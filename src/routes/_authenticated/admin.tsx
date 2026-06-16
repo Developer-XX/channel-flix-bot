@@ -93,6 +93,7 @@ function AdminLayout() {
           <NavItem to="/admin/titles" icon={<Film className="h-4 w-4" />} label="Titles" />
           <NavItem to="/admin/requests" icon={<MessageSquare className="h-4 w-4" />} label="Requests" />
           <NavItem to="/admin/telegram" icon={<Send className="h-4 w-4" />} label="Telegram" />
+          <NavItem to="/admin/bulk" icon={<Zap className="h-4 w-4" />} label="Bulk rematch" />
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-foreground inline-flex items-center gap-1"><ArrowLeft className="h-3 w-3" /> Back to site</Link>
