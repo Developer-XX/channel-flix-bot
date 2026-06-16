@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
