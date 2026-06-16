@@ -16,6 +16,9 @@ export function Hero({ featured }: Props) {
         alt=""
         width={1920}
         height={1080}
+        fetchPriority="high"
+        decoding="async"
+        loading="eager"
         className="absolute inset-0 h-full w-full object-cover object-center scale-105"
       />
       <div className="absolute inset-0 bg-gradient-hero" />

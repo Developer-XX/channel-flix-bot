@@ -108,6 +108,9 @@ function TitlePage() {
             <img
               src={t.backdrop_url}
               alt=""
+              fetchPriority="high"
+              decoding="async"
+              loading="eager"
               className="absolute inset-0 h-[55vh] sm:h-[65vh] md:h-[80vh] w-full object-cover object-top"
             />
           )}
@@ -120,6 +123,8 @@ function TitlePage() {
                   alt={`${t.title} poster`}
                   className="rounded-xl md:rounded-2xl shadow-card aspect-[2/3] w-full object-cover"
                   loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
                 />
               ) : (
                 <div className="rounded-xl md:rounded-2xl bg-surface aspect-[2/3]" />
