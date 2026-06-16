@@ -46,11 +46,12 @@ export const updateIngest = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { ingestId, ...patch } = data;
-    const cleaned = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
     if (Object.keys(cleaned).length === 0) return { ok: true };
     const { error } = await context.supabase
       .from("telegram_ingest")
-      .update(cleaned)
+      .update(cleaned as never)
       .eq("id", ingestId);
     if (error) throw error;
     return { ok: true };
