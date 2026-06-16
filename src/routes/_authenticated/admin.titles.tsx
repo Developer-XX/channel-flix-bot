@@ -193,9 +193,9 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
             release_year: null,
             release_date: null,
             rating: null,
-            language: null,
+            language: "",
           },
-        ]);
+        ] as Awaited<ReturnType<typeof tmdbSearch>>["results"]);
       } else {
         const r = await tmdbSearch({ data: { query: q, kind } });
         setResults(r.results);
