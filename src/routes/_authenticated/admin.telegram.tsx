@@ -96,6 +96,13 @@ function TelegramAdmin() {
         <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-64">
           {hook.isLoading ? "Loading..." : JSON.stringify(hook.data ?? hook.error, null, 2)}
         </pre>
+        <p className="text-xs text-muted-foreground">
+          Telegram cannot reach <code>id-preview--…</code> URLs (auth-bridged).
+          Use the stable <code>project--&lt;id&gt;-dev.lovable.app</code> URL above
+          (already filled in), and make sure the bot is added as an
+          <strong> admin</strong> of every channel you want to ingest from —
+          otherwise Telegram does not deliver <code>channel_post</code> updates.
+        </p>
       </section>
 
       <section className="rounded-lg border border-border p-4 space-y-3">
