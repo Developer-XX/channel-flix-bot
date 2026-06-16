@@ -24,10 +24,10 @@ export async function recordTrace(rows: TraceRow | TraceRow[]): Promise<void> {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const payload = (Array.isArray(rows) ? rows : [rows]).map((r) => ({
       ...r,
-      details: r.details ?? {},
+      details: (r.details ?? {}) as never,
     }));
     if (!payload.length) return;
-    const { error } = await supabaseAdmin.from("sync_trace_log").insert(payload);
+    const { error } = await supabaseAdmin.from("sync_trace_log").insert(payload as never);
     if (error) {
       // Never let logging break the caller
       console.error("[sync-trace] insert failed", error.message);
