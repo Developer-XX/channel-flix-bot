@@ -49,7 +49,10 @@ function AuthPage() {
       }
       navigate({ to: "/" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Authentication failed");
+      const e = err as { message?: string; status?: number; code?: string; name?: string };
+      const parts = [e.status && `[${e.status}]`, e.code && `(${e.code})`, e.message ?? "Authentication failed"].filter(Boolean);
+      toast.error(parts.join(" "));
+      console.error("[auth]", { name: e.name, status: e.status, code: e.code, message: e.message });
     } finally {
       setBusy(false);
     }
