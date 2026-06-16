@@ -163,15 +163,15 @@ function TitlePage() {
           </div>
         </div>
 
-        <section className="mx-auto max-w-7xl px-4 md:px-6 py-8">
-          <h2 className="font-display text-2xl font-bold mb-4">Downloads</h2>
+        <section className="mx-auto max-w-7xl px-4 md:px-6 py-6 sm:py-8">
+          <h2 className="font-display text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Downloads</h2>
           {t.category === "movie" ? (
             filesQ.isLoading ? (
               <p className="text-muted-foreground text-sm">Loading…</p>
             ) : !filesQ.data?.length ? (
-              <div className="rounded-2xl border border-dashed border-border p-8 text-center">
-                <p className="text-muted-foreground">No download files indexed yet for this title.</p>
-                <p className="mt-2 text-sm text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-border p-6 sm:p-8 text-center">
+                <p className="text-muted-foreground text-sm sm:text-base">No download files indexed yet for this title.</p>
+                <p className="mt-2 text-xs sm:text-sm text-muted-foreground">
                   Files appear here once the Telegram bot syncs them from a connected channel.
                 </p>
               </div>
@@ -180,21 +180,21 @@ function TitlePage() {
                 {filesQ.data.map((f) => (
                   <div
                     key={f.id}
-                    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border border-border bg-surface/50 p-3 sm:p-4 min-w-0"
+                    className="grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border border-border bg-surface/50 p-3 sm:p-4 min-w-0"
                   >
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
-                      <Download className="h-5 w-5" />
+                    <div className="grid h-10 w-10 sm:h-12 sm:w-12 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
+                      <Download className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-medium truncate">{f.file_name}</div>
-                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
+                      <div className="font-medium text-sm sm:text-base truncate">{f.file_name}</div>
+                      <div className="text-[11px] sm:text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         {f.quality && <span>{f.quality}</span>}
                         {f.resolution && <span>· {f.resolution}</span>}
                         {f.language && <span>· {f.language.toUpperCase()}</span>}
                         {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="col-span-2 sm:col-span-1 shrink-0 justify-self-stretch sm:justify-self-end">
                       <DownloadButton mediaFileId={f.id} fileName={f.file_name} titleId={t.id} />
                     </div>
                   </div>
