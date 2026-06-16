@@ -20,14 +20,17 @@ export const startVerification = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { startVerificationForUser } = await import("@/lib/verification.server");
 
-    // Rate-limit: count tokens in the last hour
+    // Soft per-user throttle: only count tokens that were actually consumed
+    // in the last hour, so repeated retries on a failed/iframe-blocked
+    // attempt don't lock the user out.
     const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count } = await supabaseAdmin
       .from("verification_tokens")
       .select("token", { count: "exact", head: true })
       .eq("user_id", context.userId)
-      .gte("created_at", since);
-    if ((count ?? 0) >= 6) {
+      .gte("created_at", since)
+      .not("consumed_at", "is", null);
+    if ((count ?? 0) >= 30) {
       throw new Error("Too many verification attempts in the last hour. Please wait and try again.");
     }
 
