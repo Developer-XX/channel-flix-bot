@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Structural responsive checks for SeasonAccordion.
  *
