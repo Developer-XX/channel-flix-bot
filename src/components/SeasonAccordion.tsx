@@ -99,19 +99,19 @@ function SeasonBlock({
       : season.seasonName ?? `Season ${season.seasonNumber}`;
 
   return (
-    <div className="rounded-xl border border-border bg-surface/40 overflow-hidden">
+    <div className="rounded-xl border border-border bg-surface/40 overflow-hidden min-w-0 w-full">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface/70 transition-colors"
+        className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 sm:px-4 py-3 text-left hover:bg-surface/70 transition-colors"
       >
-        <div>
-          <div className="font-semibold">{label}</div>
-          <div className="text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <div className="font-semibold truncate">{label}</div>
+          <div className="text-xs text-muted-foreground truncate">
             {episodes.length} {episodes.length === 1 ? "episode" : "episodes"} · {totalFiles} files
           </div>
         </div>
-        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="border-t border-border divide-y divide-border">
@@ -122,21 +122,21 @@ function SeasonBlock({
                 : null;
             const episodeNum = typeof epNum === "number" ? epNum : null;
             return (
-              <div key={String(epNum)} className="px-4 py-3 space-y-2">
-                <div className="text-sm font-medium">
+              <div key={String(epNum)} className="px-3 sm:px-4 py-3 space-y-2 min-w-0">
+                <div className="text-sm font-medium truncate">
                   {epNum === "other" ? "Unassigned" : `Episode ${epNum}`}
                   {files[0]?.episodes?.name ? ` — ${files[0].episodes.name}` : ""}
                 </div>
-                <div className="grid gap-2 lg:grid-cols-2">
+                <div className="grid gap-2 xl:grid-cols-2 min-w-0">
                   {files.map((f) => (
                     <div
                       key={f.id}
-                      className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-3 min-w-0"
+                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-border bg-background/40 p-3 min-w-0"
                     >
                       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
                         <Download className="h-4 w-4" />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="min-w-0">
                         <div className="text-sm font-medium truncate">{f.file_name}</div>
                         <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
                           {f.quality && <span>{f.quality}</span>}
@@ -145,13 +145,15 @@ function SeasonBlock({
                           {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
                         </div>
                       </div>
-                      <DownloadButton
-                        mediaFileId={f.id}
-                        fileName={f.file_name}
-                        titleId={titleId}
-                        season={seasonNum}
-                        episode={episodeNum}
-                      />
+                      <div className="shrink-0">
+                        <DownloadButton
+                          mediaFileId={f.id}
+                          fileName={f.file_name}
+                          titleId={titleId}
+                          season={seasonNum}
+                          episode={episodeNum}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
