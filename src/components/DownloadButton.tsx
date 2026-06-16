@@ -108,7 +108,22 @@ export function DownloadButton({
       if (r.reason === "needs_verification") {
         toast.message("Verification required — opening verification link…");
         const v = await startVerify({ data: { mediaFileId: activeFileId } });
-        window.location.href = v.redirectUrl;
+        // Shorteners (nanolinks/adrinolinks) send X-Frame-Options: DENY,
+        // so opening inside the Lovable preview iframe shows Firefox's
+        // "Can't open this page" error. Always break out of frames.
+        try {
+          if (window.top && window.top !== window.self) {
+            window.top.location.href = v.redirectUrl;
+            return;
+          }
+        } catch {
+          /* cross-origin top — fall through */
+        }
+        const w = window.open(v.redirectUrl, "_blank", "noopener,noreferrer");
+        if (!w) {
+          // Popup blocked — fall back to same-window nav
+          window.location.href = v.redirectUrl;
+        }
         return;
       }
       if (r.reason === "not_linked" || r.reason === "bot_blocked") {
