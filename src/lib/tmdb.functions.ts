@@ -90,6 +90,19 @@ export const tmdbDetails = createServerFn({ method: "POST" })
         ? r.credits.cast.slice(0, 12).map((c: any) => String(c.name))
         : [],
       imdb_id: r.imdb_id ?? r.external_ids?.imdb_id ?? null,
+      number_of_seasons: isTv ? (r.number_of_seasons ?? null) : null,
+      number_of_episodes: isTv ? (r.number_of_episodes ?? null) : null,
+      seasons: isTv && Array.isArray(r.seasons)
+        ? r.seasons
+            .filter((s: any) => Number(s.season_number) >= 0)
+            .map((s: any) => ({
+              season_number: Number(s.season_number),
+              name: String(s.name ?? `Season ${s.season_number}`),
+              episode_count: Number(s.episode_count ?? 0),
+              air_date: (s.air_date as string) ?? null,
+              poster_url: s.poster_path ? `${IMAGE_BASE}/w185${s.poster_path}` : null,
+            }))
+        : [],
     };
   });
 
