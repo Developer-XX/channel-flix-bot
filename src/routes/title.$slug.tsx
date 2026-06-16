@@ -164,15 +164,15 @@ function TitlePage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 lg:grid-cols-2">
                 {filesQ.data.map((f) => (
-                  <div key={f.id} className="flex items-center gap-4 rounded-xl border border-border bg-surface/50 p-4">
-                    <div className="grid h-12 w-12 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
+                  <div key={f.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface/50 p-3 sm:p-4 min-w-0">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
                       <Download className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{f.file_name}</div>
-                      <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
+                      <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         {f.quality && <span>{f.quality}</span>}
                         {f.resolution && <span>· {f.resolution}</span>}
                         {f.language && <span>· {f.language.toUpperCase()}</span>}
