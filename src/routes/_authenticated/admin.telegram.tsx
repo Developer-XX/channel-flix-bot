@@ -273,6 +273,15 @@ function TelegramAdmin() {
                 router.invalidate();
               }}
               onDiagnose={() => diagnose({ data: { ingestId: row.id } })}
+              onForcePublish={async (assignTitleId) => {
+                try {
+                  const r = await forcePublish({ data: { ingestId: row.id, assignTitleId } });
+                  if (r.promoted) toast.success(`✅ Force published · ${r.reason}`);
+                  else toast.error(`Not published · ${r.reason}`);
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) { toast.error(e?.message ?? "Force publish failed"); }
+              }}
               onPromote={async (titleId, overrides) => {
                 await promote({ data: { ingestId: row.id, titleId, overrides } });
                 toast.success("Promoted to media_files");
