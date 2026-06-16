@@ -415,6 +415,7 @@ export type Database = {
       }
       telegram_bot_state: {
         Row: {
+          admin_telegram_user_ids: number[]
           id: string
           last_run_at: string | null
           last_run_error: string | null
@@ -423,6 +424,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          admin_telegram_user_ids?: number[]
           id: string
           last_run_at?: string | null
           last_run_error?: string | null
@@ -431,6 +433,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          admin_telegram_user_ids?: number[]
           id?: string
           last_run_at?: string | null
           last_run_error?: string | null
@@ -443,6 +446,7 @@ export type Database = {
       telegram_channels: {
         Row: {
           channel_id: number
+          confirm_with_reply: boolean
           created_at: string
           description: string | null
           id: string
@@ -454,6 +458,7 @@ export type Database = {
         }
         Insert: {
           channel_id: number
+          confirm_with_reply?: boolean
           created_at?: string
           description?: string | null
           id?: string
@@ -465,6 +470,7 @@ export type Database = {
         }
         Update: {
           channel_id?: number
+          confirm_with_reply?: boolean
           created_at?: string
           description?: string | null
           id?: string
