@@ -211,9 +211,29 @@ function BulkRematchPage() {
                   : ""}
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setJobId(null)}>
-              View history
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRetryFailed}
+                disabled={retrying || running || !(current.failed > 0)}
+                title={current.failed > 0 ? "Re-queue only failed entries" : "No failed entries to retry"}
+              >
+                {retrying ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5 mr-1.5" />}
+                Retry failed
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onExportCsv}
+                disabled={results.length === 0}
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setJobId(null)}>
+                View history
+              </Button>
+            </div>
           </div>
           <Progress value={pct} />
           <div className="grid grid-cols-5 gap-3 text-sm">
