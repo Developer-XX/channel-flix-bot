@@ -245,24 +245,43 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
   return (
     <>
       <div className="p-5 space-y-3 border-b border-border">
+        <div className="inline-flex rounded-md border border-border bg-surface p-0.5 text-xs">
+          {(["name", "imdb"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => { setLookupBy(m); setResults([]); setQuery(""); }}
+              className={`px-3 py-1.5 rounded ${lookupBy === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {m === "name" ? "By name" : "By IMDb ID"}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-2">
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") search(); }}
-            placeholder="Search TMDB…"
-            className="flex-1 min-w-[180px] h-10 rounded-md bg-surface px-3 text-sm outline-none border border-border focus:border-ring transition"
+            placeholder={lookupBy === "imdb" ? "tt1234567" : "Search TMDB…"}
+            className="flex-1 min-w-[180px] h-10 rounded-md bg-surface px-3 text-sm outline-none border border-border focus:border-ring transition font-mono-tabular"
           />
-          <select value={kind} onChange={(e) => setKind(e.target.value as "movie" | "tv" | "multi")} className="h-10 rounded-md bg-surface border border-border px-2 text-sm">
-            <option value="multi">Any</option>
-            <option value="movie">Movies</option>
-            <option value="tv">TV</option>
-          </select>
+          {lookupBy === "name" && (
+            <select value={kind} onChange={(e) => setKind(e.target.value as "movie" | "tv" | "multi")} className="h-10 rounded-md bg-surface border border-border px-2 text-sm">
+              <option value="multi">Any</option>
+              <option value="movie">Movies</option>
+              <option value="tv">TV</option>
+            </select>
+          )}
           <Button onClick={search} disabled={searching} className="bg-gradient-primary text-primary-foreground border-0">
-            <Search className="h-4 w-4 mr-1.5" />{searching ? "…" : "Search"}
+            <Search className="h-4 w-4 mr-1.5" />{searching ? "…" : lookupBy === "imdb" ? "Lookup" : "Search"}
           </Button>
         </div>
+        {lookupBy === "imdb" && (
+          <p className="text-[11px] text-muted-foreground">
+            Paste an IMDb ID (e.g. <code className="bg-surface px-1 rounded">tt0903747</code>) to import via TMDB's external-id lookup.
+          </p>
+        )}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">Save TV imports as:</span>
           <select value={category} onChange={(e) => setCategory(e.target.value as CategorySlug)} className="bg-surface border border-border rounded px-2 py-1">
