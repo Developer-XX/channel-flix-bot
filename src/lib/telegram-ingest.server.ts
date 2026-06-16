@@ -246,6 +246,33 @@ export async function ingestTelegramUpdate(
       .eq("id", chanRow.id);
   }
 
+  // Auto-promote matched ingest rows into media_files so the website
+  // shows the file without manual admin action.
+  let promotedFileId: string | null = null;
+  if (matchedTitleId && file.file_id) {
+    try {
+      promotedFileId = await autoPromoteToMediaFile(supabase, {
+        ingestId: ingestRow.id,
+        titleId: matchedTitleId,
+        channelRowId: chanRow?.id ?? null,
+        telegramFileId: file.file_id,
+        telegramMessageId: tgMessageId,
+        fileName: file.file_name ?? parsed.title ?? "file",
+        caption,
+        mimeType: file.mime_type,
+        fileSize: file.file_size,
+        durationSeconds: file.duration_seconds,
+        quality: parsed.quality,
+        resolution: parsed.resolution,
+        language: parsed.language,
+        season: parsed.season,
+        episode: parsed.episode,
+      });
+    } catch (e) {
+      console.warn("[telegram-ingest] auto-promote failed:", (e as Error).message);
+    }
+  }
+
   // Visual confirmation back to the channel: 👀 reaction always, plus a
   // small reply if the channel opted in via confirm_with_reply.
   try {
