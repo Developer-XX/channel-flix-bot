@@ -34,6 +34,8 @@ import {
   rematchOne,
   bulkAssignTitle,
   bulkAddAlias,
+  forceRematchAndPublish,
+  rebuildWebsiteIndexes,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
@@ -63,6 +65,8 @@ function TelegramAdmin() {
   const diagnose = useServerFn(diagnoseIngest);
   const bulkAssign = useServerFn(bulkAssignTitle);
   const bulkAlias = useServerFn(bulkAddAlias);
+  const forcePublish = useServerFn(forceRematchAndPublish);
+  const rebuildIdx = useServerFn(rebuildWebsiteIndexes);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
@@ -197,6 +201,21 @@ function TelegramAdmin() {
           >
             Reindex / Refresh website
           </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              try {
+                const r = await rebuildIdx();
+                toast.success(`Rebuilt indexes · ${r.latest ?? 0} latest · ${r.trending ?? 0} trending · ${r.search ?? 0} search`);
+                router.invalidate();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Rebuild failed");
+              }
+            }}
+          >
+            Rebuild website indexes
+          </Button>
         </div>
 
         {selected.size > 0 && (
@@ -254,6 +273,15 @@ function TelegramAdmin() {
                 router.invalidate();
               }}
               onDiagnose={() => diagnose({ data: { ingestId: row.id } })}
+              onForcePublish={async (assignTitleId) => {
+                try {
+                  const r = await forcePublish({ data: { ingestId: row.id, assignTitleId } });
+                  if (r.promoted) toast.success(`✅ Force published · ${r.reason}`);
+                  else toast.error(`Not published · ${r.reason}`);
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) { toast.error(e?.message ?? "Force publish failed"); }
+              }}
               onPromote={async (titleId, overrides) => {
                 await promote({ data: { ingestId: row.id, titleId, overrides } });
                 toast.success("Promoted to media_files");
@@ -286,7 +314,7 @@ function TelegramAdmin() {
 
 function IngestCard({
   row, expanded, selected, onSelectToggle, onToggle, onUpdate, onPromote,
-  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, search,
+  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, onForcePublish, search,
 }: {
   row: IngestRow;
   expanded: boolean;
@@ -299,6 +327,7 @@ function IngestCard({
   onIgnore: () => Promise<void>;
   onRematch: () => Promise<void>;
   onDiagnose: () => Promise<any>;
+  onForcePublish: (assignTitleId?: string) => Promise<void>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
 }) {
   const [diag, setDiag] = useState<any>(null);
@@ -540,6 +569,16 @@ function IngestCard({
                 }}
               >
                 Rematch now
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                title="Re-run the matcher for just this file, write an audit row, promote on success, and bump the website cache version."
+                onClick={async () => {
+                  await onForcePublish(selectedTitleId ?? undefined);
+                }}
+              >
+                Force rematch &amp; publish
               </Button>
               <Button
                 size="sm"
