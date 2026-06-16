@@ -1,0 +1,123 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdminAccess } from "@/lib/admin-auth";
+
+export const listTelegramIngest = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { status?: "pending" | "matched" | "unmatched" | "ignored" | "all" }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    let q = context.supabase
+      .from("telegram_ingest")
+      .select("id, telegram_channel_id, telegram_message_id, file_name, caption, mime_type, file_size, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_codec, parsed_language, match_status, matched_title_id, match_score, promoted_media_file_id, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (data.status && data.status !== "all") q = q.eq("match_status", data.status);
+    const { data: rows, error } = await q;
+    if (error) throw error;
+    return rows ?? [];
+  });
+
+export const promoteIngest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ingestId: string; titleId: string; episodeId?: string | null }) =>
+    z.object({
+      ingestId: z.string().uuid(),
+      titleId: z.string().uuid(),
+      episodeId: z.string().uuid().nullish(),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: ingest, error: e1 } = await supabaseAdmin
+      .from("telegram_ingest").select("*").eq("id", data.ingestId).maybeSingle();
+    if (e1) throw e1;
+    if (!ingest) throw new Error("Ingest row not found");
+    if (!ingest.telegram_file_id) throw new Error("Missing telegram_file_id");
+
+    const { data: file, error: e2 } = await supabaseAdmin
+      .from("media_files")
+      .upsert(
+        {
+          title_id: data.titleId,
+          episode_id: data.episodeId ?? null,
+          channel_id: ingest.channel_id,
+          telegram_file_id: ingest.telegram_file_id,
+          telegram_message_id: ingest.telegram_message_id,
+          file_name: ingest.file_name ?? ingest.parsed_title ?? "file",
+          caption: ingest.caption,
+          file_size: ingest.file_size,
+          mime_type: ingest.mime_type,
+          quality: ingest.parsed_quality,
+          resolution: ingest.parsed_resolution,
+          language: ingest.parsed_language,
+          duration_seconds: ingest.duration_seconds,
+          is_active: true,
+        },
+        { onConflict: "telegram_file_id" },
+      )
+      .select("id")
+      .single();
+    if (e2) throw e2;
+
+    const { error: e3 } = await supabaseAdmin
+      .from("telegram_ingest")
+      .update({ match_status: "matched", matched_title_id: data.titleId, promoted_media_file_id: file.id })
+      .eq("id", data.ingestId);
+    if (e3) throw e3;
+    return { ok: true, fileId: file.id };
+  });
+
+export const ignoreIngest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ingestId: string }) => z.object({ ingestId: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { error } = await context.supabase
+      .from("telegram_ingest").update({ match_status: "ignored" }).eq("id", data.ingestId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// Convenience: set the Telegram bot webhook URL to point at this deployment.
+// The caller passes the public base URL (e.g. https://project--<id>-dev.lovable.app).
+export const setTelegramWebhook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { baseUrl: string }) =>
+    z.object({ baseUrl: z.string().url() }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
+    if (!secret) throw new Error("TELEGRAM_WEBHOOK_SECRET is not configured");
+    const url = `${data.baseUrl.replace(/\/$/, "")}/api/public/telegram/webhook`;
+    const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url,
+        secret_token: secret,
+        allowed_updates: ["channel_post", "edited_channel_post", "message", "edited_message"],
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.ok) throw new Error(`Telegram setWebhook failed: ${JSON.stringify(body)}`);
+    return { ok: true, url, result: body.result };
+  });
+
+export const getTelegramWebhookInfo = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
+    const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    const body = await res.json();
+    if (!res.ok || !body.ok) throw new Error(`Telegram getWebhookInfo failed: ${JSON.stringify(body)}`);
+    return body.result;
+  });

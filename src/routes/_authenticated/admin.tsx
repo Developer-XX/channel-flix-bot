@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft } from "lucide-react";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAdminGate } from "@/lib/admin.functions";
 
@@ -26,6 +26,7 @@ function AdminLayout() {
           <NavItem to="/admin" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" exact />
           <NavItem to="/admin/titles" icon={<Film className="h-4 w-4" />} label="Titles" />
           <NavItem to="/admin/requests" icon={<MessageSquare className="h-4 w-4" />} label="Requests" />
+          <NavItem to="/admin/telegram" icon={<Send className="h-4 w-4" />} label="Telegram" />
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-foreground inline-flex items-center gap-1"><ArrowLeft className="h-3 w-3" /> Back to site</Link>
