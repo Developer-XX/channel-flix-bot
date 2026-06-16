@@ -81,7 +81,18 @@ function TitlePage() {
     return (
       <div className="min-h-screen">
         <SiteHeader />
-        <div className="h-[60vh] animate-pulse bg-surface" />
+        <div className="pt-14 sm:pt-16">
+          <div className="h-[40vh] sm:h-[55vh] animate-pulse bg-gradient-to-b from-surface to-background" />
+          <div className="mx-auto max-w-7xl px-4 md:px-6 -mt-24 sm:-mt-32 grid gap-4 grid-cols-[96px_minmax(0,1fr)] sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="aspect-[2/3] w-full rounded-xl bg-surface animate-pulse" />
+            <div className="space-y-3 pt-6">
+              <div className="h-6 sm:h-8 w-3/4 bg-surface rounded animate-pulse" />
+              <div className="h-4 w-1/2 bg-surface rounded animate-pulse" />
+              <div className="h-3 w-full bg-surface rounded animate-pulse mt-4" />
+              <div className="h-3 w-5/6 bg-surface rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
