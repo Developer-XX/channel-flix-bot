@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_audit_log: {
+        Row: {
+          code: string
+          created_at: string
+          detail: string | null
+          email: string | null
+          event: string
+          has_admin_role: boolean | null
+          id: string
+          ip: string | null
+          jwt_exp_in: number | null
+          path: string | null
+          status: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          detail?: string | null
+          email?: string | null
+          event: string
+          has_admin_role?: boolean | null
+          id?: string
+          ip?: string | null
+          jwt_exp_in?: number | null
+          path?: string | null
+          status: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          detail?: string | null
+          email?: string | null
+          event?: string
+          has_admin_role?: boolean | null
+          id?: string
+          ip?: string | null
+          jwt_exp_in?: number | null
+          path?: string | null
+          status?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       auth_rate_limits: {
         Row: {
           action: string
