@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireAdminAccess } from "@/lib/admin-auth";
 
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMAGE_BASE = "https://image.tmdb.org/t/p";
@@ -16,8 +18,10 @@ const SearchSchema = z.object({
 });
 
 export const tmdbSearch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input) => SearchSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await requireAdminAccess(context);
     const url = new URL(`${TMDB_BASE}/search/${data.kind}`);
     url.searchParams.set("api_key", key());
     url.searchParams.set("query", data.query);
@@ -52,8 +56,10 @@ const DetailsSchema = z.object({
 });
 
 export const tmdbDetails = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input) => DetailsSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await requireAdminAccess(context);
     const url = new URL(`${TMDB_BASE}/${data.media_type}/${data.tmdb_id}`);
     url.searchParams.set("api_key", key());
     url.searchParams.set("append_to_response", "credits");
