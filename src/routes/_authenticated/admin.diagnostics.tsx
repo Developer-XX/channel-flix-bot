@@ -55,6 +55,12 @@ function DiagnosticsPage() {
 
       <WebVitalsPanel data={vitalsQ.data} loading={vitalsQ.isLoading} error={vitalsQ.error as Error | null} />
 
+      <IntegrationsHealthPanel />
+
+      <DestructiveActionsPanel />
+
+      <AdminAuditPanel />
+
       {q.isLoading && <div className="text-sm text-muted-foreground">Running checks…</div>}
       {q.error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
