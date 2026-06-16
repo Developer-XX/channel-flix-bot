@@ -25,6 +25,7 @@ export function TitleCard({ item }: { item: TitleCardData }) {
             src={item.poster_url}
             alt={`${item.title} poster`}
             loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover transition-opacity duration-300 group-hover:opacity-90"
           />
         ) : (
