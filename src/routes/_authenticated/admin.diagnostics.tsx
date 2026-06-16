@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
 import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
 import { runIntegrationsHealth } from "@/lib/integrations-health.functions";
+import { getVerificationDiagnostics } from "@/lib/verification-diagnostics.functions";
 import {
   requestDatabaseWipe,
   confirmDatabaseWipe,
