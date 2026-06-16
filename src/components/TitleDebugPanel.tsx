@@ -58,10 +58,14 @@ export function TitleDebugPanel({ slug }: { slug: string }) {
                   <Stat label="Files linked" value={String(debugQ.data.files.length)} />
                   <Stat label="Aliases" value={String(debugQ.data.aliases.length)} />
                 </div>
+
+                <HideMetrics candidates={debugQ.data.candidates} />
+
                 <div className="text-xs">
                   <span className="text-muted-foreground">Query filters required:</span>{" "}
                   <code>status=published</code> · <code>is_active=true</code> · <code>category={debugQ.data.filtersSummary.category ?? "any"}</code>
                 </div>
+
 
                 <div>
                   <div className="text-xs uppercase text-muted-foreground mt-2 mb-1">Linked files</div>
