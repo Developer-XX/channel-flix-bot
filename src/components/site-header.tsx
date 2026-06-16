@@ -74,7 +74,7 @@ export function SiteHeader() {
         </form>
 
 
-        <div className="ml-auto md:ml-2 flex items-center gap-2">
+        <div className="ml-auto md:ml-2 flex items-center gap-2 shrink-0">
           {isAdmin && (
             <Link to="/admin" className="hidden sm:block">
               <Button variant="outline" size="sm">Admin</Button>
