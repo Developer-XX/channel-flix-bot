@@ -25,6 +25,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
+import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
@@ -112,6 +113,11 @@ const AuthenticatedAdminRequestsRoute =
     path: '/requests',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminBulkRoute = AuthenticatedAdminBulkRouteImport.update({
+  id: '/bulk',
+  path: '/bulk',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const ApiPublicVTokenRoute = ApiPublicVTokenRouteImport.update({
   id: '/api/public/v/$token',
   path: '/api/public/v/$token',
@@ -148,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -214,6 +223,7 @@ export interface FileRouteTypes {
     | '/browse/$category'
     | '/debug/auth'
     | '/title/$slug'
+    | '/admin/bulk'
     | '/admin/requests'
     | '/admin/telegram'
     | '/admin/titles'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/browse/$category'
     | '/debug/auth'
     | '/title/$slug'
+    | '/admin/bulk'
     | '/admin/requests'
     | '/admin/telegram'
     | '/admin/titles'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/browse/$category'
     | '/debug/auth'
     | '/title/$slug'
+    | '/_authenticated/admin/bulk'
     | '/_authenticated/admin/requests'
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
@@ -397,6 +409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRequestsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/bulk': {
+      id: '/_authenticated/admin/bulk'
+      path: '/bulk'
+      fullPath: '/admin/bulk'
+      preLoaderRoute: typeof AuthenticatedAdminBulkRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/api/public/v/$token': {
       id: '/api/public/v/$token'
       path: '/api/public/v/$token'
@@ -429,6 +448,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
@@ -436,6 +456,7 @@ interface AuthenticatedAdminRouteChildren {
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
