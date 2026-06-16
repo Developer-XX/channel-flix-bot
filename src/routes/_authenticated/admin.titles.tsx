@@ -174,6 +174,16 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
   const [results, setResults] = useState<Awaited<ReturnType<typeof tmdbSearch>>["results"]>([]);
   const [searching, setSearching] = useState(false);
   const [importing, setImporting] = useState<number | null>(null);
+  const [preview, setPreview] = useState<
+    | null
+    | {
+        details: Awaited<ReturnType<typeof tmdbDetails>>;
+        media_type: "movie" | "tv";
+        category: CategorySlug;
+        slug: string;
+      }
+  >(null);
+  const [committing, setCommitting] = useState(false);
 
   const search = async () => {
     const q = query.trim();
@@ -207,15 +217,34 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
     }
   };
 
-  const importOne = async (tmdb_id: number, media_type: string) => {
+  // Step 1: resolve TMDB details and show a preview the admin can review.
+  const openPreview = async (tmdb_id: number, media_type: string) => {
     setImporting(tmdb_id);
     try {
-      const mt = media_type === "tv" ? "tv" : "movie";
-      const d = await tmdbDetails({ data: { tmdb_id, media_type: mt as "movie" | "tv" } });
+      const mt: "movie" | "tv" = media_type === "tv" ? "tv" : "movie";
+      const d = await tmdbDetails({ data: { tmdb_id, media_type: mt } });
       const finalCategory: CategorySlug = mt === "tv" ? (category === "movie" ? "series" : category) : "movie";
-      const baseSlug = slugify(`${d.title}-${d.release_year ?? ""}`);
+      setPreview({
+        details: d,
+        media_type: mt,
+        category: finalCategory,
+        slug: slugify(`${d.title}-${d.release_year ?? ""}`),
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load TMDB details");
+    } finally {
+      setImporting(null);
+    }
+  };
+
+  // Step 2: commit the previewed title.
+  const commitPreview = async () => {
+    if (!preview) return;
+    setCommitting(true);
+    try {
+      const { details: d, category: finalCategory, slug } = preview;
       await createAdminTitle({ data: {
-        slug: baseSlug,
+        slug: slug.trim() || slugify(`${d.title}-${d.release_year ?? ""}`),
         title: d.title,
         original_title: d.original_title,
         category: finalCategory as never,
@@ -234,13 +263,137 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
         imdb_id: d.imdb_id,
       } });
       toast.success(`Imported "${d.title}"`);
+      setPreview(null);
       onCreated();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Import failed");
     } finally {
-      setImporting(null);
+      setCommitting(false);
     }
   };
+
+  if (preview) {
+    const d = preview.details;
+    return (
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            onClick={() => setPreview(null)}
+            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+          >
+            ← Back to results
+          </button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          {d.poster_url ? (
+            <img src={d.poster_url} alt="" className="h-48 w-32 shrink-0 rounded-lg object-cover border border-border" />
+          ) : (
+            <div className="h-48 w-32 shrink-0 rounded-lg bg-surface border border-border" />
+          )}
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider bg-surface px-1.5 py-0.5 rounded">{preview.media_type}</span>
+              <h3 className="font-display text-xl font-bold truncate">{d.title}</h3>
+              {d.release_year && <span className="text-sm text-muted-foreground">{d.release_year}</span>}
+            </div>
+            {d.original_title && d.original_title !== d.title && (
+              <p className="text-xs text-muted-foreground">Original: <em>{d.original_title}</em></p>
+            )}
+            <div className="flex flex-wrap gap-1.5">
+              {d.genres?.slice(0, 6).map((g) => (
+                <span key={g} className="text-[11px] bg-surface border border-border rounded-full px-2 py-0.5">{g}</span>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground line-clamp-4">{d.overview || "No overview."}</p>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs pt-1">
+              <dt className="text-muted-foreground">TMDB</dt><dd className="font-mono">{d.tmdb_id}</dd>
+              <dt className="text-muted-foreground">IMDb</dt><dd className="font-mono">{d.imdb_id ?? "—"}</dd>
+              <dt className="text-muted-foreground">Runtime</dt><dd>{d.runtime_minutes ? `${d.runtime_minutes} min` : "—"}</dd>
+              <dt className="text-muted-foreground">Rating</dt><dd>{d.rating ? d.rating.toFixed(1) : "—"}</dd>
+              <dt className="text-muted-foreground">Language</dt><dd>{d.language ?? "—"}</dd>
+              <dt className="text-muted-foreground">Release</dt><dd>{d.release_date ?? "—"}</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Slug</span>
+            <input
+              value={preview.slug}
+              onChange={(e) => setPreview({ ...preview, slug: e.target.value })}
+              className="mt-1 w-full h-9 rounded-md bg-surface px-3 text-sm border border-border focus:border-ring outline-none font-mono"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Category</span>
+            <select
+              value={preview.category}
+              onChange={(e) => setPreview({ ...preview, category: e.target.value as CategorySlug })}
+              className="mt-1 w-full h-9 rounded-md bg-surface px-3 text-sm border border-border focus:border-ring outline-none"
+            >
+              {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+            </select>
+          </label>
+        </div>
+
+        {preview.media_type === "tv" && (
+          <div className="rounded-xl border border-border bg-surface/40 p-4">
+            <div className="flex items-baseline justify-between gap-2 mb-3">
+              <h4 className="font-semibold text-sm">Season &amp; episode mapping</h4>
+              <span className="text-xs text-muted-foreground">
+                {d.number_of_seasons ?? 0} season{(d.number_of_seasons ?? 0) === 1 ? "" : "s"} ·{" "}
+                {d.number_of_episodes ?? 0} episode{(d.number_of_episodes ?? 0) === 1 ? "" : "s"}
+              </span>
+            </div>
+            {d.seasons && d.seasons.length > 0 ? (
+              <div className="max-h-56 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-muted-foreground text-[10px] uppercase tracking-wider">
+                    <tr>
+                      <th className="text-left px-2 py-1.5">#</th>
+                      <th className="text-left px-2 py-1.5">Name</th>
+                      <th className="text-left px-2 py-1.5">Episodes</th>
+                      <th className="text-left px-2 py-1.5">Air date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.seasons.map((s) => (
+                      <tr key={s.season_number} className="border-t border-border">
+                        <td className="px-2 py-1.5 font-mono">S{String(s.season_number).padStart(2, "0")}</td>
+                        <td className="px-2 py-1.5 truncate">{s.name}</td>
+                        <td className="px-2 py-1.5">{s.episode_count}</td>
+                        <td className="px-2 py-1.5 text-muted-foreground">{s.air_date ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">TMDB returned no season data.</p>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-border">
+          <Button variant="ghost" onClick={() => setPreview(null)} disabled={committing}>
+            Cancel
+          </Button>
+          <Button
+            onClick={commitPreview}
+            disabled={committing || !preview.slug.trim()}
+            className="bg-gradient-primary text-primary-foreground border-0"
+          >
+            {committing ? "Importing…" : "Confirm import"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+
 
   return (
     <>
@@ -302,8 +455,8 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
               </div>
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.overview || "No overview."}</p>
             </div>
-            <Button size="sm" onClick={() => importOne(r.tmdb_id, r.media_type)} disabled={importing === r.tmdb_id} className="shrink-0">
-              {importing === r.tmdb_id ? "…" : "Import"}
+            <Button size="sm" onClick={() => openPreview(r.tmdb_id, r.media_type)} disabled={importing === r.tmdb_id} className="shrink-0">
+              {importing === r.tmdb_id ? "…" : "Preview"}
             </Button>
           </div>
         ))}

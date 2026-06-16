@@ -28,6 +28,33 @@ test.use({
 });
 
 test.beforeEach(async ({ page }) => {
+  // Stub analytics + tracking BEFORE any navigation so they never affect timing.
+  await page.route(
+    /(google-analytics|googletagmanager|hotjar|segment|fullstory|plausible|posthog|sentry\.io|datadog|amplitude)/i,
+    (r) => r.fulfill({ status: 204, body: "" }).catch(() => {}),
+  );
+  // Stub the in-house web-vitals beacon so RUM POSTs don't keep the network busy.
+  await page.route(/\/_serverFn\/.*web[-_]?vitals/i, (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: "{}" }).catch(() => {}),
+  );
+
+  // Track in-flight API calls so tests can wait for "API settled" instead of networkidle.
+  const inflight = new Set<string>();
+  (page as Page & { __inflight?: Set<string> }).__inflight = inflight;
+  const isApi = (url: string) =>
+    /\/(rest|auth|storage|functions)\/v\d+\//.test(url) || /\/_serverFn\//.test(url);
+  page.on("request", (r) => {
+    if (isApi(r.url())) inflight.add(r.url() + "#" + Math.random());
+  });
+  const drop = () => {
+    // Coarse but effective: requestfinished/failed don't expose the same key, so we
+    // pop oldest. Tests only care about the count reaching 0.
+    const first = inflight.values().next().value;
+    if (first) inflight.delete(first);
+  };
+  page.on("requestfinished", (r) => isApi(r.url()) && drop());
+  page.on("requestfailed", (r) => isApi(r.url()) && drop());
+
   await page.addInitScript(() => {
     // Freeze clock to a deterministic instant.
     const FROZEN = new Date("2026-06-16T12:00:00Z").valueOf();
@@ -41,42 +68,46 @@ test.beforeEach(async ({ page }) => {
         return FROZEN;
       }
     };
-    // Deterministic RNG.
     let seed = 1;
     Math.random = () => {
       seed = (seed * 9301 + 49297) % 233280;
       return seed / 233280;
     };
+    // Neutralize in-app analytics no-ops.
+    (window as unknown as { gtag?: () => void; dataLayer?: unknown[] }).gtag = () => {};
+    (window as unknown as { dataLayer: unknown[] }).dataLayer = [];
   });
 });
 
-
-
 /**
  * Deterministic rendering harness — reduces flakiness on mobile breakpoints by:
- *  - Pinning Date.now / Math.random / scrollbar width before any app code runs
- *  - Forcing prefers-reduced-motion and disabling CSS animations + transitions
- *  - Awaiting document.fonts.ready (and a second tick after webfont swap)
- *  - Waiting for networkidle + every <img> to finish decoding
- *  - Hiding the caret blink, scrollbars, and stripping video autoplay
+ *  - Stubbed analytics + tracked in-flight API requests (see beforeEach)
+ *  - Waits for app API responses (Supabase REST + server fns) to drain, not
+ *    generic networkidle (which third-party CDNs can stall indefinitely)
+ *  - Awaits document.fonts.ready + two RAF ticks
+ *  - Disables animations, transitions, caret blink, scrollbars, video
+ *  - Waits for every <img> to finish decoding so layout-shift is settled
  */
 async function waitForFontsAndImages(page: Page) {
-  // Block known third-party trackers/analytics that introduce non-determinism.
-  await page.route(/(google-analytics|googletagmanager|hotjar|segment|fullstory)/i, (r) =>
-    r.abort().catch(() => {}),
-  );
-
+  // 1. Drain in-flight app API requests (Supabase REST / server fns), bounded.
+  const inflight = (page as Page & { __inflight?: Set<string> }).__inflight;
+  if (inflight) {
+    const start = Date.now();
+    while (inflight.size > 0 && Date.now() - start < 4_000) {
+      await page.waitForTimeout(50);
+    }
+  }
+  // 2. Fonts.
   await page.evaluate(async () => {
     try {
       await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
     } catch {}
   });
-  // Give Vite HMR + webfont swap one extra paint.
-  await page.waitForLoadState("networkidle").catch(() => {});
+  // 3. Two RAF ticks for webfont swap / layout settle.
   await page.evaluate(
     () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
   );
-  // Disable in-flight CSS animations, transitions, caret blink, scrollbar gutter.
+  // 4. Disable animations / transitions / caret blink / scrollbars / video.
   await page.addStyleTag({
     content: `
       *, *::before, *::after {
@@ -89,7 +120,7 @@ async function waitForFontsAndImages(page: Page) {
       video, [data-testid="video"] { visibility: hidden !important; }
     `,
   });
-  // Wait for every <img> to decode so layout-shift is fully settled.
+  // 5. Wait for every <img> to decode.
   await page.evaluate(async () => {
     const imgs = Array.from(document.images);
     await Promise.all(
@@ -103,6 +134,20 @@ async function waitForFontsAndImages(page: Page) {
       ),
     );
   });
+}
+
+/**
+ * Wait for the next Supabase REST response matching `tablePattern` after an
+ * action that triggers a fetch (e.g. typing into search). Returns the
+ * response so callers can assert status if needed.
+ */
+async function waitForApiResponse(page: Page, tablePattern: RegExp, timeout = 5_000) {
+  return page
+    .waitForResponse(
+      (resp) => tablePattern.test(resp.url()) && resp.request().method() !== "OPTIONS",
+      { timeout },
+    )
+    .catch(() => null);
 }
 
 async function assertNoHorizontalOverflow(page: Page) {
@@ -202,7 +247,10 @@ test.describe("mobile visual regression — homepage", () => {
   });
 
   test("search results page renders without clipping", async ({ page }, info) => {
+    // Wait for the actual master_titles search response, not just networkidle.
+    const apiPromise = waitForApiResponse(page, /master_titles.*ilike|imdb_id=eq/i);
     await page.goto("/search?q=a");
+    await apiPromise;
     await waitForFontsAndImages(page);
 
     await assertVisible(page, page.locator("header").first(), "header on search");
