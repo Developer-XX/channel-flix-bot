@@ -302,3 +302,107 @@ export async function ingestTelegramUpdate(
 
   return { ok: true, status: "ingested", ingestId: ingestRow.id, matched: !!matchedTitleId, matchScore };
 }
+
+// Auto-promotion: creates (or updates) season → episode → media_files rows
+// for a matched ingest. Idempotent on telegram_file_id (media_files PK).
+export async function autoPromoteToMediaFile(
+  supabase: SupabaseClient<any, any, any>,
+  args: {
+    ingestId: string;
+    titleId: string;
+    channelRowId: string | null;
+    telegramFileId: string;
+    telegramMessageId: number;
+    fileName: string;
+    caption: string | null;
+    mimeType: string | null;
+    fileSize: number | null;
+    durationSeconds: number | null;
+    quality: string | null;
+    resolution: string | null;
+    language: string | null;
+    season: number | null;
+    episode: number | null;
+  },
+): Promise<string | null> {
+  let episodeId: string | null = null;
+
+  // Find / create season + episode rows when this is a series file.
+  if (args.season != null) {
+    const { data: existingSeason } = await supabase
+      .from("seasons")
+      .select("id")
+      .eq("title_id", args.titleId)
+      .eq("season_number", args.season)
+      .maybeSingle();
+    let seasonId = existingSeason?.id ?? null;
+    if (!seasonId) {
+      const { data: ins } = await supabase
+        .from("seasons")
+        .insert({ title_id: args.titleId, season_number: args.season })
+        .select("id")
+        .single();
+      seasonId = ins?.id ?? null;
+    }
+
+    if (seasonId && args.episode != null) {
+      const { data: existingEp } = await supabase
+        .from("episodes")
+        .select("id")
+        .eq("title_id", args.titleId)
+        .eq("season_id", seasonId)
+        .eq("episode_number", args.episode)
+        .maybeSingle();
+      episodeId = existingEp?.id ?? null;
+      if (!episodeId) {
+        const { data: ins } = await supabase
+          .from("episodes")
+          .insert({
+            title_id: args.titleId,
+            season_id: seasonId,
+            episode_number: args.episode,
+          })
+          .select("id")
+          .single();
+        episodeId = ins?.id ?? null;
+      }
+    }
+  }
+
+  const { data: file, error: fileErr } = await supabase
+    .from("media_files")
+    .upsert(
+      {
+        title_id: args.titleId,
+        episode_id: episodeId,
+        channel_id: args.channelRowId,
+        telegram_file_id: args.telegramFileId,
+        telegram_message_id: args.telegramMessageId,
+        file_name: args.fileName,
+        caption: args.caption,
+        file_size: args.fileSize,
+        mime_type: args.mimeType,
+        quality: args.quality,
+        resolution: args.resolution,
+        language: args.language,
+        duration_seconds: args.durationSeconds,
+        is_active: true,
+      },
+      { onConflict: "telegram_file_id" },
+    )
+    .select("id")
+    .single();
+  if (fileErr) throw fileErr;
+
+  await supabase
+    .from("telegram_ingest")
+    .update({
+      match_status: "matched",
+      matched_title_id: args.titleId,
+      promoted_media_file_id: file.id,
+      last_error: null,
+    })
+    .eq("id", args.ingestId);
+
+  return file.id;
+}
