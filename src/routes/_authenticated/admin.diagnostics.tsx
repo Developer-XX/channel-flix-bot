@@ -144,3 +144,146 @@ function badgeClass(status: "ok" | "warn" | "fail" | string): string {
   if (status === "warn") return "text-amber-500";
   return "text-red-500";
 }
+
+// ---------------------------------------------------------------------------
+// Web Vitals (RUM) panel
+// ---------------------------------------------------------------------------
+
+// Google's Core Web Vitals thresholds (mobile field data).
+const VITAL_THRESHOLDS: Record<string, { good: number; poor: number; unit: string; label: string }> = {
+  LCP:  { good: 2500, poor: 4000, unit: "ms",  label: "Largest Contentful Paint" },
+  CLS:  { good: 0.1,  poor: 0.25, unit: "",    label: "Cumulative Layout Shift" },
+  INP:  { good: 200,  poor: 500,  unit: "ms",  label: "Interaction to Next Paint" },
+  FCP:  { good: 1800, poor: 3000, unit: "ms",  label: "First Contentful Paint" },
+  TTFB: { good: 800,  poor: 1800, unit: "ms",  label: "Time to First Byte" },
+  TBT:  { good: 200,  poor: 600,  unit: "ms",  label: "Total Blocking Time" },
+};
+
+function ratingFor(metric: string, value: number): "good" | "needs-improvement" | "poor" {
+  const t = VITAL_THRESHOLDS[metric];
+  if (!t) return "needs-improvement";
+  if (value <= t.good) return "good";
+  if (value <= t.poor) return "needs-improvement";
+  return "poor";
+}
+
+function ratingClass(r: "good" | "needs-improvement" | "poor"): string {
+  if (r === "good") return "text-emerald-500";
+  if (r === "needs-improvement") return "text-amber-500";
+  return "text-red-500";
+}
+
+function fmtMetric(metric: string, v: number | null | undefined): string {
+  if (v == null) return "—";
+  const t = VITAL_THRESHOLDS[metric];
+  if (!t) return String(v);
+  if (t.unit === "ms") return `${Math.round(Number(v))} ms`;
+  return Number(v).toFixed(3);
+}
+
+function WebVitalsPanel({
+  data,
+  loading,
+  error,
+}: {
+  data: VitalsRow[] | undefined;
+  loading: boolean;
+  error: Error | null;
+}) {
+  // Aggregate per-metric across all routes (sum samples, weighted p75).
+  const perMetric = new Map<string, { samples: number; p75: number; p95: number }>();
+  for (const r of data ?? []) {
+    const prev = perMetric.get(r.metric) ?? { samples: 0, p75: 0, p95: 0 };
+    const total = prev.samples + Number(r.sample_count);
+    perMetric.set(r.metric, {
+      samples: total,
+      p75: total ? (prev.p75 * prev.samples + Number(r.p75_value) * Number(r.sample_count)) / total : 0,
+      p95: total ? (prev.p95 * prev.samples + Number(r.p95_value) * Number(r.sample_count)) / total : 0,
+    });
+  }
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Activity className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Real-User Web Vitals — last 7 days</h2>
+        <span className="ml-auto text-[10px] text-muted-foreground">
+          {data?.length ?? 0} route×metric rows
+        </span>
+      </div>
+
+      {loading && <p className="text-xs text-muted-foreground">Loading RUM data…</p>}
+      {error && <p className="text-xs text-destructive break-words">{error.message}</p>}
+
+      {!loading && !error && perMetric.size === 0 && (
+        <p className="text-xs text-muted-foreground">
+          No RUM samples yet. Visit a few public pages from a non-headless browser to populate this.
+        </p>
+      )}
+
+      {perMetric.size > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {Object.keys(VITAL_THRESHOLDS).map((m) => {
+            const agg = perMetric.get(m);
+            if (!agg || !agg.samples) return null;
+            const r = ratingFor(m, agg.p75);
+            return (
+              <div key={m} className="rounded-md border border-border/60 p-2.5">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <span>{m}</span>
+                  <span>{agg.samples.toLocaleString()} obs</span>
+                </div>
+                <div className={`mt-1 font-mono text-base font-semibold ${ratingClass(r)}`}>
+                  {fmtMetric(m, agg.p75)}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  p75 · p95 {fmtMetric(m, agg.p95)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {data && data.length > 0 && (
+        <div className="overflow-x-auto -mx-3 sm:mx-0">
+          <table className="w-full text-[11px] min-w-[640px]">
+            <thead className="text-muted-foreground">
+              <tr className="text-left">
+                <th className="p-1.5">Route</th>
+                <th className="p-1.5">Metric</th>
+                <th className="p-1.5">Samples</th>
+                <th className="p-1.5">p75</th>
+                <th className="p-1.5">p95</th>
+                <th className="p-1.5">Good</th>
+                <th className="p-1.5">NI</th>
+                <th className="p-1.5">Poor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data
+                .slice()
+                .sort((a, b) => Number(b.sample_count) - Number(a.sample_count))
+                .slice(0, 50)
+                .map((r) => {
+                  const rating = ratingFor(r.metric, Number(r.p75_value));
+                  return (
+                    <tr key={`${r.route}-${r.metric}`} className="border-t border-border/50">
+                      <td className="p-1.5 font-mono text-muted-foreground break-all max-w-[220px]">{r.route}</td>
+                      <td className="p-1.5 font-mono">{r.metric}</td>
+                      <td className="p-1.5">{Number(r.sample_count).toLocaleString()}</td>
+                      <td className={`p-1.5 ${ratingClass(rating)}`}>{fmtMetric(r.metric, Number(r.p75_value))}</td>
+                      <td className="p-1.5 text-muted-foreground">{fmtMetric(r.metric, Number(r.p95_value))}</td>
+                      <td className="p-1.5 text-emerald-500">{r.good_count}</td>
+                      <td className="p-1.5 text-amber-500">{r.needs_improvement_count}</td>
+                      <td className="p-1.5 text-red-500">{r.poor_count}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}

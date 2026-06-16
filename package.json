@@ -13,7 +13,9 @@
     "test:e2e": "playwright test",
     "test:visual": "playwright test e2e/visual-regression.spec.ts",
     "test:visual:update": "playwright test e2e/visual-regression.spec.ts --update-snapshots",
-    "perf:budget": "node scripts/lighthouse-budget.mjs"
+    "test:a11y": "playwright test e2e/a11y.spec.ts",
+    "perf:budget": "node scripts/lighthouse-budget.mjs",
+    "test:report-diffs": "node scripts/visual-diff-report.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
