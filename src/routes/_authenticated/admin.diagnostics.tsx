@@ -531,3 +531,146 @@ function AdminAuditPanel() {
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Verification redirect diagnostics
+// ---------------------------------------------------------------------------
+
+function VerificationRedirectPanel() {
+  const run = useServerFn(getVerificationDiagnostics);
+  const q = useQuery({
+    queryKey: ["verification-diagnostics"],
+    queryFn: () => run(),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const d = q.data;
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Link2 className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Verification redirects</h2>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          onClick={() => q.refetch()}
+          disabled={q.isFetching}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
+      </div>
+
+      {q.isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+      {q.error && (
+        <p className="text-xs text-destructive break-words">{(q.error as Error).message}</p>
+      )}
+
+      {d && (
+        <>
+          <div className="rounded-md border border-border/60 p-2.5 grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+            <StatusIcon status={d.baseUrl.looksBroken ? "fail" : d.baseUrl.isFallback ? "warn" : "ok"} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">Public base URL</span>
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  source: {d.baseUrl.source}
+                </span>
+              </div>
+              <div className="text-xs font-mono break-all">{d.baseUrl.url}</div>
+              {d.baseUrl.isFallback && (
+                <div className="text-[11px] text-amber-500 mt-1">
+                  Using built-in fallback. Set <code>PUBLIC_BASE_URL</code> env var to your published domain to override.
+                </div>
+              )}
+              {d.baseUrl.looksBroken && (
+                <div className="text-[11px] text-red-500 mt-1">
+                  ⚠ Configured URL looks like a preview/localhost host — shared links will break.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Tokens (24h)" value={d.counters.tokensLast24h} />
+            <Stat label="Consumed" value={d.counters.consumedLast24h} tone="ok" />
+            <Stat label="Expired unused" value={d.counters.expiredLast24h} tone="warn" />
+            <Stat label="Provider errors" value={d.counters.providerErrorsLast24h} tone={d.counters.providerErrorsLast24h ? "fail" : "ok"} />
+          </div>
+
+          {d.recentTokens.length > 0 && (
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="w-full text-[11px] min-w-[640px]">
+                <thead className="text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="p-1.5">Token</th>
+                    <th className="p-1.5">Provider</th>
+                    <th className="p-1.5">User</th>
+                    <th className="p-1.5">File</th>
+                    <th className="p-1.5">Age</th>
+                    <th className="p-1.5">Consumed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.recentTokens.map((t) => (
+                    <tr key={t.token_prefix + t.created_at} className="border-t border-border/50">
+                      <td className="p-1.5 font-mono">{t.token_prefix}…</td>
+                      <td className="p-1.5">{t.provider}</td>
+                      <td className="p-1.5 font-mono text-muted-foreground break-all max-w-[140px]">{t.user_id.slice(0, 8)}…</td>
+                      <td className="p-1.5 font-mono text-muted-foreground break-all max-w-[140px]">{t.media_file_id ? t.media_file_id.slice(0, 8) + "…" : "—"}</td>
+                      <td className="p-1.5 text-muted-foreground">{t.age_minutes}m</td>
+                      <td className={`p-1.5 ${t.consumed_at ? "text-emerald-500" : "text-muted-foreground"}`}>
+                        {t.consumed_at ? "yes" : "no"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {d.recentProviderCalls.length > 0 && (
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="w-full text-[11px] min-w-[640px]">
+                <thead className="text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="p-1.5">Time</th>
+                    <th className="p-1.5">Provider</th>
+                    <th className="p-1.5">Status</th>
+                    <th className="p-1.5">HTTP</th>
+                    <th className="p-1.5">Latency</th>
+                    <th className="p-1.5">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.recentProviderCalls.map((c) => (
+                    <tr key={c.id} className="border-t border-border/50">
+                      <td className="p-1.5 whitespace-nowrap text-muted-foreground">{new Date(c.created_at).toLocaleTimeString()}</td>
+                      <td className="p-1.5">{c.provider}</td>
+                      <td className={`p-1.5 ${c.status === "ok" ? "text-emerald-500" : c.status === "no_key" ? "text-amber-500" : "text-red-500"}`}>{c.status}</td>
+                      <td className="p-1.5 text-muted-foreground">{c.http_status ?? "—"}</td>
+                      <td className="p-1.5 text-muted-foreground">{c.latency_ms ?? "—"}ms</td>
+                      <td className="p-1.5 text-muted-foreground break-words max-w-[260px]">{c.error ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok" | "warn" | "fail" }) {
+  const cls = tone === "ok" ? "text-emerald-500" : tone === "warn" ? "text-amber-500" : tone === "fail" ? "text-red-500" : "";
+  return (
+    <div className="rounded-md border border-border/60 p-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 font-mono text-base font-semibold ${cls}`}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
