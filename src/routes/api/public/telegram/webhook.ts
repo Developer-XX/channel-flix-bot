@@ -199,18 +199,7 @@ async function handleCommand(
       return { handled: true };
     }
 
-      const { data: chans } = await supabaseAdmin
-        .from("telegram_channels")
-        .select("channel_id")
-        .eq("is_active", true);
-      let ok = 0, fail = 0;
-      for (const c of chans ?? []) {
-        try { await sendMessage(c.channel_id, args); ok++; }
-        catch { fail++; }
-      }
-      await sendMessage(chatId, `📣 Broadcast complete: ${ok} sent, ${fail} failed.`);
-      return { handled: true };
-    }
+
     default: {
       await sendMessage(chatId, "Unknown command. Type /help for the list.");
       return { handled: true };
