@@ -95,6 +95,8 @@ function AdminLayout() {
           <NavItem to="/admin/telegram" icon={<Send className="h-4 w-4" />} label="Telegram" />
           <NavItem to="/admin/bulk" icon={<Zap className="h-4 w-4" />} label="Bulk rematch" />
           <NavItem to="/admin/verification-limits" icon={<ShieldAlert className="h-4 w-4" />} label="Verification limits" />
+          <NavItem to="/admin/sync-trace" icon={<Activity className="h-4 w-4" />} label="Sync trace" />
+          <NavItem to="/admin/diagnostics" icon={<Stethoscope className="h-4 w-4" />} label="Diagnostics" />
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-foreground inline-flex items-center gap-1"><ArrowLeft className="h-3 w-3" /> Back to site</Link>
