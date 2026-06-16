@@ -30,6 +30,7 @@ import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authentica
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
+import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -142,6 +143,12 @@ const ApiPublicTelegramBackfillRoute =
     path: '/api/public/telegram/backfill',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksTelegramResyncRecentRoute =
+  ApiPublicHooksTelegramResyncRecentRouteImport.update({
+    id: '/api/public/hooks/telegram-resync-recent',
+    path: '/api/public/hooks/telegram-resync-recent',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMaybeRebuildIndexesRoute =
   ApiPublicHooksMaybeRebuildIndexesRouteImport.update({
     id: '/api/public/hooks/maybe-rebuild-indexes',
@@ -168,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -190,6 +198,7 @@ export interface FileRoutesByTo {
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -215,6 +224,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/admin/verification-limits'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/admin/verification-limits'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -286,6 +298,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/verification-limits'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -303,6 +316,7 @@ export interface RootRouteChildren {
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
   ApiPublicVTokenRoute: typeof ApiPublicVTokenRoute
@@ -457,6 +471,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTelegramBackfillRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/telegram-resync-recent': {
+      id: '/api/public/hooks/telegram-resync-recent'
+      path: '/api/public/hooks/telegram-resync-recent'
+      fullPath: '/api/public/hooks/telegram-resync-recent'
+      preLoaderRoute: typeof ApiPublicHooksTelegramResyncRecentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/maybe-rebuild-indexes': {
       id: '/api/public/hooks/maybe-rebuild-indexes'
       path: '/api/public/hooks/maybe-rebuild-indexes'
@@ -515,6 +536,8 @@ const rootRouteChildren: RootRouteChildren = {
   TitleSlugRoute: TitleSlugRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,
+  ApiPublicHooksTelegramResyncRecentRoute:
+    ApiPublicHooksTelegramResyncRecentRoute,
   ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
   ApiPublicVTokenRoute: ApiPublicVTokenRoute,
