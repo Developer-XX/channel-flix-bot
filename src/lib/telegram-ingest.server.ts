@@ -11,7 +11,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseMedia, normalizeTitle, titleSimilarity } from "@/lib/telegram-parser";
 
-const MATCH_THRESHOLD = 0.55;
+const MATCH_THRESHOLD = 0.45;
+
+// Stronger similarity: max of jaccard, containment, and substring boost.
+function bestTitleScore(parsedTitle: string, candidate: string): number {
+  const a = normalizeTitle(parsedTitle);
+  const b = normalizeTitle(candidate);
+  if (!a || !b) return 0;
+  const jacc = titleSimilarity(parsedTitle, candidate);
+  const A = new Set(a.split(" ").filter(Boolean));
+  const B = new Set(b.split(" ").filter(Boolean));
+  const small = A.size <= B.size ? A : B;
+  const big = small === A ? B : A;
+  let inter = 0;
+  for (const t of small) if (big.has(t)) inter++;
+  const containment = small.size ? inter / small.size : 0;
+  const substr = a.includes(b) || b.includes(a) ? 0.9 : 0;
+  return Math.max(jacc, containment, substr);
+}
 
 export type TgMessage = {
   message_id: number;
