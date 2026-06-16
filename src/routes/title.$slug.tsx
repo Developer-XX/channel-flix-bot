@@ -57,7 +57,9 @@ function TitlePage() {
         .select("id, file_name, quality, resolution, language, file_size")
         .eq("title_id", titleQ.data!.id)
         .eq("is_active", true)
-        .order("quality", { ascending: false });
+        .order("resolution", { ascending: false, nullsFirst: false })
+        .order("quality", { ascending: false, nullsFirst: false })
+        .order("file_name", { ascending: true });
       return data ?? [];
     },
   });
