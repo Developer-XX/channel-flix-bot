@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { timingSafeEqual } from "crypto";
 
-// Telegram channel-post webhook receiver.
+// Telegram channel-post webhook receiver + DM command dispatcher.
 // Security: Telegram is configured with a `secret_token` and sends it back in
 // the `X-Telegram-Bot-Api-Secret-Token` header on every request. We compare it
 // with a timing-safe equality check. Any mismatch is logged in detail and
@@ -12,6 +12,113 @@ function safeEqual(a: string, b: string): boolean {
   const B = Buffer.from(b);
   if (A.length !== B.length) return false;
   return timingSafeEqual(A, B);
+}
+
+const HELP_TEXT = `<b>StreamVault ingest bot</b>
+
+I watch your Telegram channels and import posted media files into the catalog.
+
+<b>Setup</b>
+1. Add me as an <b>Administrator</b> of your channel (with "Read messages" — posting rights optional).
+2. Open the admin panel → Telegram → <b>Channel wizard</b> and paste the channel @username or id.
+3. Post a file with a clear caption, e.g. <code>Demon Slayer S01E02 1080p WEB-DL Hindi+English</code>.
+4. I'll react with 👀 on the post and the row will show up under "unmatched" or "matched".
+
+<b>Commands</b>
+/start, /help — this message
+/id — show your chat id (useful when adding /broadcast admins)
+/status — bot health and last ingest count
+/channels — list connected channels
+/broadcast &lt;text&gt; — (admins only) send a message to every active channel`;
+
+async function handleCommand(
+  update: any,
+  supabaseAdmin: any,
+): Promise<{ handled: true; reply?: string } | { handled: false }> {
+  const msg = update.message ?? update.edited_message;
+  if (!msg?.chat?.id || msg.chat.type !== "private") return { handled: false };
+  const text: string = (msg.text ?? "").trim();
+  if (!text.startsWith("/")) return { handled: false };
+
+  const { sendMessage } = await import("@/lib/telegram-api.server");
+  const [rawCmd, ...rest] = text.split(/\s+/);
+  const cmd = rawCmd.split("@")[0].toLowerCase();
+  const args = rest.join(" ");
+  const chatId = msg.chat.id;
+  const fromId: number | undefined = msg.from?.id;
+
+  switch (cmd) {
+    case "/start":
+    case "/help": {
+      await sendMessage(chatId, HELP_TEXT);
+      return { handled: true };
+    }
+    case "/id": {
+      await sendMessage(
+        chatId,
+        `Your chat id: <code>${chatId}</code>\nYour user id: <code>${fromId ?? "?"}</code>`,
+      );
+      return { handled: true };
+    }
+    case "/status": {
+      const [{ count: chanCount }, { count: ingestCount }, { data: state }] = await Promise.all([
+        supabaseAdmin.from("telegram_channels").select("id", { count: "exact", head: true }).eq("is_active", true),
+        supabaseAdmin.from("telegram_ingest").select("id", { count: "exact", head: true }),
+        supabaseAdmin.from("telegram_bot_state").select("last_run_at, last_run_status, last_update_id").eq("id", "global").maybeSingle(),
+      ]);
+      await sendMessage(
+        chatId,
+        `<b>Bot status</b>\nActive channels: ${chanCount ?? 0}\nIngested rows: ${ingestCount ?? 0}\nLast backfill: ${state?.last_run_at ?? "never"} (${state?.last_run_status ?? "—"})\nLast update_id: ${state?.last_update_id ?? 0}`,
+      );
+      return { handled: true };
+    }
+    case "/channels": {
+      const { data: chans } = await supabaseAdmin
+        .from("telegram_channels")
+        .select("name, username, channel_id, is_active")
+        .order("created_at", { ascending: true });
+      if (!chans?.length) {
+        await sendMessage(chatId, "No channels configured yet. Use the admin panel → Channel wizard.");
+        return { handled: true };
+      }
+      const lines = chans.map((c: any) =>
+        `${c.is_active ? "🟢" : "⚪"} ${c.name ?? c.username ?? c.channel_id} (<code>${c.channel_id}</code>)`,
+      );
+      await sendMessage(chatId, `<b>Channels</b>\n${lines.join("\n")}`);
+      return { handled: true };
+    }
+    case "/broadcast": {
+      const { data: state } = await supabaseAdmin
+        .from("telegram_bot_state")
+        .select("admin_telegram_user_ids")
+        .eq("id", "global")
+        .maybeSingle();
+      const admins: number[] = state?.admin_telegram_user_ids ?? [];
+      if (!fromId || !admins.includes(fromId)) {
+        await sendMessage(chatId, `❌ Not authorized. Ask an admin to add your Telegram user id (<code>${fromId ?? "?"}</code>) in the admin panel.`);
+        return { handled: true };
+      }
+      if (!args) {
+        await sendMessage(chatId, "Usage: /broadcast &lt;message&gt;");
+        return { handled: true };
+      }
+      const { data: chans } = await supabaseAdmin
+        .from("telegram_channels")
+        .select("channel_id")
+        .eq("is_active", true);
+      let ok = 0, fail = 0;
+      for (const c of chans ?? []) {
+        try { await sendMessage(c.channel_id, args); ok++; }
+        catch { fail++; }
+      }
+      await sendMessage(chatId, `📣 Broadcast complete: ${ok} sent, ${fail} failed.`);
+      return { handled: true };
+    }
+    default: {
+      await sendMessage(chatId, "Unknown command. Type /help for the list.");
+      return { handled: true };
+    }
+  }
 }
 
 export const Route = createFileRoute("/api/public/telegram/webhook")({
@@ -46,8 +153,20 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         }
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { ingestTelegramUpdate } = await import("@/lib/telegram-ingest.server");
 
+        // DM command dispatch (private chats only). Channel posts fall through
+        // to the ingest pipeline.
+        try {
+          const cmd = await handleCommand(update, supabaseAdmin);
+          if (cmd.handled) {
+            console.log(`[telegram-webhook] command handled update_id=${update?.update_id}`);
+            return Response.json({ ok: true, kind: "command" });
+          }
+        } catch (e: any) {
+          console.error("[telegram-webhook] command error:", e?.message);
+        }
+
+        const { ingestTelegramUpdate } = await import("@/lib/telegram-ingest.server");
         try {
           const result = await ingestTelegramUpdate(supabaseAdmin, update, "webhook");
           console.log(
