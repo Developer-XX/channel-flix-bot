@@ -86,22 +86,87 @@ test.describe("mobile visual regression — homepage", () => {
     });
   });
 
-  test("mobile menu opens and shows all categories", async ({ page }) => {
+  test("mobile menu expanded — drawer snapshot", async ({ page }, info) => {
     await page.goto("/");
     await waitForFontsAndImages(page);
 
     const toggle = page.getByRole("button", { name: /toggle menu/i }).first();
     await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
-    // Drawer
-    const drawer = page.locator("header").locator("xpath=following-sibling::*").first();
-    // Category links inside drawer
     const links = page.locator("a", { hasText: /movie|series|anime|drama|cartoon/i });
     expect(await links.count()).toBeGreaterThan(0);
     await assertVisible(page, links.first(), "first menu category");
+    await assertNoHorizontalOverflow(page);
+
+    await expect(page).toHaveScreenshot(`menu-open-${info.project.name}.png`, {
+      fullPage: false,
+      maxDiffPixelRatio: 0.04,
+      animations: "disabled",
+    });
+  });
+
+  test("trending row scrolled — no cards clipped after horizontal scroll", async ({ page }, info) => {
+    await page.goto("/");
+    await waitForFontsAndImages(page);
+
+    const trending = page.getByRole("heading", { name: /trending now/i }).first();
+    if (!(await trending.isVisible().catch(() => false))) test.skip(true, "no trending row to test");
+    const row = trending.locator("xpath=following-sibling::*[1]");
+    // Scroll the row horizontally by 200px to expose later cards.
+    await row.evaluate((el) => el.scrollBy({ left: 200 }));
+    await page.waitForTimeout(150);
 
     await assertNoHorizontalOverflow(page);
-    void drawer;
+    await expect(row).toHaveScreenshot(`trending-scrolled-${info.project.name}.png`, {
+      maxDiffPixelRatio: 0.06,
+      animations: "disabled",
+      mask: [page.locator("img")],
+    });
+  });
+
+  test("search results page renders without clipping", async ({ page }, info) => {
+    await page.goto("/search?q=a");
+    await waitForFontsAndImages(page);
+
+    await assertVisible(page, page.locator("header").first(), "header on search");
+    await assertNoHorizontalOverflow(page);
+
+    await expect(page).toHaveScreenshot(`search-${info.project.name}.png`, {
+      fullPage: true,
+      maxDiffPixelRatio: 0.05,
+      animations: "disabled",
+      mask: [page.locator("img")],
+    });
+  });
+});
+
+test.describe("mobile visual regression — modal / dialog", () => {
+  test("download dialog (if rendered) snapshots cleanly", async ({ page }, info) => {
+    const slug =
+      (process.env.TITLE_SLUGS ?? "")
+        .split(",").map((s) => s.trim()).filter(Boolean)[0] ??
+      "doraemon-the-movie-nobita-s-earth-symphony-2024";
+    await page.goto(`/title/${slug}`);
+    await waitForFontsAndImages(page);
+
+    const dlBtn = page.getByRole("button", { name: /download/i }).first();
+    if (!(await dlBtn.isVisible().catch(() => false))) {
+      test.skip(true, "no download button on this title");
+    }
+    await dlBtn.click().catch(() => {});
+    // Wait for any dialog/popover that may open.
+    const dialog = page.getByRole("dialog").first();
+    if (await dialog.isVisible().catch(() => false)) {
+      await assertNoHorizontalOverflow(page);
+      await expect(dialog).toHaveScreenshot(`download-dialog-${info.project.name}.png`, {
+        maxDiffPixelRatio: 0.05,
+        animations: "disabled",
+        mask: [page.locator("img")],
+      });
+    } else {
+      test.skip(true, "download button did not open a dialog");
+    }
   });
 });
 
