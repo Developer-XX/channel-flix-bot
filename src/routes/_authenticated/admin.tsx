@@ -1,16 +1,82 @@
-import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send } from "lucide-react";
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
-import { getAdminGate } from "@/lib/admin.functions";
+import { toast } from "sonner";
+import { getAdminGate, claimFirstAdmin } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  beforeLoad: async () => {
-    const gate = await getAdminGate();
-    if (!gate.canAccessAdmin) throw redirect({ to: "/" });
-    return gate;
-  },
-  component: AdminLayout,
+  component: AdminGateLayout,
+  errorComponent: ({ error }) => (
+    <div className="p-8 max-w-xl mx-auto">
+      <h1 className="text-xl font-bold mb-2">Admin loading failed</h1>
+      <pre className="text-xs bg-muted p-3 rounded overflow-auto">{error.message}</pre>
+      <Link to="/" className="text-primary text-sm mt-3 inline-block">← Back to site</Link>
+    </div>
+  ),
 });
+
+function AdminGateLayout() {
+  const gate = useServerFn(getAdminGate);
+  const claim = useServerFn(claimFirstAdmin);
+  const q = useQuery({ queryKey: ["admin-gate"], queryFn: () => gate(), retry: false });
+
+  if (q.isLoading) {
+    return <div className="p-8 text-sm text-muted-foreground">Checking admin access…</div>;
+  }
+  if (q.error) {
+    return (
+      <div className="p-8 max-w-xl mx-auto space-y-3">
+        <h1 className="text-xl font-bold">Could not verify admin access</h1>
+        <pre className="text-xs bg-muted p-3 rounded overflow-auto">{(q.error as Error).message}</pre>
+        <Button variant="outline" onClick={() => q.refetch()}>Retry</Button>
+        <Link to="/" className="text-primary text-sm inline-block">← Back to site</Link>
+      </div>
+    );
+  }
+  const g = q.data!;
+  if (!g.canAccessAdmin) {
+    return (
+      <div className="p-8 max-w-xl mx-auto space-y-4">
+        <div className="flex items-center gap-2 text-amber-500">
+          <AlertTriangle className="h-5 w-5" />
+          <h1 className="text-xl font-bold">Admin access required</h1>
+        </div>
+        <div className="rounded-md border border-border p-4 text-sm space-y-1">
+          <div><span className="text-muted-foreground">Signed in as:</span> {g.email ?? "(no email)"}</div>
+          <div className="font-mono text-xs text-muted-foreground break-all">{g.userId}</div>
+          <div className="pt-1">
+            <span className="text-muted-foreground">Roles:</span>{" "}
+            {g.isAdmin ? "admin " : ""}{g.isModerator ? "moderator " : ""}
+            {!g.isAdmin && !g.isModerator && <span className="text-muted-foreground">none</span>}
+          </div>
+          <div><span className="text-muted-foreground">Any admin exists:</span> {g.hasAnyAdmin ? "yes" : "no"}</div>
+        </div>
+        {!g.hasAnyAdmin && (
+          <div className="space-y-2">
+            <p className="text-sm">No admin exists yet. You can claim the first admin role:</p>
+            <Button
+              onClick={async () => {
+                try {
+                  await claim();
+                  toast.success("You are now admin");
+                  q.refetch();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Claim failed");
+                }
+              }}
+            >
+              Claim first admin
+            </Button>
+          </div>
+        )}
+        <Link to="/" className="text-primary text-sm inline-block">← Back to site</Link>
+      </div>
+    );
+  }
+  return <AdminLayout />;
+}
 
 function AdminLayout() {
   return (
