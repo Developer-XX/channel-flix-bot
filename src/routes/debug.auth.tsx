@@ -26,31 +26,37 @@ function DebugAuth() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
+    console.log("[debug-auth] load start");
     try {
-      const { data: s, error: sErr } = await supabase.auth.getSession();
-      const { data: u, error: uErr } = await supabase.auth.getUser();
-      const session = s.session;
+      const withTimeout = <T,>(p: Promise<T>, ms: number, tag: string): Promise<T> =>
+        Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`${tag} timed out after ${ms}ms`)), ms))]);
+      const sRes = await withTimeout(supabase.auth.getSession(), 5000, "getSession");
+      const uRes = await withTimeout(supabase.auth.getUser(), 5000, "getUser");
+      console.log("[debug-auth] got session", sRes, "user", uRes);
+      const session = sRes.data.session;
       const exp = session?.expires_at ? new Date(session.expires_at * 1000) : null;
       const storageKeys = typeof localStorage !== "undefined"
         ? Object.keys(localStorage).filter((k) => k.includes("supabase") || k.startsWith("sb-"))
         : [];
       setStatus({
         hasSession: !!session,
-        user: u.user ? { id: u.user.id, email: u.user.email } : null,
+        user: uRes.data.user ? { id: uRes.data.user.id, email: uRes.data.user.email } : null,
         accessTokenPresent: !!session?.access_token,
         refreshTokenPresent: !!session?.refresh_token,
         accessTokenExpiresAt: exp ? exp.toISOString() : null,
         accessTokenExpired: exp ? exp.getTime() < Date.now() : null,
-        getUserOk: !uErr && !!u.user,
-        getUserError: uErr?.message ?? null,
+        getUserOk: !uRes.error && !!uRes.data.user,
+        getUserError: uRes.error?.message ?? null,
         storageKeys,
-        error: sErr?.message ?? null,
+        error: sRes.error?.message ?? null,
       });
     } catch (e) {
+      console.error("[debug-auth] load failed", e);
       setStatus({
         hasSession: false, user: null, accessTokenPresent: false, refreshTokenPresent: false,
         accessTokenExpiresAt: null, accessTokenExpired: null, getUserOk: false,
-        getUserError: null, storageKeys: [], error: (e as Error).message,
+        getUserError: null, storageKeys: typeof localStorage !== "undefined" ? Object.keys(localStorage).filter((k) => k.includes("supabase") || k.startsWith("sb-")) : [],
+        error: (e as Error).message,
       });
     }
   };
