@@ -7,6 +7,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { CATEGORY_LABEL } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { DownloadButton } from "@/components/DownloadButton";
+import { SeasonAccordion } from "@/components/SeasonAccordion";
+import { TitleDebugPanel } from "@/components/TitleDebugPanel";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
