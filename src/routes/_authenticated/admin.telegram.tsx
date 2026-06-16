@@ -166,6 +166,8 @@ function TelegramAdmin() {
         </p>
       </section>
 
+      <MatchingSettingsPanel />
+
       <section className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           {(["all", "pending", "matched", "unmatched", "ignored"] as const).map((s) => (
@@ -173,7 +175,7 @@ function TelegramAdmin() {
               key={s}
               variant={statusFilter === s ? "default" : "outline"}
               size="sm"
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); setSelected(new Set()); }}
             >
               {s}
             </Button>
@@ -185,17 +187,48 @@ function TelegramAdmin() {
             onClick={async () => {
               try {
                 const r = await rematch();
-                toast.success(`Rematch: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
+                toast.success(`Reindex: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
                 ingest.refetch();
                 router.invalidate();
               } catch (e: any) {
-                toast.error(e?.message ?? "Rematch failed");
+                toast.error(e?.message ?? "Reindex failed");
               }
             }}
           >
-            Rematch unmatched
+            Reindex / Refresh website
           </Button>
         </div>
+
+        {selected.size > 0 && (
+          <BulkActionBar
+            count={selected.size}
+            ingestIds={Array.from(selected)}
+            search={search}
+            onClear={() => setSelected(new Set())}
+            onAssign={async (titleId) => {
+              const r = await bulkAssign({ data: { ingestIds: Array.from(selected), titleId, promote: true } });
+              toast.success(`Assigned ${r.assigned} · promoted ${r.promoted}`);
+              setSelected(new Set());
+              ingest.refetch();
+              router.invalidate();
+            }}
+            onAddAlias={async (titleId) => {
+              const r = await bulkAlias({ data: { ingestIds: Array.from(selected), titleId } });
+              const re = await rematch({ data: { ingestIds: Array.from(selected) } });
+              toast.success(`Added ${r.added} alias(es) · promoted ${re.promoted}`);
+              setSelected(new Set());
+              ingest.refetch();
+              router.invalidate();
+            }}
+            onPromoteSelected={async () => {
+              const r = await rematch({ data: { ingestIds: Array.from(selected) } });
+              toast.success(`Promoted ${r.promoted}/${r.scanned}`);
+              setSelected(new Set());
+              ingest.refetch();
+              router.invalidate();
+            }}
+          />
+        )}
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {ingest.error && <p className="text-sm text-destructive">{(ingest.error as Error).message}</p>}
@@ -206,11 +239,21 @@ function TelegramAdmin() {
               key={row.id}
               row={row}
               expanded={expanded === row.id}
+              selected={selected.has(row.id)}
+              onSelectToggle={() => toggleSel(row.id)}
               onToggle={() => setExpanded(expanded === row.id ? null : row.id)}
               onUpdate={async (patch) => {
                 await update({ data: { ingestId: row.id, ...patch } });
                 ingest.refetch();
               }}
+              onRematch={async () => {
+                const r = await rematchSingle({ data: { ingestId: row.id, autoPromote: true } });
+                if (r.match.matchedTitleId) toast.success(`Matched · score ${r.match.matchScore?.toFixed(2)}${r.promoted ? " · promoted" : ""}`);
+                else toast.message(`No match · best score ${(r.match.matchScore ?? 0).toFixed(2)}`);
+                ingest.refetch();
+                router.invalidate();
+              }}
+              onDiagnose={() => diagnose({ data: { ingestId: row.id } })}
               onPromote={async (titleId, overrides) => {
                 await promote({ data: { ingestId: row.id, titleId, overrides } });
                 toast.success("Promoted to media_files");
@@ -238,6 +281,7 @@ function TelegramAdmin() {
       </section>
     </div>
   );
+
 }
 
 function IngestCard({
