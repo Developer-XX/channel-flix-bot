@@ -429,6 +429,20 @@ function IngestCard({
               </Button>
               <Button
                 size="sm"
+                variant="secondary"
+                disabled={!selectedTitleId || !draft.parsed_title}
+                title="Save this parsed title as an alias for the selected master title, then auto-promote every matching unmatched file"
+                onClick={async () => {
+                  if (!selectedTitleId) return;
+                  try {
+                    await onSaveAliasAndPromote(selectedTitleId, draft.parsed_title);
+                  } catch (e: any) { toast.error(e?.message ?? "Save alias failed"); }
+                }}
+              >
+                Save as alias + auto-promote all
+              </Button>
+              <Button
+                size="sm"
                 variant="outline"
                 onClick={async () => {
                   try { await onIgnore(); toast.success("Ignored"); }
