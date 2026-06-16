@@ -110,6 +110,9 @@ function TelegramAdmin() {
         </p>
       </section>
 
+      <ChannelWizard />
+
+
       <section className="rounded-lg border border-border p-4 space-y-3">
         <h2 className="font-semibold">Backfill</h2>
         <div className="text-xs text-muted-foreground">
