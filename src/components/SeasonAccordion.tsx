@@ -73,7 +73,7 @@ export function SeasonAccordion({ titleId }: Props) {
   return (
     <div className="space-y-3">
       {grouped.map((s) => (
-        <SeasonBlock key={String(s.seasonNumber)} season={s} />
+        <SeasonBlock key={String(s.seasonNumber)} season={s} titleId={titleId} />
       ))}
     </div>
   );
@@ -81,8 +81,10 @@ export function SeasonAccordion({ titleId }: Props) {
 
 function SeasonBlock({
   season,
+  titleId,
 }: {
   season: { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> };
+  titleId: string;
 }) {
   const [open, setOpen] = useState(season.seasonNumber === 1 || season.seasonNumber === "other");
   const episodes = Array.from(season.episodes.entries()).sort(([a], [b]) => {
@@ -113,36 +115,49 @@ function SeasonBlock({
       </button>
       {open && (
         <div className="border-t border-border divide-y divide-border">
-          {episodes.map(([epNum, files]) => (
-            <div key={String(epNum)} className="px-4 py-3 space-y-2">
-              <div className="text-sm font-medium">
-                {epNum === "other" ? "Unassigned" : `Episode ${epNum}`}
-                {files[0]?.episodes?.name ? ` — ${files[0].episodes.name}` : ""}
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {files.map((f) => (
-                  <div
-                    key={f.id}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3"
-                  >
-                    <div className="grid h-9 w-9 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
-                      <Download className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{f.file_name}</div>
-                      <div className="text-[11px] text-muted-foreground flex gap-1.5 mt-0.5">
-                        {f.quality && <span>{f.quality}</span>}
-                        {f.resolution && <span>· {f.resolution}</span>}
-                        {f.language && <span>· {f.language.toUpperCase()}</span>}
-                        {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
+          {episodes.map(([epNum, files]) => {
+            const seasonNum =
+              typeof files[0]?.episodes?.seasons?.season_number === "number"
+                ? files[0]!.episodes!.seasons!.season_number
+                : null;
+            const episodeNum = typeof epNum === "number" ? epNum : null;
+            return (
+              <div key={String(epNum)} className="px-4 py-3 space-y-2">
+                <div className="text-sm font-medium">
+                  {epNum === "other" ? "Unassigned" : `Episode ${epNum}`}
+                  {files[0]?.episodes?.name ? ` — ${files[0].episodes.name}` : ""}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {files.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3"
+                    >
+                      <div className="grid h-9 w-9 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
+                        <Download className="h-4 w-4" />
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{f.file_name}</div>
+                        <div className="text-[11px] text-muted-foreground flex gap-1.5 mt-0.5">
+                          {f.quality && <span>{f.quality}</span>}
+                          {f.resolution && <span>· {f.resolution}</span>}
+                          {f.language && <span>· {f.language.toUpperCase()}</span>}
+                          {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
+                        </div>
+                      </div>
+                      <DownloadButton
+                        mediaFileId={f.id}
+                        fileName={f.file_name}
+                        titleId={titleId}
+                        season={seasonNum}
+                        episode={episodeNum}
+                      />
                     </div>
-                    <DownloadButton mediaFileId={f.id} fileName={f.file_name} />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
