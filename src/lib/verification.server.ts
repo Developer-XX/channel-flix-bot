@@ -19,7 +19,7 @@ function siteOrigin(): string {
   return (
     process.env.SITE_URL ??
     process.env.PUBLIC_SITE_URL ??
-    "https://project--d54ff009-ac17-477f-85a3-112a949d0888.lovable.app"
+    "https://channel-flix-bot.lovable.app"
   );
 }
 
