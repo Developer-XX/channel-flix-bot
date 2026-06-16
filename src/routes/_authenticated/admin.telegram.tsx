@@ -26,6 +26,8 @@ import {
   saveTelegramChannel,
   deleteTelegramChannel,
   setBotAdminIds,
+  addTitleAlias,
+  rematchUnmatched,
 } from "@/lib/telegram.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/telegram")({
