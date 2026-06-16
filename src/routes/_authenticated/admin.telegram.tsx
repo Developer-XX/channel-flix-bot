@@ -532,12 +532,84 @@ function IngestCard({
               >
                 Ignore
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try { await onRematch(); } catch (e: any) { toast.error(e?.message ?? "Rematch failed"); }
+                }}
+              >
+                Rematch now
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  setDiagLoading(true);
+                  try { setDiag(await onDiagnose()); }
+                  catch (e: any) { toast.error(e?.message ?? "Diagnose failed"); }
+                  finally { setDiagLoading(false); }
+                }}
+              >
+                {diagLoading ? "Diagnosing…" : "Diagnose"}
+              </Button>
             </div>
           </div>
+
+          {diag && (
+            <div className="border-t border-border pt-3 space-y-2">
+              <Label className="text-xs uppercase text-muted-foreground">Diagnostics</Label>
+              <div className="text-xs text-muted-foreground">
+                Threshold: <code>{diag.threshold}</code> · Best score: <code>{(diag.matchScore ?? 0).toFixed(3)}</code>
+                {diag.matchedVia ? <> · Matched via <Badge variant="secondary">{diag.matchedVia}</Badge></> : <> · <span className="text-amber-500">no match (below threshold)</span></>}
+              </div>
+              <div className="text-xs">
+                Parsed: <code>"{diag.parsed.parsed_title}"</code>
+                {diag.parsed.parsed_year ? ` · year ${diag.parsed.parsed_year}` : ""}
+                {diag.parsed.parsed_season != null ? ` · S${String(diag.parsed.parsed_season).padStart(2,"0")}${diag.parsed.parsed_episode != null ? `E${String(diag.parsed.parsed_episode).padStart(2,"0")}` : ""}` : ""}
+                {diag.parsed.parsed_category ? ` · ${diag.parsed.parsed_category}` : ""}
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mt-2">Alias hits ({diag.aliasHits.length})</div>
+                {diag.aliasHits.length === 0 && <div className="text-xs text-muted-foreground">— no aliases matched —</div>}
+                {diag.aliasHits.map((a: any, i: number) => (
+                  <div key={i} className="text-xs font-mono">
+                    {a.exact ? "✓ exact" : "≈ contained"} · "{a.alias}" → {a.titleId.slice(0, 8)}…
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mt-2">Top fuzzy candidates ({diag.candidates.length})</div>
+                {diag.candidates.length === 0 && <div className="text-xs text-muted-foreground">— no candidates found (head token did not match any master title) —</div>}
+                <table className="w-full text-xs">
+                  <thead className="text-muted-foreground">
+                    <tr><th className="text-left">Title</th><th>Adj</th><th>Jacc</th><th>Cont</th><th>Sub</th><th>Year</th><th>Cat</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {diag.candidates.map((c: any) => (
+                      <tr key={c.titleId} className="border-t border-border/50">
+                        <td className="py-1">{c.title} {c.release_year ? `(${c.release_year})` : ""}</td>
+                        <td className="text-center font-semibold">{c.adjustedScore.toFixed(2)}</td>
+                        <td className="text-center">{c.parts.jaccard.toFixed(2)}</td>
+                        <td className="text-center">{c.parts.containment.toFixed(2)}</td>
+                        <td className="text-center">{c.parts.substring.toFixed(2)}</td>
+                        <td className="text-center">{c.yearOk ? "✓" : "✗"}</td>
+                        <td className="text-center">{c.categoryOk ? "✓" : "✗"}</td>
+                        <td>
+                          <Button size="sm" variant="ghost" onClick={() => onPromote(c.titleId)}>Use</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
