@@ -572,6 +572,16 @@ function IngestCard({
               </Button>
               <Button
                 size="sm"
+                variant="default"
+                title="Re-run the matcher for just this file, write an audit row, promote on success, and bump the website cache version."
+                onClick={async () => {
+                  await onForcePublish(selectedTitleId ?? undefined);
+                }}
+              >
+                Force rematch &amp; publish
+              </Button>
+              <Button
+                size="sm"
                 variant="ghost"
                 onClick={async () => {
                   setDiagLoading(true);
