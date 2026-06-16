@@ -103,13 +103,38 @@ function AdminLayout() {
         </div>
       </aside>
       <main className="flex-1 min-w-0">
-        <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border bg-sidebar">
-          <Link to="/admin" className="font-bold">StreamVault Admin</Link>
-          <Link to="/"><Button size="sm" variant="ghost">Site</Button></Link>
+        <div className="md:hidden sticky top-0 z-20 border-b border-border bg-sidebar/95 backdrop-blur">
+          <div className="flex items-center justify-between px-3 h-12">
+            <Link to="/admin" className="font-bold text-sm truncate">StreamVault Admin</Link>
+            <Link to="/"><Button size="sm" variant="ghost">Site</Button></Link>
+          </div>
+          <nav className="flex gap-1 overflow-x-auto px-3 pb-2 text-xs no-scrollbar">
+            <MobileNavItem to="/admin" label="Dashboard" exact />
+            <MobileNavItem to="/admin/titles" label="Titles" />
+            <MobileNavItem to="/admin/requests" label="Requests" />
+            <MobileNavItem to="/admin/telegram" label="Telegram" />
+            <MobileNavItem to="/admin/bulk" label="Bulk" />
+            <MobileNavItem to="/admin/verification-limits" label="Limits" />
+            <MobileNavItem to="/admin/sync-trace" label="Sync trace" />
+            <MobileNavItem to="/admin/diagnostics" label="Diagnostics" />
+          </nav>
         </div>
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function MobileNavItem({ to, label, exact }: { to: string; label: string; exact?: boolean }) {
+  return (
+    <Link
+      to={to as never}
+      activeOptions={{ exact: !!exact }}
+      activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground border-sidebar-accent" }}
+      className="shrink-0 rounded-md border border-border px-2.5 py-1 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors whitespace-nowrap"
+    >
+      {label}
+    </Link>
   );
 }
 
