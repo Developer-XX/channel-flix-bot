@@ -181,20 +181,24 @@ async function handleCommand(
       return { handled: true };
     }
     case "/broadcast": {
-      const { data: state } = await supabaseAdmin
-        .from("telegram_bot_state")
-        .select("admin_telegram_user_ids")
-        .eq("id", "global")
-        .maybeSingle();
-      const admins: number[] = state?.admin_telegram_user_ids ?? [];
-      if (!fromId || !admins.includes(fromId)) {
-        await sendMessage(chatId, `❌ Not authorized. Ask an admin to add your Telegram user id (<code>${fromId ?? "?"}</code>) in the admin panel.`);
-        return { handled: true };
-      }
+      // Admin check already enforced at the top of handleCommand.
       if (!args) {
         await sendMessage(chatId, "Usage: /broadcast &lt;message&gt;");
         return { handled: true };
       }
+      const { data: chans } = await supabaseAdmin
+        .from("telegram_channels")
+        .select("channel_id")
+        .eq("is_active", true);
+      let ok = 0, fail = 0;
+      for (const c of chans ?? []) {
+        try { await sendMessage(c.channel_id, args); ok++; }
+        catch { fail++; }
+      }
+      await sendMessage(chatId, `📣 Broadcast complete: ${ok} sent, ${fail} failed.`);
+      return { handled: true };
+    }
+
       const { data: chans } = await supabaseAdmin
         .from("telegram_channels")
         .select("channel_id")
