@@ -1,11 +1,12 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Star, Clock, Calendar, Globe, Download, Send } from "lucide-react";
+import { Star, Clock, Calendar, Globe, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { CATEGORY_LABEL } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
+import { DownloadButton } from "@/components/DownloadButton";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
