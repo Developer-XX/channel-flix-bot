@@ -143,6 +143,8 @@ function SeasonBlock({
                   {files.map((f) => (
                     <div
                       key={f.id}
+                      data-testid="episode-row"
+                      data-media-file-id={f.id}
                       className="grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-border bg-background/40 p-3 min-w-0"
                     >
                       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
