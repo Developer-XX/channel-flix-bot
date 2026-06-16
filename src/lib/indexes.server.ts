@@ -3,6 +3,31 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+// Called after every successful promotion. Increments the running counter
+// and flips pending_index_rebuild=true once the configured threshold is
+// reached so the cron worker picks it up on the next tick.
+export async function markPromotionForAutoRebuild(
+  supabase: SupabaseClient<any, any, any>,
+): Promise<void> {
+  const { data: cur } = await supabase
+    .from("telegram_bot_state")
+    .select("promotions_since_last_index, auto_rebuild_threshold")
+    .eq("id", "global")
+    .maybeSingle();
+  const count = (cur?.promotions_since_last_index ?? 0) + 1;
+  const threshold = cur?.auto_rebuild_threshold ?? 25;
+  await supabase
+    .from("telegram_bot_state")
+    .upsert(
+      {
+        id: "global",
+        promotions_since_last_index: count,
+        pending_index_rebuild: count >= threshold,
+      },
+      { onConflict: "id" },
+    );
+}
+
 export async function bumpCacheVersion(
   supabase: SupabaseClient<any, any, any>,
 ): Promise<number> {
