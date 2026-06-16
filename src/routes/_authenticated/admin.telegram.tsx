@@ -49,6 +49,8 @@ function TelegramAdmin() {
   const backfill = useServerFn(runBackfillNow);
   const botState = useServerFn(getBotState);
   const search = useServerFn(searchMasterTitles);
+  const addAlias = useServerFn(addTitleAlias);
+  const rematch = useServerFn(rematchUnmatched);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
