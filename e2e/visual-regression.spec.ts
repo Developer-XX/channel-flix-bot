@@ -20,6 +20,38 @@ const TITLE_SLUGS = (process.env.TITLE_SLUGS ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+// Force reduced-motion + a frozen clock for every visual test to keep
+// animations, randomized greetings, and time-based UI deterministic.
+test.use({
+  colorScheme: "dark",
+  reducedMotion: "reduce",
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    // Freeze clock to a deterministic instant.
+    const FROZEN = new Date("2026-06-16T12:00:00Z").valueOf();
+    const RealDate = Date;
+    // @ts-expect-error override
+    globalThis.Date = class extends RealDate {
+      constructor(...args: ConstructorParameters<typeof Date>) {
+        super(...(args.length ? args : [FROZEN]));
+      }
+      static now() {
+        return FROZEN;
+      }
+    };
+    // Deterministic RNG.
+    let seed = 1;
+    Math.random = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+  });
+});
+
+
+
 /**
  * Deterministic rendering harness — reduces flakiness on mobile breakpoints by:
  *  - Pinning Date.now / Math.random / scrollbar width before any app code runs
