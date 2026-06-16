@@ -26,6 +26,7 @@ import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
+import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -115,6 +116,12 @@ const ApiPublicTelegramWebhookRoute =
     path: '/api/public/telegram/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicTelegramBackfillRoute =
+  ApiPublicTelegramBackfillRouteImport.update({
+    id: '/api/public/telegram/backfill',
+    path: '/api/public/telegram/backfill',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -149,6 +157,7 @@ export interface FileRoutesByTo {
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesById {
@@ -169,6 +178,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRouteTypes {
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin/'
+    | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin'
+    | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
   id:
     | '__root__'
@@ -225,6 +237,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/'
+    | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -239,6 +252,7 @@ export interface RootRouteChildren {
   BrowseCategoryRoute: typeof BrowseCategoryRoute
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
+  ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
 }
 
@@ -363,6 +377,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTelegramWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/telegram/backfill': {
+      id: '/api/public/telegram/backfill'
+      path: '/api/public/telegram/backfill'
+      fullPath: '/api/public/telegram/backfill'
+      preLoaderRoute: typeof ApiPublicTelegramBackfillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -407,6 +428,7 @@ const rootRouteChildren: RootRouteChildren = {
   BrowseCategoryRoute: BrowseCategoryRoute,
   DebugAuthRoute: DebugAuthRoute,
   TitleSlugRoute: TitleSlugRoute,
+  ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
