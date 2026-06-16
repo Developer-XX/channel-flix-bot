@@ -1,51 +1,42 @@
-import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Film, LayoutDashboard, FileText, MessageSquare, ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { claimFirstAdmin, getAdminGate } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
 });
 
 function AdminLayout() {
-  const navigate = useNavigate();
   const [checked, setChecked] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasAnyAdmin, setHasAnyAdmin] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        navigate({ to: "/auth" });
-        return;
+      try {
+        const gate = await getAdminGate();
+        setIsAdmin(gate.canAccessAdmin);
+        setHasAnyAdmin(gate.hasAnyAdmin);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Admin check failed");
+      } finally {
+        setChecked(true);
       }
-      setUserId(u.user.id);
-      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", u.user.id);
-      const admin = !!roles?.some((r) => r.role === "admin" || r.role === "moderator");
-      setIsAdmin(admin);
-      const { count } = await supabase
-        .from("user_roles")
-        .select("id", { count: "exact", head: true })
-        .eq("role", "admin");
-      setHasAnyAdmin((count ?? 0) > 0);
-      setChecked(true);
     })();
-  }, [navigate]);
+  }, []);
 
   const claimAdmin = async () => {
-    if (!userId) return;
-    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: "admin" });
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await claimFirstAdmin();
+      toast.success("You are now the admin.");
+      setIsAdmin(true);
+      setHasAnyAdmin(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to claim admin role");
     }
-    toast.success("You are now the admin.");
-    setIsAdmin(true);
-    setHasAnyAdmin(true);
   };
 
   if (!checked) {
