@@ -59,16 +59,24 @@ function TelegramAdmin() {
   const search = useServerFn(searchMasterTitles);
   const addAlias = useServerFn(addTitleAlias);
   const rematch = useServerFn(rematchUnmatched);
+  const rematchSingle = useServerFn(rematchOne);
+  const diagnose = useServerFn(diagnoseIngest);
+  const bulkAssign = useServerFn(bulkAssignTitle);
+  const bulkAlias = useServerFn(bulkAddAlias);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
-  // Telegram needs a stable, externally reachable HTTPS URL. The `id-preview--…`
-  // host goes through Lovable's auth bridge and is NOT reachable for Telegram.
-  // Use the stable `project--<id>-dev.lovable.app` (preview) or
-  // `project--<id>.lovable.app` (published) host instead.
   const STABLE_DEV_URL = "https://project--d54ff009-ac17-477f-85a3-112a949d0888-dev.lovable.app";
   const [baseUrl, setBaseUrl] = useState(STABLE_DEV_URL);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSel = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const ingest = useQuery({
     queryKey: ["tg-ingest", statusFilter],
@@ -76,6 +84,7 @@ function TelegramAdmin() {
   });
   const hook = useQuery({ queryKey: ["tg-webhook-info"], queryFn: () => getHook() });
   const state = useQuery({ queryKey: ["tg-bot-state"], queryFn: () => botState() });
+
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
