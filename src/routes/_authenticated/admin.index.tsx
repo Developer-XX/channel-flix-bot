@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Users, MessageSquare, Download } from "lucide-react";
+import { Film, Users, MessageSquare, Download, Activity, Clock, AlertOctagon } from "lucide-react";
 import { getAdminStats } from "@/lib/admin.functions";
+import { getCronMetrics } from "@/lib/cron-metrics.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: Dashboard,
@@ -11,6 +12,11 @@ function Dashboard() {
   const stats = useQuery({
     queryKey: ["admin-stats"],
     queryFn: () => getAdminStats(),
+  });
+  const cron = useQuery({
+    queryKey: ["admin-cron-metrics"],
+    queryFn: () => getCronMetrics(),
+    refetchInterval: 60_000,
   });
 
   return (
