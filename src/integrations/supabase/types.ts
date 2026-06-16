@@ -14,16 +14,459 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      content_requests: {
+        Row: {
+          admin_notes: string | null
+          category: Database["public"]["Enums"]["content_category"] | null
+          created_at: string
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["request_status"]
+          title: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          category?: Database["public"]["Enums"]["content_category"] | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["request_status"]
+          title: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          category?: Database["public"]["Enums"]["content_category"] | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["request_status"]
+          title?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      download_logs: {
+        Row: {
+          created_at: string
+          file_id: string | null
+          id: string
+          source: string | null
+          title_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_id?: string | null
+          id?: string
+          source?: string | null
+          title_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_id?: string | null
+          id?: string
+          source?: string | null
+          title_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "download_logs_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "download_logs_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      episodes: {
+        Row: {
+          air_date: string | null
+          created_at: string
+          episode_number: number
+          id: string
+          name: string | null
+          overview: string | null
+          runtime_minutes: number | null
+          season_id: string
+          still_url: string | null
+          title_id: string
+          updated_at: string
+        }
+        Insert: {
+          air_date?: string | null
+          created_at?: string
+          episode_number: number
+          id?: string
+          name?: string | null
+          overview?: string | null
+          runtime_minutes?: number | null
+          season_id: string
+          still_url?: string | null
+          title_id: string
+          updated_at?: string
+        }
+        Update: {
+          air_date?: string | null
+          created_at?: string
+          episode_number?: number
+          id?: string
+          name?: string | null
+          overview?: string | null
+          runtime_minutes?: number | null
+          season_id?: string
+          still_url?: string | null
+          title_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "episodes_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "episodes_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      master_titles: {
+        Row: {
+          backdrop_url: string | null
+          cast_names: string[] | null
+          category: Database["public"]["Enums"]["content_category"]
+          created_at: string
+          download_count: number
+          genres: string[] | null
+          id: string
+          imdb_id: string | null
+          is_featured: boolean
+          is_trending: boolean
+          language: string | null
+          original_title: string | null
+          overview: string | null
+          poster_url: string | null
+          rating: number | null
+          release_date: string | null
+          release_year: number | null
+          runtime_minutes: number | null
+          slug: string
+          status: Database["public"]["Enums"]["content_status"]
+          title: string
+          tmdb_id: number | null
+          trailer_url: string | null
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          backdrop_url?: string | null
+          cast_names?: string[] | null
+          category: Database["public"]["Enums"]["content_category"]
+          created_at?: string
+          download_count?: number
+          genres?: string[] | null
+          id?: string
+          imdb_id?: string | null
+          is_featured?: boolean
+          is_trending?: boolean
+          language?: string | null
+          original_title?: string | null
+          overview?: string | null
+          poster_url?: string | null
+          rating?: number | null
+          release_date?: string | null
+          release_year?: number | null
+          runtime_minutes?: number | null
+          slug: string
+          status?: Database["public"]["Enums"]["content_status"]
+          title: string
+          tmdb_id?: number | null
+          trailer_url?: string | null
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          backdrop_url?: string | null
+          cast_names?: string[] | null
+          category?: Database["public"]["Enums"]["content_category"]
+          created_at?: string
+          download_count?: number
+          genres?: string[] | null
+          id?: string
+          imdb_id?: string | null
+          is_featured?: boolean
+          is_trending?: boolean
+          language?: string | null
+          original_title?: string | null
+          overview?: string | null
+          poster_url?: string | null
+          rating?: number | null
+          release_date?: string | null
+          release_year?: number | null
+          runtime_minutes?: number | null
+          slug?: string
+          status?: Database["public"]["Enums"]["content_status"]
+          title?: string
+          tmdb_id?: number | null
+          trailer_url?: string | null
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: []
+      }
+      media_files: {
+        Row: {
+          caption: string | null
+          channel_id: string | null
+          created_at: string
+          duration_seconds: number | null
+          episode_id: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          is_active: boolean
+          language: string | null
+          mime_type: string | null
+          quality: string | null
+          resolution: string | null
+          telegram_file_id: string
+          telegram_message_id: number | null
+          title_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          channel_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          episode_id?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          is_active?: boolean
+          language?: string | null
+          mime_type?: string | null
+          quality?: string | null
+          resolution?: string | null
+          telegram_file_id: string
+          telegram_message_id?: number | null
+          title_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          channel_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          episode_id?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          is_active?: boolean
+          language?: string | null
+          mime_type?: string | null
+          quality?: string | null
+          resolution?: string | null
+          telegram_file_id?: string
+          telegram_message_id?: number | null
+          title_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_files_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_files_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_files_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seasons: {
+        Row: {
+          air_date: string | null
+          created_at: string
+          episode_count: number
+          id: string
+          name: string | null
+          overview: string | null
+          poster_url: string | null
+          season_number: number
+          title_id: string
+          updated_at: string
+        }
+        Insert: {
+          air_date?: string | null
+          created_at?: string
+          episode_count?: number
+          id?: string
+          name?: string | null
+          overview?: string | null
+          poster_url?: string | null
+          season_number: number
+          title_id: string
+          updated_at?: string
+        }
+        Update: {
+          air_date?: string | null
+          created_at?: string
+          episode_count?: number
+          id?: string
+          name?: string | null
+          overview?: string | null
+          poster_url?: string | null
+          season_number?: number
+          title_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seasons_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telegram_channels: {
+        Row: {
+          channel_id: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          last_synced_at: string | null
+          name: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          channel_id: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_synced_at?: string | null
+          name: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          channel_id?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_synced_at?: string | null
+          name?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
+      content_category:
+        | "movie"
+        | "series"
+        | "anime"
+        | "cartoon"
+        | "kdrama"
+        | "documentary"
+      content_status: "draft" | "published" | "archived"
+      request_status: "pending" | "approved" | "rejected" | "fulfilled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +593,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+      content_category: [
+        "movie",
+        "series",
+        "anime",
+        "cartoon",
+        "kdrama",
+        "documentary",
+      ],
+      content_status: ["draft", "published", "archived"],
+      request_status: ["pending", "approved", "rejected", "fulfilled"],
+    },
   },
 } as const
