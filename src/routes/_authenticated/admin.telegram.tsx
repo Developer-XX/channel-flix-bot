@@ -201,6 +201,21 @@ function TelegramAdmin() {
           >
             Reindex / Refresh website
           </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              try {
+                const r = await rebuildIdx();
+                toast.success(`Rebuilt indexes · ${r.latest ?? 0} latest · ${r.trending ?? 0} trending · ${r.search ?? 0} search`);
+                router.invalidate();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Rebuild failed");
+              }
+            }}
+          >
+            Rebuild website indexes
+          </Button>
         </div>
 
         {selected.size > 0 && (
