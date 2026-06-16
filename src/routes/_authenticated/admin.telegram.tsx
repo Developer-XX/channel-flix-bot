@@ -305,7 +305,7 @@ function TelegramAdmin() {
 
 function IngestCard({
   row, expanded, selected, onSelectToggle, onToggle, onUpdate, onPromote,
-  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, search,
+  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, onForcePublish, search,
 }: {
   row: IngestRow;
   expanded: boolean;
@@ -318,6 +318,7 @@ function IngestCard({
   onIgnore: () => Promise<void>;
   onRematch: () => Promise<void>;
   onDiagnose: () => Promise<any>;
+  onForcePublish: (assignTitleId?: string) => Promise<void>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
 }) {
   const [diag, setDiag] = useState<any>(null);
