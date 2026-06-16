@@ -139,28 +139,54 @@ export async function ingestTelegramUpdate(
 
   const parsed = parseMedia(caption, file.file_name);
 
-  // Fuzzy match against published master_titles
+  // Match resolution order:
+  //   1. Exact normalized alias (admin-curated, highest confidence)
+  //   2. Token-overlap / containment scoring against master_titles
   let matchedTitleId: string | null = null;
   let matchScore: number | null = null;
   const normalized = normalizeTitle(parsed.title);
+
   if (normalized) {
-    const head = normalized.split(" ").filter((w) => w.length >= 3)[0] ?? normalized.split(" ")[0] ?? "";
-    if (head) {
-      const { data: candidates } = await supabase
-        .from("master_titles")
-        .select("id, title, release_year, category")
-        .ilike("title", `%${head}%`)
-        .limit(25);
-      for (const c of candidates ?? []) {
-        const score = titleSimilarity(parsed.title, c.title);
-        const yearOk = !parsed.year || !c.release_year || Math.abs(parsed.year - c.release_year) <= 1;
-        const catOk = !parsed.category || c.category === parsed.category;
-        let adj = score;
-        if (!yearOk) adj *= 0.6;
-        if (!catOk) adj *= 0.85;
-        if (matchScore === null || adj > matchScore) {
-          matchScore = adj;
-          if (adj >= MATCH_THRESHOLD) matchedTitleId = c.id;
+    // 1. Alias lookup (exact or substring on normalized form)
+    const { data: aliasHits } = await supabase
+      .from("title_aliases")
+      .select("title_id, normalized_alias")
+      .or(`normalized_alias.eq.${normalized},normalized_alias.ilike.%${normalized}%`)
+      .limit(10);
+    for (const a of aliasHits ?? []) {
+      if (a.normalized_alias === normalized) {
+        matchedTitleId = a.title_id;
+        matchScore = 1.0;
+        break;
+      }
+      if (normalized.includes(a.normalized_alias) || a.normalized_alias.includes(normalized)) {
+        matchedTitleId = a.title_id;
+        matchScore = 0.95;
+      }
+    }
+
+    // 2. Fuzzy title scoring (skip if alias already matched)
+    if (!matchedTitleId) {
+      const head =
+        normalized.split(" ").filter((w) => w.length >= 3)[0] ??
+        normalized.split(" ")[0] ?? "";
+      if (head) {
+        const { data: candidates } = await supabase
+          .from("master_titles")
+          .select("id, title, release_year, category")
+          .ilike("title", `%${head}%`)
+          .limit(25);
+        for (const c of candidates ?? []) {
+          const score = bestTitleScore(parsed.title, c.title);
+          const yearOk = !parsed.year || !c.release_year || Math.abs(parsed.year - c.release_year) <= 1;
+          const catOk = !parsed.category || c.category === parsed.category;
+          let adj = score;
+          if (!yearOk) adj *= 0.6;
+          if (!catOk) adj *= 0.85;
+          if (matchScore === null || adj > matchScore) {
+            matchScore = adj;
+            if (adj >= MATCH_THRESHOLD) matchedTitleId = c.id;
+          }
         }
       }
     }
