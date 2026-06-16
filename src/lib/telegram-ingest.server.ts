@@ -203,5 +203,32 @@ export async function ingestTelegramUpdate(
       .eq("id", chanRow.id);
   }
 
+  // Visual confirmation back to the channel: 👀 reaction always, plus a
+  // small reply if the channel opted in via confirm_with_reply.
+  try {
+    const { setMessageReaction, replyToMessage } = await import("@/lib/telegram-api.server");
+    void setMessageReaction(tgChannelId, tgMessageId, matchedTitleId ? "👍" : "👀");
+    if (chanRow?.id) {
+      const { data: chanFull } = await supabase
+        .from("telegram_channels")
+        .select("confirm_with_reply")
+        .eq("id", chanRow.id)
+        .maybeSingle();
+      if (chanFull?.confirm_with_reply) {
+        const bits = [
+          parsed.title ?? file.file_name ?? "ingested",
+          parsed.season != null
+            ? `S${String(parsed.season).padStart(2, "0")}${parsed.episode != null ? `E${String(parsed.episode).padStart(2, "0")}` : ""}`
+            : null,
+          parsed.resolution,
+          parsed.quality,
+        ].filter(Boolean).join(" · ");
+        void replyToMessage(tgChannelId, tgMessageId, `✅ Ingested · ${bits}`);
+      }
+    }
+  } catch (e) {
+    console.warn("[telegram-ingest] confirmation failed:", (e as Error).message);
+  }
+
   return { ok: true, status: "ingested", ingestId: ingestRow.id, matched: !!matchedTitleId, matchScore };
 }
