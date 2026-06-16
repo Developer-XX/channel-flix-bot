@@ -65,6 +65,8 @@ function TelegramAdmin() {
   const diagnose = useServerFn(diagnoseIngest);
   const bulkAssign = useServerFn(bulkAssignTitle);
   const bulkAlias = useServerFn(bulkAddAlias);
+  const forcePublish = useServerFn(forceRematchAndPublish);
+  const rebuildIdx = useServerFn(rebuildWebsiteIndexes);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
