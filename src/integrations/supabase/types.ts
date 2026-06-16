@@ -421,6 +421,7 @@ export type Database = {
           last_run_error: string | null
           last_run_status: string | null
           last_update_id: number
+          matching_settings: Json
           updated_at: string
         }
         Insert: {
@@ -430,6 +431,7 @@ export type Database = {
           last_run_error?: string | null
           last_run_status?: string | null
           last_update_id?: number
+          matching_settings?: Json
           updated_at?: string
         }
         Update: {
@@ -439,6 +441,7 @@ export type Database = {
           last_run_error?: string | null
           last_run_status?: string | null
           last_update_id?: number
+          matching_settings?: Json
           updated_at?: string
         }
         Relationships: []
