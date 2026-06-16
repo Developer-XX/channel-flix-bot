@@ -105,7 +105,7 @@ export function SiteHeader() {
           )}
           <button
             onClick={() => setMobileOpen((v) => !v)}
-            className="lg:hidden grid h-9 w-9 place-items-center rounded-md text-foreground hover:bg-surface"
+            className="xl:hidden grid h-9 w-9 place-items-center rounded-md text-foreground hover:bg-surface"
             aria-label="Toggle menu"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -114,7 +114,7 @@ export function SiteHeader() {
       </div>
 
       {mobileOpen && (
-        <div className="lg:hidden border-t border-border bg-background/95 backdrop-blur-md">
+        <div className="xl:hidden border-t border-border bg-background/95 backdrop-blur-md">
           <div className="mx-auto max-w-7xl px-4 py-4 space-y-1">
             <form onSubmit={submit} className="mb-3 md:hidden">
               <div className="relative">
