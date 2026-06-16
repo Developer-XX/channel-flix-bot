@@ -21,6 +21,9 @@ export const startBulkRematch = createServerFn({ method: "POST" })
       .object({
         days: z.number().int().min(1).max(180).default(7),
         dryRun: z.boolean().optional(),
+        categories: z
+          .array(z.enum(["movie", "series", "anime", "documentary", "show"]))
+          .optional(),
       })
       .parse(d ?? {}),
   )
@@ -40,12 +43,16 @@ export const startBulkRematch = createServerFn({ method: "POST" })
     }
 
     const since = new Date(Date.now() - data.days * 24 * 60 * 60 * 1000).toISOString();
-    const { data: rows, error } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("telegram_ingest")
       .select("id")
       .eq("match_status", "unmatched")
       .gte("created_at", since)
       .order("created_at", { ascending: false });
+    if (data.categories && data.categories.length > 0) {
+      q = q.in("parsed_category", data.categories as any);
+    }
+    const { data: rows, error } = await q;
     if (error) throw error;
     const ids = (rows ?? []).map((r: any) => r.id as string);
 
@@ -54,6 +61,7 @@ export const startBulkRematch = createServerFn({ method: "POST" })
       .insert({
         job_type: "force_rematch",
         params: { days: data.days, dryRun: !!data.dryRun },
+        filters: { days: data.days, categories: data.categories ?? null, dryRun: !!data.dryRun },
         total: ids.length,
         created_by: context.userId,
       })
@@ -61,9 +69,6 @@ export const startBulkRematch = createServerFn({ method: "POST" })
       .single();
     if (jobErr) throw jobErr;
 
-    // Fire-and-forget: process in background after returning.
-    // Note: serverless workers can be terminated; long batches will be picked
-    // up by the cron auto-rebuild cycle and the admin can re-trigger.
     void runRematchJob(job.id, ids, !!data.dryRun);
 
     return { jobId: job.id, total: ids.length };
