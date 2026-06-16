@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus, Trash2, Search, Star, X } from "lucide-react";
 import { toast } from "sonner";
-import { tmdbSearch, tmdbDetails } from "@/lib/tmdb.functions";
+import { tmdbSearch, tmdbDetails, tmdbFindByImdb } from "@/lib/tmdb.functions";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, type CategorySlug } from "@/lib/categories";
