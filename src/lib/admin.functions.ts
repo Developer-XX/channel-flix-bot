@@ -176,8 +176,9 @@ export const listVerificationRateLimits = createServerFn({ method: "GET" })
       .limit(200);
     if (error) throw error;
     return (data ?? []).map((r) => {
-      let parsed: Record<string, unknown> | null = null;
+      let parsed: { mediaFileId?: string | null; used?: number; capacity?: number; windowMs?: number; retryAfterMs?: number } | null = null;
       try { parsed = r.error ? JSON.parse(r.error) : null; } catch { /* keep raw */ }
       return { ...r, parsed };
     });
   });
+
