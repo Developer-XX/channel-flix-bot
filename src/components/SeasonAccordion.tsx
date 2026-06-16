@@ -70,10 +70,20 @@ export function SeasonAccordion({ titleId }: Props) {
       </div>
     );
 
+  // Auto-open the FIRST season in the list (covers cases where season 1 doesn't
+  // exist, e.g. a manually added "Chhota Bheem Season 18"). If there's only one
+  // season, it stays open. Other seasons stay collapsed.
+  const firstKey = grouped[0]?.seasonNumber;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="season-accordion">
       {grouped.map((s) => (
-        <SeasonBlock key={String(s.seasonNumber)} season={s} titleId={titleId} />
+        <SeasonBlock
+          key={String(s.seasonNumber)}
+          season={s}
+          titleId={titleId}
+          defaultOpen={s.seasonNumber === firstKey}
+        />
       ))}
     </div>
   );
