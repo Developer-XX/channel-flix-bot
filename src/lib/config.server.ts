@@ -1,26 +1,23 @@
 import process from "node:process";
 
-// Server-only config. The .server.ts suffix prevents Vite from bundling
-// this file into the client — values here never reach the browser.
-//
-// On Cloudflare Workers, env binds at REQUEST time. Module-scope reads
-// (e.g. `const x = process.env.X`) resolve to undefined — always read
-// process.env INSIDE a function or handler.
-//
-// When to use which env-access pattern:
-//   - .server.ts module (this file): server-only helpers reused across
-//     handlers. Wrap reads in a function so they run per-request.
-//   - inline process.env inside a createServerFn handler: one-off reads
-//     not reused elsewhere.
-//   - import.meta.env.VITE_FOO: PUBLIC config readable from both client
-//     and server (analytics IDs, public URLs). Define in .env with the
-//     VITE_ prefix. Never put secrets here — they ship to the browser.
+// Server-only config. Read env INSIDE functions (Workers binds env per-request).
 
 export function getServerConfig() {
   return {
     nodeEnv: process.env.NODE_ENV,
-    // Add server-only values here, e.g.:
-    //   databaseUrl: process.env.DATABASE_URL,
-    //   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+  };
+}
+
+/**
+ * Verification attempt-cap config — tunable without code changes.
+ *   VERIFICATION_MAX_PER_HOUR  (default 30)
+ *   VERIFICATION_WINDOW_MINUTES (default 60)
+ */
+export function getVerificationConfig() {
+  const max = Number(process.env.VERIFICATION_MAX_PER_HOUR ?? 30);
+  const windowMin = Number(process.env.VERIFICATION_WINDOW_MINUTES ?? 60);
+  return {
+    maxPerWindow: Number.isFinite(max) && max > 0 ? Math.floor(max) : 30,
+    windowMs: (Number.isFinite(windowMin) && windowMin > 0 ? windowMin : 60) * 60 * 1000,
   };
 }
