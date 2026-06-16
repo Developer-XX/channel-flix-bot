@@ -19,19 +19,52 @@ export const startVerification = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { startVerificationForUser } = await import("@/lib/verification.server");
+    const { getVerificationConfig } = await import("@/lib/config.server");
 
-    // Soft per-user throttle: only count tokens that were actually consumed
-    // in the last hour, so repeated retries on a failed/iframe-blocked
-    // attempt don't lock the user out.
-    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    const { count } = await supabaseAdmin
+    const { maxPerWindow, windowMs } = getVerificationConfig();
+    const since = new Date(Date.now() - windowMs).toISOString();
+
+    // Soft per-user throttle: count only tokens actually consumed in window.
+    const { data: rows } = await supabaseAdmin
       .from("verification_tokens")
-      .select("token", { count: "exact", head: true })
+      .select("created_at")
       .eq("user_id", context.userId)
       .gte("created_at", since)
-      .not("consumed_at", "is", null);
-    if ((count ?? 0) >= 30) {
-      throw new Error("Too many verification attempts in the last hour. Please wait and try again.");
+      .not("consumed_at", "is", null)
+      .order("created_at", { ascending: true });
+
+    const used = rows?.length ?? 0;
+    if (used >= maxPerWindow) {
+      // earliest attempt determines when cap resets
+      const earliest = rows![0].created_at as unknown as string;
+      const retryAfterMs = Math.max(
+        0,
+        new Date(earliest).getTime() + windowMs - Date.now(),
+      );
+      // Audit the rejection with token/file context (no secrets).
+      await supabaseAdmin.from("verification_provider_calls").insert({
+        user_id: context.userId,
+        provider: "n/a",
+        status: "rate_limited",
+        short_url_returned: false,
+        error: JSON.stringify({
+          mediaFileId: data.mediaFileId ?? null,
+          used,
+          capacity: maxPerWindow,
+          windowMs,
+          retryAfterMs,
+        }).slice(0, 300),
+      });
+      // Encode structured payload in message so client can parse & backoff.
+      throw new Error(
+        "RATE_LIMITED:" +
+          JSON.stringify({
+            code: "rate_limited",
+            retryAfterMs,
+            capacity: maxPerWindow,
+            used,
+          }),
+      );
     }
 
     let ip: string | null = null;

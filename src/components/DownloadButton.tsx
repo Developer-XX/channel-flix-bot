@@ -49,6 +49,55 @@ export function DownloadButton({
     setErrorState({ message, detail, cid });
     toast.error(`${message} · ref ${cid}`, { description: detail });
   }
+  function parseRateLimit(msg: string): { retryAfterMs: number; capacity: number; used: number } | null {
+    const i = msg.indexOf("RATE_LIMITED:");
+    if (i < 0) return null;
+    try {
+      return JSON.parse(msg.slice(i + "RATE_LIMITED:".length));
+    } catch {
+      return null;
+    }
+  }
+
+  function formatRetry(ms: number): string {
+    const min = Math.ceil(ms / 60000);
+    if (min < 1) return "less than a minute";
+    if (min === 1) return "1 minute";
+    if (min < 60) return `${min} minutes`;
+    const h = Math.ceil(min / 60);
+    return h === 1 ? "1 hour" : `${h} hours`;
+  }
+
+  // Exponential backoff retry for transient verification failures.
+  // Up to 4 attempts (≈ 0.5s, 1s, 2s gaps). Hard rate-limit aborts immediately.
+  async function startVerifyWithBackoff(
+    fileId: string,
+    cid: string,
+  ): Promise<{ redirectUrl: string } | null> {
+    const MAX = 4;
+    let lastErr: any = null;
+    for (let i = 0; i < MAX; i++) {
+      try {
+        return await startVerify({ data: { mediaFileId: fileId } });
+      } catch (e: any) {
+        lastErr = e;
+        const rl = parseRateLimit(String(e?.message ?? ""));
+        if (rl) {
+          failWith(
+            `Verification limit reached — try again in ${formatRetry(rl.retryAfterMs)}.`,
+            cid,
+            `Used ${rl.used}/${rl.capacity} attempts in the current window.`,
+          );
+          return null;
+        }
+        // Backoff before next try (0.5s, 1s, 2s, …)
+        if (i < MAX - 1) await new Promise((r) => setTimeout(r, 500 * 2 ** i));
+      }
+    }
+    failWith("Couldn't start verification after several tries.", cid, lastErr?.message);
+    return null;
+  }
+
 
   async function handleClick() {
     setLoading(true);
@@ -107,7 +156,8 @@ export function DownloadButton({
       }
       if (r.reason === "needs_verification") {
         toast.message("Verification required — opening verification link…");
-        const v = await startVerify({ data: { mediaFileId: activeFileId } });
+        const v = await startVerifyWithBackoff(activeFileId, cid);
+        if (!v) return; // error already surfaced
         // Shorteners (nanolinks/adrinolinks) send X-Frame-Options: DENY,
         // so opening inside the Lovable preview iframe shows Firefox's
         // "Can't open this page" error. Always break out of frames.
