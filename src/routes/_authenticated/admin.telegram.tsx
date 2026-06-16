@@ -425,3 +425,179 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function ChannelWizard() {
+  const list = useServerFn(listTelegramChannels);
+  const verify = useServerFn(verifyTelegramChannel);
+  const save = useServerFn(saveTelegramChannel);
+  const del = useServerFn(deleteTelegramChannel);
+  const setAdmins = useServerFn(setBotAdminIds);
+  const state = useServerFn(getBotState);
+
+  const channels = useQuery({ queryKey: ["tg-channels"], queryFn: () => list() });
+  const botState = useQuery({ queryKey: ["tg-bot-state-wizard"], queryFn: () => state() });
+
+  const [ref, setRef] = useState("");
+  const [check, setCheck] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [adminIds, setAdminIds] = useState("");
+
+  return (
+    <section className="rounded-lg border border-border p-4 space-y-4">
+      <div>
+        <h2 className="font-semibold">Channel wizard</h2>
+        <p className="text-xs text-muted-foreground">
+          Verify the bot has admin rights on a channel, then save it so posts get ingested.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <Input
+          value={ref}
+          onChange={(e) => setRef(e.target.value)}
+          placeholder="@channel_username or -100123456789"
+          className="max-w-md"
+        />
+        <Button
+          disabled={busy || !ref.trim()}
+          onClick={async () => {
+            setBusy(true); setCheck(null);
+            try {
+              const r = await verify({ data: { ref: ref.trim() } });
+              setCheck(r);
+              if (!r.ok) toast.error(r.error);
+            } catch (e: any) { toast.error(e?.message ?? "Verify failed"); }
+            finally { setBusy(false); }
+          }}
+        >
+          Verify
+        </Button>
+      </div>
+
+      {check && check.ok && (
+        <div className="rounded-md border border-border p-3 text-sm space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>{check.chat.type}</Badge>
+            <span className="font-medium">{check.chat.title ?? check.chat.username ?? check.chat.id}</span>
+            <span className="text-xs text-muted-foreground font-mono">{check.chat.id}</span>
+          </div>
+          <div className="text-xs">
+            Bot: <code>@{check.bot.username}</code> · Member status: <code>{check.memberStatus}</code>
+          </div>
+          {check.isAdmin ? (
+            <div className="text-emerald-500 text-sm">✓ Bot is an administrator — channel posts will be received.</div>
+          ) : (
+            <div className="text-amber-500 text-sm">
+              ⚠ Bot is <b>not</b> an administrator of this channel. Open the channel in Telegram → Manage → Administrators → Add @{check.bot.username}, then re-verify.
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              disabled={!check.isAdmin}
+              onClick={async () => {
+                try {
+                  await save({ data: {
+                    channel_id: check.chat.id,
+                    name: check.chat.title ?? check.chat.username ?? String(check.chat.id),
+                    username: check.chat.username,
+                    description: check.chat.description,
+                    is_active: true,
+                  }});
+                  toast.success("Channel saved");
+                  setCheck(null); setRef("");
+                  channels.refetch();
+                } catch (e: any) { toast.error(e?.message ?? "Save failed"); }
+              }}
+            >
+              Save channel
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setCheck(null)}>Cancel</Button>
+          </div>
+          <div className="text-xs text-muted-foreground pt-2 border-t border-border">
+            <b>Next:</b> post a file in this channel with a clear caption like
+            <code className="mx-1">Demon Slayer S01E02 1080p WEB-DL Hindi+English</code>.
+            The bot will react 👀 and the row will appear in the list below.
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <div className="text-xs uppercase text-muted-foreground">Connected channels</div>
+        {channels.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+        {(channels.data ?? []).length === 0 && !channels.isLoading && (
+          <div className="text-sm text-muted-foreground">No channels yet.</div>
+        )}
+        {(channels.data ?? []).map((c: any) => (
+          <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+            <div className="min-w-0">
+              <div className="font-medium truncate">
+                {c.is_active ? "🟢" : "⚪"} {c.name} {c.username ? <span className="text-muted-foreground">@{c.username}</span> : null}
+              </div>
+              <div className="text-xs text-muted-foreground font-mono">{c.channel_id}</div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await save({ data: {
+                      channel_id: c.channel_id, name: c.name, username: c.username,
+                      description: c.description, is_active: c.is_active,
+                      confirm_with_reply: !c.confirm_with_reply,
+                    }});
+                    channels.refetch();
+                  } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                }}
+              >
+                Reply: {c.confirm_with_reply ? "on" : "off"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  if (!confirm(`Remove ${c.name}?`)) return;
+                  try { await del({ data: { id: c.id } }); channels.refetch(); }
+                  catch (e: any) { toast.error(e?.message ?? "Failed"); }
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-border pt-3 space-y-2">
+        <div className="text-xs uppercase text-muted-foreground">DM /broadcast admin user IDs</div>
+        <div className="text-xs text-muted-foreground">
+          Telegram user IDs allowed to run <code>/broadcast</code> in DM. Use <code>/id</code> in DM to get yours.
+          Current: {(botState.data?.admin_telegram_user_ids ?? []).join(", ") || "none"}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={adminIds}
+            onChange={(e) => setAdminIds(e.target.value)}
+            placeholder="123456789, 987654321"
+            className="max-w-md"
+          />
+          <Button
+            onClick={async () => {
+              const ids = adminIds.split(/[\s,]+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n));
+              try {
+                await setAdmins({ data: { ids } });
+                toast.success(`Saved ${ids.length} admin id(s)`);
+                botState.refetch();
+                setAdminIds("");
+              } catch (e: any) { toast.error(e?.message ?? "Failed"); }
+            }}
+          >
+            Save admins
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
