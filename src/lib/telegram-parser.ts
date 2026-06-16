@@ -1,56 +1,142 @@
 // Caption / filename parser for Telegram media posts.
-// Extracts title, year, season/episode, resolution, quality tag, codec, language.
+// Extracts title, year, season/episode, resolution, quality tag, codec, language, category.
+
+import type { CategorySlug } from "@/lib/categories";
 
 export interface ParsedMedia {
   title: string;
   year: number | null;
   season: number | null;
   episode: number | null;
-  resolution: string | null; // e.g. "1080p", "720p", "2160p"
-  quality: string | null;    // e.g. "WEB-DL", "BluRay", "HDRip", "CAM"
-  codec: string | null;      // e.g. "x264", "x265", "HEVC", "AV1"
-  language: string | null;   // e.g. "Hindi", "English", "Dual Audio", "Multi"
+  resolution: string | null; // "2160p" | "1080p" | "720p" | ...
+  quality: string | null;    // "WEB-DL" | "BLURAY" | ...
+  codec: string | null;      // "x265" | "x264" | "HEVC" | ...
+  language: string | null;   // "Hindi", "English", "Hindi+English", "Dual Audio", ...
+  category: CategorySlug | null;
 }
 
-const RES_RE = /\b(2160p|1440p|1080p|720p|480p|360p|4k|uhd)\b/i;
-const QUALITY_RE = /\b(WEB[- ]?DL|WEB[- ]?Rip|WEBRip|BluRay|BRRip|BDRip|HDRip|DVDRip|HDTV|HDCAM|CAMRip|CAM|TS|TC|REMUX|PROPER)\b/i;
-const CODEC_RE = /\b(x265|x264|h\.?265|h\.?264|HEVC|AVC|AV1|XviD|DivX)\b/i;
-const LANG_RE = /\b(Hindi|English|Tamil|Telugu|Malayalam|Kannada|Bengali|Punjabi|Korean|Japanese|Spanish|French|German|Multi|Dual[- ]?Audio|Multi[- ]?Audio)\b/i;
-const SE_RE = /S(\d{1,2})[\s._-]?E(\d{1,3})/i;
+const RES_PATTERNS: Array<[RegExp, string]> = [
+  [/\b(2160p|4k|uhd)\b/i, "2160p"],
+  [/\b1440p\b/i, "1440p"],
+  [/\b1080p?\b/i, "1080p"],
+  [/\b720p?\b/i, "720p"],
+  [/\b480p?\b/i, "480p"],
+  [/\b360p?\b/i, "360p"],
+];
+
+const QUALITY_PATTERNS: Array<[RegExp, string]> = [
+  [/\bWEB[\s._-]?DL\b/i, "WEB-DL"],
+  [/\bWEB[\s._-]?Rip\b/i, "WEBRip"],
+  [/\bWEBRip\b/i, "WEBRip"],
+  [/\bBlu[\s._-]?Ray\b/i, "BLURAY"],
+  [/\bBR[\s._-]?Rip\b/i, "BRRip"],
+  [/\bBD[\s._-]?Rip\b/i, "BDRip"],
+  [/\bREMUX\b/i, "REMUX"],
+  [/\bHD[\s._-]?Rip\b/i, "HDRip"],
+  [/\bDVD[\s._-]?Rip\b/i, "DVDRip"],
+  [/\bHDTV\b/i, "HDTV"],
+  [/\bPRE[\s._-]?DVD\b/i, "PreDVD"],
+  [/\bHD[\s._-]?CAM\b/i, "HDCAM"],
+  [/\bCAM[\s._-]?Rip\b/i, "CAMRip"],
+  [/\bCAM\b/i, "CAM"],
+  [/\bTS\b/i, "TS"],
+  [/\bTC\b/i, "TC"],
+  [/\bPROPER\b/i, "PROPER"],
+];
+
+const CODEC_PATTERNS: Array<[RegExp, string]> = [
+  [/\b(x265|h\.?265|HEVC)\b/i, "x265"],
+  [/\b(x264|h\.?264|AVC)\b/i, "x264"],
+  [/\bAV1\b/i, "AV1"],
+  [/\bXviD\b/i, "XviD"],
+  [/\bDivX\b/i, "DivX"],
+];
+
+const LANG_TOKENS = [
+  "Hindi", "English", "Tamil", "Telugu", "Malayalam", "Kannada", "Bengali",
+  "Punjabi", "Marathi", "Gujarati", "Urdu",
+  "Korean", "Japanese", "Chinese", "Mandarin", "Cantonese",
+  "Spanish", "French", "German", "Italian", "Portuguese", "Russian", "Turkish", "Arabic",
+];
+const LANG_RE = new RegExp(`\\b(${LANG_TOKENS.join("|")})\\b`, "gi");
+const DUAL_RE = /\b(Dual[\s._-]?Audio|Multi[\s._-]?Audio|Multi|Dubbed|Subbed|Subtitled)\b/i;
+
+const SE_RE = /\bS(\d{1,2})[\s._-]?E(\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
 const SEASON_ONLY_RE = /\bSeason[\s._-]?(\d{1,2})\b/i;
-const EPISODE_ONLY_RE = /\bEpisode[\s._-]?(\d{1,3})\b/i;
+const EPISODE_ONLY_RE = /\b(?:Episode|EP|Ep)[\s._-]?(\d{1,3})\b/i;
 const YEAR_RE = /\b(19[5-9]\d|20[0-4]\d)\b/;
+
+// Category cues
+const ANIME_RE = /\b(anime|sub\s*indo|fansub|crunchyroll|jujutsu|naruto|one\s*piece|demon\s*slayer|attack\s*on\s*titan)\b/i;
+const KDRAMA_RE = /\b(k[-\s]?drama|korean\s*drama|kbs|tvN|kocowa)\b/i;
+const CARTOON_RE = /\b(cartoon|nickelodeon|cartoon\s*network|disney\s*junior|paw\s*patrol|spongebob)\b/i;
+const DOC_RE = /\b(documentary|docu(?:series)?|nat\s*geo|bbc\s*earth|discovery)\b/i;
 
 function cleanTitle(input: string): string {
   return input
     .replace(/[._]+/g, " ")
     .replace(/\[[^\]]*\]/g, " ")
     .replace(/\([^)]*\)/g, " ")
+    .replace(/[-_:|]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function firstMatch(
+  text: string,
+  patterns: Array<[RegExp, string]>,
+): { value: string; index: number } | null {
+  let best: { value: string; index: number } | null = null;
+  for (const [re, val] of patterns) {
+    const m = text.match(re);
+    if (m && m.index !== undefined) {
+      if (!best || m.index < best.index) best = { value: val, index: m.index };
+    }
+  }
+  return best;
+}
+
+function detectCategory(text: string, season: number | null): CategorySlug | null {
+  if (ANIME_RE.test(text)) return "anime";
+  if (KDRAMA_RE.test(text)) return "kdrama";
+  if (CARTOON_RE.test(text)) return "cartoon";
+  if (DOC_RE.test(text)) return "documentary";
+  if (season !== null) return "series";
+  // Default: a media file with year and resolution is most likely a movie.
+  return null;
 }
 
 export function parseMedia(rawCaption: string | null | undefined, fileName?: string | null): ParsedMedia {
   const source = [rawCaption ?? "", fileName ?? ""].filter(Boolean).join(" \n ");
   const text = source.replace(/\s+/g, " ").trim();
 
-  const resMatch = text.match(RES_RE);
-  let resolution: string | null = null;
-  if (resMatch) {
-    const r = resMatch[1].toLowerCase();
-    resolution = r === "4k" || r === "uhd" ? "2160p" : r;
+  // Resolution
+  const res = firstMatch(text, RES_PATTERNS);
+  const quality = firstMatch(text, QUALITY_PATTERNS);
+  const codec = firstMatch(text, CODEC_PATTERNS);
+
+  // Languages — collect all distinct, preserve order.
+  const langs: string[] = [];
+  const langMatches = text.matchAll(LANG_RE);
+  for (const m of langMatches) {
+    const tok = m[1];
+    const norm = tok.charAt(0).toUpperCase() + tok.slice(1).toLowerCase();
+    if (!langs.includes(norm)) langs.push(norm);
   }
+  const dual = text.match(DUAL_RE);
+  let language: string | null = null;
+  if (langs.length >= 2) language = langs.slice(0, 3).join("+");
+  else if (langs.length === 1) language = dual ? `${langs[0]} (Dual)` : langs[0];
+  else if (dual) language = dual[1].replace(/[\s._-]+/g, " ");
 
-  const qualityMatch = text.match(QUALITY_RE);
-  const codecMatch = text.match(CODEC_RE);
-  const langMatch = text.match(LANG_RE);
-
+  // Season / episode
   let season: number | null = null;
   let episode: number | null = null;
   const seMatch = text.match(SE_RE);
   if (seMatch) {
     season = parseInt(seMatch[1], 10);
-    episode = parseInt(seMatch[2], 10);
+    const epStr = seMatch[2].match(/\d+/g);
+    if (epStr) episode = parseInt(epStr[0], 10);
   } else {
     const so = text.match(SEASON_ONLY_RE);
     if (so) season = parseInt(so[1], 10);
@@ -58,25 +144,33 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
     if (eo) episode = parseInt(eo[1], 10);
   }
 
+  // Year
   const yearMatch = text.match(YEAR_RE);
   const year = yearMatch ? parseInt(yearMatch[1], 10) : null;
 
-  // Title = everything before the earliest discriminator (year, S01E01, resolution).
-  const cutCandidates = [yearMatch?.index, seMatch?.index, resMatch?.index, qualityMatch?.index]
-    .filter((i): i is number => typeof i === "number");
+  // Title = everything before the earliest discriminator
+  const cutCandidates = [
+    yearMatch?.index,
+    seMatch?.index,
+    res?.index,
+    quality?.index,
+  ].filter((i): i is number => typeof i === "number");
   const cut = cutCandidates.length ? Math.min(...cutCandidates) : text.length;
-  const rawTitle = cleanTitle(text.slice(0, cut)).replace(/[-_:|]+$/g, "").trim();
+  const rawTitle = cleanTitle(text.slice(0, cut));
   const title = rawTitle || cleanTitle(text).slice(0, 120) || "Untitled";
+
+  const category = detectCategory(text, season);
 
   return {
     title,
     year,
     season,
     episode,
-    resolution,
-    quality: qualityMatch ? qualityMatch[1].replace(/\s+/g, "-").toUpperCase() : null,
-    codec: codecMatch ? codecMatch[1].toUpperCase().replace(".", "") : null,
-    language: langMatch ? langMatch[1].replace(/\s+/g, " ") : null,
+    resolution: res?.value ?? null,
+    quality: quality?.value ?? null,
+    codec: codec?.value ?? null,
+    language,
+    category,
   };
 }
 
