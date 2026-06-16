@@ -31,6 +31,42 @@ function Dashboard() {
         <StatCard icon={<Users className="h-5 w-5" />} label="Downloads" value={stats.data?.downloads} />
       </div>
 
+      <section className="mt-10 rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-display text-lg font-bold flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" /> Index rebuild cron · last 24h
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              pg_cron hits <code>/api/public/hooks/maybe-rebuild-indexes</code> every 10 minutes.
+            </p>
+          </div>
+          {cron.data?.lastRunAt && (
+            <div className="text-xs text-muted-foreground">
+              Last run {new Date(cron.data.lastRunAt).toLocaleTimeString()}
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+          <CronStat label="Runs" value={cron.data?.total ?? "—"} hint={cron.data ? `${cron.data.runsPerHour}/hr` : undefined} />
+          <CronStat label="Successful" value={cron.data?.successful ?? "—"} tone="ok" />
+          <CronStat
+            label="Overlap skips"
+            value={cron.data?.overlapSkips ?? "—"}
+            tone={(cron.data?.overlapSkips ?? 0) > 0 ? "warn" : undefined}
+            icon={<Clock className="h-3.5 w-3.5" />}
+          />
+          <CronStat label="No-pending skips" value={cron.data?.noPendingSkips ?? "—"} />
+          <CronStat label="Avg duration" value={cron.data ? formatMs(cron.data.avgDurationMs) : "—"} />
+        </div>
+        {(cron.data?.errors ?? 0) > 0 && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-red-400">
+            <AlertOctagon className="h-3.5 w-3.5" /> {cron.data?.errors} errored run(s) in the window.
+          </div>
+        )}
+      </section>
+
+
       <div className="mt-10 grid gap-4 md:grid-cols-2">
         <Link to="/admin/titles" className="rounded-2xl border border-border bg-card p-6 hover:border-ring transition-colors">
           <Film className="h-6 w-6 text-primary" />
