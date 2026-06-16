@@ -27,17 +27,32 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
           bestTitleScore,
         } = await import("@/lib/telegram-ingest.server");
         const { bumpCacheVersion } = await import("@/lib/indexes.server");
+        const { recordTrace, newRunId } = await import("@/lib/sync-trace.server");
 
+        const runId = newRunId();
         const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+
+        await recordTrace({
+          run_id: runId,
+          source: "resync-recent",
+          decision: "matched",
+          reason_code: "RUN_STARTED",
+          details: { hours, since },
+        });
+
         const { data: titles, error: titlesErr } = await supabaseAdmin
           .from("master_titles")
-          .select("id, title, release_year, category")
+          .select("id, slug, title, release_year, category")
           .gte("updated_at", since)
           .eq("status", "published")
           .limit(50);
         if (titlesErr) {
           console.error("[resync-recent] titles query failed", titlesErr);
-          return Response.json({ ok: false, error: titlesErr.message }, { status: 500 });
+          await recordTrace({
+            run_id: runId, source: "resync-recent", decision: "error",
+            reason_code: "TITLES_QUERY_FAILED", details: { error: titlesErr.message },
+          });
+          return Response.json({ ok: false, error: titlesErr.message, runId }, { status: 500 });
         }
 
         const settings = await loadMatchingSettings(supabaseAdmin);
@@ -45,6 +60,7 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
         let promoted = 0;
         let skipped = 0;
         const errors: string[] = [];
+        const traces: Array<Parameters<typeof recordTrace>[0]> = [];
 
         for (const t of titles ?? []) {
           scannedTitles++;
@@ -65,7 +81,34 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
             if (!yearOk) adjusted *= 0.6;
             if (settings.require_category_match && !categoryOk) adjusted = 0;
             else if (!categoryOk) adjusted *= 0.85;
-            if (adjusted < settings.threshold || !r.telegram_file_id) { skipped++; continue; }
+
+            const baseTrace = {
+              run_id: runId,
+              source: "resync-recent" as const,
+              title_id: t.id,
+              title_slug: (t as { slug?: string }).slug ?? null,
+              channel_id: r.channel_id ?? null,
+              message_id: r.telegram_message_id ?? null,
+              ingest_id: r.id,
+              season_number: r.parsed_season ?? null,
+              episode_number: r.parsed_episode ?? null,
+            };
+
+            if (!r.telegram_file_id) {
+              skipped++;
+              traces.push({ ...baseTrace, decision: "skipped", reason_code: "MEDIA_FILE_MISSING", details: { score: adjusted } });
+              continue;
+            }
+            if (adjusted < settings.threshold) {
+              skipped++;
+              traces.push({
+                ...baseTrace,
+                decision: "skipped",
+                reason_code: !yearOk ? "SKIPPED_YEAR_MISMATCH" : !categoryOk ? "SKIPPED_CATEGORY_MISMATCH" : "SKIPPED_TITLE_MISMATCH",
+                details: { score: adjusted, threshold: settings.threshold, parsed: r.parsed_title },
+              });
+              continue;
+            }
             try {
               await autoPromoteToMediaFile(supabaseAdmin, {
                 ingestId: r.id,
@@ -85,13 +128,25 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
                 episode: r.parsed_episode,
               });
               promoted++;
-            } catch (e) { errors.push((e as Error).message); }
+              traces.push({ ...baseTrace, decision: "promoted", reason_code: "PROMOTED", details: { score: adjusted } });
+            } catch (e) {
+              const msg = (e as Error).message;
+              errors.push(msg);
+              traces.push({ ...baseTrace, decision: "error", reason_code: "PROMOTE_FAILED", details: { error: msg } });
+            }
           }
         }
 
+        if (traces.length) await recordTrace(traces);
         if (promoted > 0) await bumpCacheVersion(supabaseAdmin);
 
-        const summary = { ok: true, hours, scannedTitles, promoted, skipped, errors: errors.slice(0, 10) };
+        await recordTrace({
+          run_id: runId, source: "resync-recent", decision: "matched",
+          reason_code: "RUN_FINISHED",
+          details: { scannedTitles, promoted, skipped, errorCount: errors.length },
+        });
+
+        const summary = { ok: true, runId, hours, scannedTitles, promoted, skipped, errors: errors.slice(0, 10) };
         console.log("[resync-recent]", JSON.stringify(summary));
         return Response.json(summary);
       },
