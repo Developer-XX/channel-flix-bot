@@ -18,7 +18,13 @@ export const getAdminGate = createServerFn({ method: "GET" })
       .select("id", { count: "exact", head: true })
       .eq("role", "admin");
     if (error) throw error;
-    return { ...access, hasAnyAdmin: (count ?? 0) > 0 };
+    const email = (context.claims as { email?: string } | null)?.email ?? null;
+    return {
+      ...access,
+      hasAnyAdmin: (count ?? 0) > 0,
+      userId: context.userId,
+      email,
+    };
   });
 
 export const claimFirstAdmin = createServerFn({ method: "POST" })
