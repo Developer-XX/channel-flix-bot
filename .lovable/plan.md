@@ -1,75 +1,98 @@
-## Slice 1 — Bot-DM file delivery (with account linking)
 
-Click "Download" on the website → bot sends the file to the user's Telegram DM.
+## Scope
 
-**Schema (one migration):**
-- `telegram_user_links(user_id uuid PK→auth.users, telegram_user_id bigint UNIQUE, telegram_username text, linked_at timestamptz, link_code text UNIQUE, link_code_expires_at timestamptz)` — RLS: user reads/updates own row.
-- `download_logs` already exists; add `delivery_status text`, `delivery_error text`, `delivered_at timestamptz`.
+Six related slices. The verification piece (#6) is the one that needs a decision before I start — everything else I can build immediately with reasonable defaults.
 
-**Flow:**
-1. User clicks Download on `title.$slug.tsx`. If not signed in → "Sign in to download" CTA. If signed in but no Telegram link → modal showing a 6-char code + "Open bot" link (`https://t.me/<botname>?start=link_<code>`).
-2. Bot webhook handles `/start link_<code>` — verifies/expires code, writes `telegram_user_links` row, replies "✅ Linked as <displayname>. You can now download from the site."
-3. Once linked, clicking Download calls `requestDownload({ mediaFileId })` server fn → looks up `telegram_user_links.telegram_user_id` → uses Bot API `copyMessage` (from source channel + `telegram_message_id`) to send into the user's DM → logs result. Returns `{ ok, delivered: true }` and the UI toasts "Sent to your Telegram".
-4. Fallback if bot can't DM the user (user never `/start`ed): server returns `{ ok:false, reason:"bot_blocked" }` and UI shows "Open the bot, press Start, then try again".
+---
 
-**Bot commands added:** `/start link_<code>`, `/unlink`, `/whoami` (shows link status).
+### 1. Retries + idempotency for Telegram DM sends
 
-## Slice 2 — Per-title debug + per-ingest "Force rematch & publish" + audit trail
+- Add a `delivery_attempts` table:
+  - `id`, `user_id`, `media_file_id`, `idempotency_key` (UNIQUE),
+    `attempt_no`, `status` (`pending|delivered|failed`), `error`,
+    `telegram_message_id`, `created_at`, `updated_at`.
+- `requestDownload` generates `idempotency_key = sha256(user_id|media_file_id|hour-bucket)` so duplicate clicks inside the same bucket reuse the existing row instead of double-sending.
+- On `tryCopyMessage` failure, retry with exponential backoff (250ms, 1s, 3s) up to 3 attempts. Treat `blocked` / `not_started` / `not_found` as non-retryable.
+- Each attempt is upserted into `delivery_attempts` (and mirrored into `download_logs`).
 
-**Schema:**
-- `match_audit_log(id, telegram_ingest_id, master_title_id nullable, attempt_at, scores jsonb {jaccard, containment, substring, total}, rules_used jsonb (snapshot of matching_settings), threshold numeric, decision text ('promoted'|'rejected'|'manual'|'alias'), reason text, actor text ('auto'|'admin:<email>'))` — RLS: admin-only.
-- Write a row from `runMatcher` every time it evaluates an ingest.
+### 2. Download audit log
 
-**Title debug panel (`title.$slug.tsx`):**
-- Admin-only collapsible "Debug" section.
-- Shows: title's `category`, file counts grouped by `season/episode/quality/language`, all `telegram_ingest` rows whose parsed title scores ≥ 0.3 against this title, each with: score, why-rejected (category mismatch / year mismatch / below threshold / parse-fail), and a "Force match to this title" button.
-- Lists the current website query filters being applied (so you can see e.g. "filtered out: status != 'published'").
+- Reuse existing `download_logs` and extend it (via migration) with:
+  `verification_status`, `verification_provider`, `bot_user_id`,
+  `idempotency_key`, `attempt_count`, `attempt_history jsonb`.
+- Record every: verification redirect, verification callback, link-code request, DM attempt (success or failure) with timestamps and the Telegram `bot_user_id` resolved from `getMe()` (cached).
+- Add an admin tab "Delivery log" listing the last 200 rows with filters by status / user / file.
 
-**Force rematch & publish (single-row):**
-- Button on diagnostic panel + on each ingest card → `forceRematchAndPublish({ ingestId })`:
-  1. Re-run matcher with current settings, write audit row.
-  2. If passes threshold or admin-assigned → auto-promote to `media_files` (existing helper).
-  3. Invalidate caches (slice 3) and return the updated media_file payload.
-- UI toasts result + refetches the title page.
+### 3. DownloadButton validation
 
-## Slice 3 — Reindex flow with cache invalidation + homepage index rebuild
+- Before the request, `DownloadButton` re-queries `media_files` by `(title_id, season, episode, id)` and confirms the row still resolves to the expected `telegram_file_id`.
+- For series, callers pass `season` + `episode`; the button picks the most recent active file matching that tuple. If the file_id changed (re-promoted), it uses the new one.
+- If no row matches, surface a friendly "this episode was reorganized — refresh" toast and call `router.invalidate()`.
 
-The app is TanStack Start (SSR/edge), no Next ISR. Two layers:
-- **Server-fn cache busting:** keep a `cache_version` row in `telegram_bot_state`. Every promotion/rematch increments it. All loaders that fetch title/listing data use it as part of their query key and add `Cache-Control: no-store` when called via server route, so the website reflects changes on next nav.
-- **Derived index tables (materialized for speed):**
-  - `idx_latest_releases(media_file_id, published_at)` — top 50 newly promoted.
-  - `idx_trending(master_title_id, score, computed_at)` — based on download_logs last 7d.
-  - `idx_search(master_title_id, searchable tsvector)` — for `search.tsx`.
-- Admin button **"Rebuild website indexes"** → `rebuildIndexes()` server fn truncates+repopulates the three tables in a transaction, bumps `cache_version`, returns counts.
-- **Reindex / Refresh** existing button now also: bumps `cache_version`, runs `rebuildIndexes`, then `router.invalidate()` on the client.
+### 4. Admin bulk job: forceRematchAndPublish over last N days
 
-## Slice 4 — Series season/episode organization + download wiring
+- New server fn `bulkForceRematch({ days, dryRun? })`:
+  loops over `telegram_ingest` where `match_status='unmatched'` and `created_at >= now()-N days`, runs `forceRematchAndPublish` per row, streams progress into a `bulk_job_runs` table:
+  `id, job_type, started_at, finished_at, total, processed, promoted, failed, last_error, status`.
+- Admin UI: "Bulk rematch unmatched (N days)" with N input, Run/Cancel buttons, and a progress card that polls `getBulkJobStatus` every 2s.
 
-**On `title.$slug.tsx` for `category='series'`:**
-- Group `media_files` by `season_number` then `episode_number`.
-- Render an accordion: "Season 1 (12 episodes · 8 available)" → list episodes E01…E12 with status badge (available / missing) and per-quality download buttons.
-- Missing episodes shown greyed out with "Not yet ingested".
-- Ordering: season asc, episode asc, then quality desc (2160p>1080p>720p>480p).
+### 5. Background index rebuild scheduler
 
-**Parsing fixes in `telegram-parser.ts`:**
-- Recognize `S01E02`, `1x02`, `Season 1 Episode 2`, `EP02`, `- 02 -`. Multi-episode ranges `E01-E03` create three rows.
-- Persist parsed `season_number` + `episode_number` on `telegram_ingest`; auto-promotion writes them to `episodes` + links `media_files.episode_id`.
+- New `pg_cron` job (every 10 minutes) → calls `POST /api/public/hooks/maybe-rebuild-indexes`.
+- The handler checks a `telegram_bot_state` flag:
+  - `pending_index_rebuild=true` (set by `bumpCacheVersion` whenever ≥ N promotions happen since last rebuild)
+  - `indexes_rebuilding_at` lock (skip if a rebuild started <5 min ago — prevents overlap).
+- Promotion code increments `promotions_since_last_index` and flips `pending_index_rebuild` once threshold (default 25) is crossed.
+- Admin sees "Last rebuilt: …, pending: yes/no, in-flight: no" panel.
 
-**Download link wiring:**
-- Each episode/quality row's Download button calls Slice-1 `requestDownload({ mediaFileId })`.
-- For movies (`category='movie'`), same button on the main quality grid.
+### 6. 24h token verification via nanolinks ↔ adrinolinks (decision needed)
 
-## Files to touch
+Per your earlier spec the cycle alternates between `nanolinks.in` and `adrinolinks.in` — you said 12h then, "every 24h" now. I'll assume **24h cycle, alternating provider each cycle** unless you say otherwise.
 
-- **New:** `supabase/migrations/<ts>_dm_downloads_audit_indexes.sql`, `src/lib/match-audit.server.ts`, `src/lib/downloads.functions.ts`, `src/lib/indexes.server.ts`, `src/components/DownloadButton.tsx`, `src/components/SeasonAccordion.tsx`, `src/components/TitleDebugPanel.tsx`, `src/components/LinkTelegramModal.tsx`.
-- **Edited:** `src/routes/api/public/telegram/webhook.ts` (link_/whoami/unlink), `src/lib/telegram-ingest.server.ts` (audit writes, cache_version bump, parser hookup), `src/lib/telegram-parser.ts` (S/E patterns), `src/lib/telegram.functions.ts` (forceRematchAndPublish, rebuildIndexes, requestDownload helpers, getTitleDebug), `src/routes/_authenticated/admin.telegram.tsx` (Rebuild indexes button, per-ingest force-rematch hooked to new fn), `src/routes/title.$slug.tsx` (season accordion, DownloadButton, admin debug panel).
+Flow:
+```text
+User clicks Download
+  → server checks user_verifications.expires_at
+      ├─ valid  → proceed to DM send (slice 1)
+      └─ expired/missing
+            → mint token, pick next provider (nanolinks if last was adrinolinks, else adrinolinks)
+            → shorten https://<site>/v/<token> via provider API
+            → redirect user to shortened URL
+            → provider redirects user back to /v/<token>
+            → /v/<token> marks verification valid for 24h, redirects to original download
+            → bot DM proceeds
+```
 
-## Order
+Tables:
+- `user_verifications`: `user_id` PK, `last_provider`, `verified_at`, `expires_at`, `verification_count`.
+- `verification_tokens`: `token` PK, `user_id`, `media_file_id` (return target), `provider`, `created_at`, `consumed_at`, `expires_at`, `ip_hash` (anti-abuse).
 
-1. Migration (links, audit, indexes, cache_version, ingest S/E columns).
-2. Slice 1 (DM downloads — most user-visible, unblocks testing).
-3. Slice 4 (series organization + wire downloads in).
-4. Slice 2 (audit + force rematch + title debug).
-5. Slice 3 (cache_version + rebuildIndexes + Reindex hookup).
+Routes:
+- `GET /api/public/v/:token` — consume token, write `user_verifications`, redirect to the original media-file download trigger.
+- Server fn `startVerification({ mediaFileId })` — mints token, returns shortener URL.
 
-I'll ship each slice in its own turn so you can test as we go. Reply "go" to start with the migration + Slice 1.
+Anti-abuse:
+- 1 outstanding unconsumed token per user (older ones invalidated).
+- Token TTL 30 min; consumed_at must be null; ip hash recorded.
+- Rate limit `startVerification` to 6/hour per user via `auth_rate_limits`.
+
+**Decision I need (one answer):**
+
+I will need API credentials for the shorteners. Options:
+
+- **A. I have both nanolinks + adrinolinks API keys** → I'll add them as secrets and call their real shorten endpoints.
+- **B. Only one (which?)** → I'll wire that one as the active provider and stub the other behind a feature flag (no alternating until you add it).
+- **C. None yet** → I'll build the full flow but use a "passthrough" stub provider (redirects directly back to `/v/<token>`) so you can test end-to-end. Swap to the real provider by adding the secret later.
+
+---
+
+### Build order
+
+1. Migration: `delivery_attempts`, `bulk_job_runs`, `user_verifications`, `verification_tokens`, extend `download_logs` and `telegram_bot_state`.
+2. Slice 1 (retries) + slice 2 (audit) — wired into `requestDownload`.
+3. Slice 3 (DownloadButton episode validation).
+4. Slice 6 (verification gate) using the answer to the decision above.
+5. Slice 4 (bulk rematch) + admin UI.
+6. Slice 5 (cron + auto-rebuild) + admin status panel.
+
+Reply with **A / B / C** (and any keys if A or B) and I'll start.
