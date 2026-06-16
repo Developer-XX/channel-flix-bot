@@ -93,11 +93,24 @@ export const resolveEpisodeFile = createServerFn({ method: "POST" })
         season: z.number().int().nullable().optional(),
         episode: z.number().int().nullable().optional(),
         expectedFileId: z.string().uuid().optional(),
+        correlationId: z.string().max(64).optional(),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { validateEpisodeInput, decideEpisodeResolution } = await import(
+      "@/lib/episode-resolution"
+    );
+    const cid = data.correlationId ?? null;
+    const validation = validateEpisodeInput({
+      titleId: data.titleId,
+      season: data.season ?? null,
+      episode: data.episode ?? null,
+    });
+    if (!validation.ok) {
+      return { ok: false as const, reason: validation.reason, detail: validation.detail, correlationId: cid };
+    }
     let query = supabaseAdmin
       .from("media_files")
       .select(
@@ -114,9 +127,11 @@ export const resolveEpisodeFile = createServerFn({ method: "POST" })
     }
     const { data: rows, error } = await query.limit(1);
     if (error) throw error;
-    const row = rows?.[0];
-    if (!row) return { ok: false as const, reason: "not_found" as const };
-    const changed = data.expectedFileId ? row.id !== data.expectedFileId : false;
+    const decision = decideEpisodeResolution({ ok: true }, (rows ?? []) as any, data.expectedFileId);
+    if (!decision.ok) {
+      return { ok: false as const, reason: decision.reason, detail: decision.detail, correlationId: cid };
+    }
+    const row: any = decision.file;
     return {
       ok: true as const,
       file: {
@@ -127,7 +142,8 @@ export const resolveEpisodeFile = createServerFn({ method: "POST" })
         language: row.language,
         file_size: row.file_size,
       },
-      changed,
+      changed: decision.changed,
+      correlationId: cid,
     };
   });
 
