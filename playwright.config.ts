@@ -24,7 +24,9 @@ export default defineConfig({
   projects: [
     { name: "mobile-320", use: { ...devices["iPhone SE"], viewport: { width: 320, height: 568 } } },
     { name: "mobile-360", use: { ...devices["Pixel 5"], viewport: { width: 360, height: 800 } } },
+    { name: "mobile-375", use: { ...devices["iPhone SE"], viewport: { width: 375, height: 667 } } },
     { name: "mobile-390", use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 } } },
+    { name: "mobile-414", use: { ...devices["iPhone 11"], viewport: { width: 414, height: 896 } } },
     { name: "tablet-768", use: { ...devices["iPad Mini"], viewport: { width: 768, height: 1024 } } },
   ],
 });
