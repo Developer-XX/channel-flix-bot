@@ -130,10 +130,22 @@ export function DownloadButton({
 
   return (
     <>
-      <Button size={size} variant={variant} onClick={handleClick} disabled={loading} className="shrink-0">
-        {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-        via Bot
-      </Button>
+      <div className="flex flex-col gap-1 shrink-0">
+        <Button size={size} variant={variant} onClick={handleClick} disabled={loading} className="shrink-0">
+          {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
+          via Bot
+        </Button>
+        {errorState && (
+          <div
+            role="alert"
+            className="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] leading-tight text-red-300"
+          >
+            <div className="font-medium">{errorState.message}</div>
+            {errorState.detail && <div className="opacity-80">{errorState.detail}</div>}
+            <div className="mt-0.5 font-mono opacity-70">support ref: {errorState.cid}</div>
+          </div>
+        )}
+      </div>
 
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
         <DialogContent>
