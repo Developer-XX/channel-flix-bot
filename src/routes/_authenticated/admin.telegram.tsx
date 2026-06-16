@@ -374,7 +374,9 @@ function IngestCard({
           </p>
         </button>
         <Button size="sm" variant="ghost" onClick={onToggle}>{expanded ? "Close" : "Review"}</Button>
+        </div>
       </div>
+
 
       {expanded && (
         <div className="mt-4 grid gap-3 border-t border-border pt-4">
