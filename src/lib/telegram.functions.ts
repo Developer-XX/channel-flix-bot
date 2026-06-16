@@ -640,3 +640,215 @@ export const bulkAddAlias = createServerFn({ method: "POST" })
     return { ok: true, added };
   });
 
+
+// --- Audit trail, force-rematch, title debug, reindex --------------------
+
+export const getMatchAudit = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ingestId?: string; titleId?: string; limit?: number }) =>
+    z.object({
+      ingestId: z.string().uuid().optional(),
+      titleId: z.string().uuid().optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    let q = context.supabase
+      .from("match_audit_log")
+      .select("id, telegram_ingest_id, master_title_id, attempt_at, scores, rules_used, threshold, decision, reason, actor, parsed_snapshot")
+      .order("attempt_at", { ascending: false })
+      .limit(data.limit ?? 50);
+    if (data.ingestId) q = q.eq("telegram_ingest_id", data.ingestId);
+    if (data.titleId) q = q.eq("master_title_id", data.titleId);
+    const { data: rows, error } = await q;
+    if (error) throw error;
+    return rows ?? [];
+  });
+
+export const forceRematchAndPublish = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ingestId: string; assignTitleId?: string }) =>
+    z.object({
+      ingestId: z.string().uuid(),
+      assignTitleId: z.string().uuid().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { runMatcher, loadMatchingSettings, autoPromoteToMediaFile } = await import("@/lib/telegram-ingest.server");
+    const { writeMatchAudit } = await import("@/lib/match-audit.server");
+    const { bumpCacheVersion } = await import("@/lib/indexes.server");
+
+    const { data: r, error } = await supabaseAdmin
+      .from("telegram_ingest").select("*").eq("id", data.ingestId).maybeSingle();
+    if (error) throw error;
+    if (!r) throw new Error("Ingest row not found");
+
+    const settings = await loadMatchingSettings(supabaseAdmin);
+    const match = await runMatcher(
+      supabaseAdmin,
+      { title: r.parsed_title ?? "", year: r.parsed_year ?? null, category: r.parsed_category ?? null },
+      settings,
+    );
+
+    const finalTitleId = data.assignTitleId ?? match.matchedTitleId;
+    const actor = `admin:${context.claims?.email ?? context.userId}`;
+
+    let promoted = false;
+    let fileId: string | null = null;
+    let reason = "below_threshold";
+
+    if (finalTitleId && r.telegram_file_id) {
+      try {
+        fileId = await autoPromoteToMediaFile(supabaseAdmin, {
+          ingestId: r.id,
+          titleId: finalTitleId,
+          channelRowId: r.channel_id,
+          telegramFileId: r.telegram_file_id,
+          telegramMessageId: r.telegram_message_id,
+          fileName: r.file_name ?? r.parsed_title ?? "file",
+          caption: r.caption,
+          mimeType: r.mime_type,
+          fileSize: r.file_size,
+          durationSeconds: r.duration_seconds,
+          quality: r.parsed_quality,
+          resolution: r.parsed_resolution,
+          language: r.parsed_language,
+          season: r.parsed_season,
+          episode: r.parsed_episode,
+        });
+        promoted = true;
+        reason = data.assignTitleId ? "manual_assign" : (match.matchedVia ?? "fuzzy") + "_promote";
+        await bumpCacheVersion(supabaseAdmin);
+      } catch (e) {
+        reason = `promote_failed:${(e as Error).message}`;
+      }
+    } else {
+      await supabaseAdmin.from("telegram_ingest").update({
+        match_status: "unmatched",
+        match_score: match.matchScore,
+      }).eq("id", r.id);
+    }
+
+    await writeMatchAudit(supabaseAdmin, {
+      ingestId: r.id,
+      titleId: finalTitleId,
+      match,
+      settings,
+      decision: promoted ? (data.assignTitleId ? "manual" : (match.matchedVia === "alias" ? "alias" : "promoted")) : "rejected",
+      reason,
+      actor,
+      parsedSnapshot: {
+        title: r.parsed_title, year: r.parsed_year, category: r.parsed_category,
+        season: r.parsed_season, episode: r.parsed_episode,
+        quality: r.parsed_quality, resolution: r.parsed_resolution, language: r.parsed_language,
+      },
+    });
+
+    return { ok: true, promoted, fileId, match, reason };
+  });
+
+// Per-title diagnostic — explains why a title's master record might have no
+// files, and lists nearby ingest rows with their scores against this title.
+export const getTitleDebug = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { slug: string }) => z.object({ slug: z.string().min(1) }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { runMatcher, loadMatchingSettings, bestTitleScore } = await import("@/lib/telegram-ingest.server");
+
+    const { data: title, error: e1 } = await supabaseAdmin
+      .from("master_titles")
+      .select("*")
+      .eq("slug", data.slug)
+      .maybeSingle();
+    if (e1) throw e1;
+    if (!title) throw new Error("Title not found");
+
+    const settings = await loadMatchingSettings(supabaseAdmin);
+
+    // Files currently linked
+    const { data: files } = await supabaseAdmin
+      .from("media_files")
+      .select("id, file_name, episode_id, quality, resolution, language, is_active, created_at, episodes(season_id, episode_number, seasons(season_number))")
+      .eq("title_id", title.id);
+
+    // Aliases for this title
+    const { data: aliases } = await supabaseAdmin
+      .from("title_aliases")
+      .select("id, alias, normalized_alias, created_at")
+      .eq("title_id", title.id);
+
+    // Nearby ingest rows: take a head word and search
+    const head = (title.title || "").split(/\s+/).filter((w: string) => w.length >= 3)[0] ?? title.title?.[0] ?? "";
+    const { data: nearby } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("id, parsed_title, parsed_year, parsed_category, parsed_season, parsed_episode, parsed_quality, parsed_resolution, match_status, matched_title_id, promoted_media_file_id, file_name, caption, created_at")
+      .ilike("parsed_title", `%${head}%`)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    const scored = (nearby ?? []).map((row: any) => {
+      const { score, parts } = bestTitleScore(row.parsed_title ?? "", title.title, settings);
+      const yearOk = !row.parsed_year || !title.release_year || Math.abs(row.parsed_year - title.release_year) <= settings.year_window;
+      const categoryOk = !row.parsed_category || !title.category || row.parsed_category === title.category;
+      let adjusted = score;
+      if (!yearOk) adjusted *= 0.6;
+      if (settings.require_category_match && !categoryOk) adjusted = 0;
+      else if (!categoryOk) adjusted *= 0.85;
+      const reasons: string[] = [];
+      if (adjusted < settings.threshold) reasons.push(`score ${adjusted.toFixed(2)} < threshold ${settings.threshold}`);
+      if (!yearOk) reasons.push(`year ${row.parsed_year} vs ${title.release_year}`);
+      if (!categoryOk) reasons.push(`category ${row.parsed_category} vs ${title.category}`);
+      if (row.matched_title_id && row.matched_title_id !== title.id) reasons.push(`already matched to another title`);
+      if (row.promoted_media_file_id) reasons.push("already promoted");
+      if (!row.parsed_title) reasons.push("parse_fail: empty title");
+      return { row, score, parts, adjusted, yearOk, categoryOk, reasons };
+    }).sort((a: any, b: any) => b.adjusted - a.adjusted);
+
+    return {
+      title,
+      settings,
+      files: files ?? [],
+      aliases: aliases ?? [],
+      candidates: scored,
+      filtersSummary: {
+        status_required: "published",
+        is_active_required: true,
+        category: title.category,
+      },
+    };
+  });
+
+export const rebuildWebsiteIndexes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { rebuildIndexes } = await import("@/lib/indexes.server");
+    return rebuildIndexes(supabaseAdmin);
+  });
+
+export const getCacheVersion = createServerFn({ method: "GET" })
+  .handler(async () => {
+    // Read via a publishable client (anon-readable). Avoid bringing the
+    // browser supabase client into the server runtime.
+    const { createClient } = await import("@supabase/supabase-js");
+    const sb = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_PUBLISHABLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { data } = await sb
+      .from("telegram_bot_state")
+      .select("cache_version, indexes_rebuilt_at")
+      .eq("id", "global")
+      .maybeSingle();
+    return {
+      cacheVersion: data?.cache_version ?? 1,
+      indexesRebuiltAt: data?.indexes_rebuilt_at ?? null,
+    };
+  });
