@@ -22,6 +22,7 @@ import { Route as BrowseCategoryRouteImport } from './routes/browse.$category'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as AuthenticatedAdminVerificationLimitsRouteImport } from './routes/_authenticated/admin.verification-limits'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
@@ -95,6 +96,12 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminVerificationLimitsRoute =
+  AuthenticatedAdminVerificationLimitsRouteImport.update({
+    id: '/verification-limits',
+    path: '/verification-limits',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminTitlesRoute =
   AuthenticatedAdminTitlesRouteImport.update({
     id: '/titles',
@@ -158,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
+  '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -179,6 +187,7 @@ export interface FileRoutesByTo {
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
+  '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -203,6 +212,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
+  '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/telegram'
     | '/admin/titles'
+    | '/admin/verification-limits'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/telegram/backfill'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/telegram'
     | '/admin/titles'
+    | '/admin/verification-limits'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/telegram/backfill'
@@ -271,6 +283,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/requests'
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
+    | '/_authenticated/admin/verification-limits'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/telegram/backfill'
@@ -388,6 +401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/verification-limits': {
+      id: '/_authenticated/admin/verification-limits'
+      path: '/verification-limits'
+      fullPath: '/admin/verification-limits'
+      preLoaderRoute: typeof AuthenticatedAdminVerificationLimitsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/titles': {
       id: '/_authenticated/admin/titles'
       path: '/titles'
@@ -452,6 +472,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
+  AuthenticatedAdminVerificationLimitsRoute: typeof AuthenticatedAdminVerificationLimitsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
 }
 
@@ -460,6 +481,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
+  AuthenticatedAdminVerificationLimitsRoute:
+    AuthenticatedAdminVerificationLimitsRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
 }
 
@@ -499,13 +522,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

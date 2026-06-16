@@ -750,6 +750,76 @@ export const forceRematchAndPublish = createServerFn({ method: "POST" })
     return { ok: true, promoted, fileId, match, reason };
   });
 
+// Re-run the matcher across all nearby telegram_ingest rows for a single title
+// and (re)promote any that clear the threshold. Use this when episodes show up
+// in Title Debug but not on the live page — it forces a one-off resync without
+// touching unrelated titles or hitting the Telegram API.
+export const resyncTitleFiles = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { titleId: string }) => z.object({ titleId: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { runMatcher, loadMatchingSettings, autoPromoteToMediaFile, bestTitleScore } =
+      await import("@/lib/telegram-ingest.server");
+    const { bumpCacheVersion } = await import("@/lib/indexes.server");
+
+    const { data: title } = await supabaseAdmin
+      .from("master_titles").select("*").eq("id", data.titleId).maybeSingle();
+    if (!title) throw new Error("Title not found");
+
+    const settings = await loadMatchingSettings(supabaseAdmin);
+    const head = (title.title || "").split(/\s+/).filter((w: string) => w.length >= 3)[0] ?? title.title?.[0] ?? "";
+
+    const { data: nearby } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("*")
+      .ilike("parsed_title", `%${head}%`)
+      .is("promoted_media_file_id", null)
+      .limit(200);
+
+    let promoted = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    for (const r of nearby ?? []) {
+      const { score } = bestTitleScore(r.parsed_title ?? "", title.title, settings);
+      const yearOk = !r.parsed_year || !title.release_year ||
+        Math.abs(r.parsed_year - title.release_year) <= settings.year_window;
+      const categoryOk = !r.parsed_category || !title.category || r.parsed_category === title.category;
+      let adjusted = score;
+      if (!yearOk) adjusted *= 0.6;
+      if (settings.require_category_match && !categoryOk) adjusted = 0;
+      else if (!categoryOk) adjusted *= 0.85;
+      if (adjusted < settings.threshold || !r.telegram_file_id) { skipped++; continue; }
+      try {
+        await autoPromoteToMediaFile(supabaseAdmin, {
+          ingestId: r.id,
+          titleId: title.id,
+          channelRowId: r.channel_id,
+          telegramFileId: r.telegram_file_id,
+          telegramMessageId: r.telegram_message_id,
+          fileName: r.file_name ?? r.parsed_title ?? "file",
+          caption: r.caption,
+          mimeType: r.mime_type,
+          fileSize: r.file_size,
+          durationSeconds: r.duration_seconds,
+          quality: r.parsed_quality,
+          resolution: r.parsed_resolution,
+          language: r.parsed_language,
+          season: r.parsed_season,
+          episode: r.parsed_episode,
+        });
+        promoted++;
+      } catch (e) { errors.push((e as Error).message); }
+    }
+    if (promoted > 0) await bumpCacheVersion(supabaseAdmin);
+    // Silence unused matcher import; keep symmetry with forceRematchAndPublish
+    void runMatcher;
+    return { ok: true, scanned: nearby?.length ?? 0, promoted, skipped, errors: errors.slice(0, 5) };
+  });
+
+
 // Per-title diagnostic — explains why a title's master record might have no
 // files, and lists nearby ingest rows with their scores against this title.
 export const getTitleDebug = createServerFn({ method: "GET" })

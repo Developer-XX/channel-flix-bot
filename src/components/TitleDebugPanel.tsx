@@ -4,7 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getTitleDebug } from "@/lib/telegram.functions";
+import { getTitleDebug, resyncTitleFiles } from "@/lib/telegram.functions";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Wrench } from "lucide-react";
 
 export function TitleDebugPanel({ slug }: { slug: string }) {
@@ -116,15 +118,46 @@ export function TitleDebugPanel({ slug }: { slug: string }) {
                 </div>
               </>
             )}
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => debugQ.refetch()}>
                 Refresh debug
               </Button>
+              <ResyncButton titleId={debugQ.data?.title.id} slug={slug} />
             </div>
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+function ResyncButton({ titleId, slug }: { titleId?: string; slug: string }) {
+  const fn = useServerFn(resyncTitleFiles);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  if (!titleId) return null;
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await fn({ data: { titleId } });
+          toast.success(`Resync done · ${r.promoted} promoted, ${r.skipped} skipped`);
+          qc.invalidateQueries({ queryKey: ["title-files-grouped"] });
+          qc.invalidateQueries({ queryKey: ["title-files"] });
+          qc.invalidateQueries({ queryKey: ["title-debug", slug] });
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "Resyncing…" : "Re-run Telegram sync for this title"}
+    </Button>
   );
 }
 

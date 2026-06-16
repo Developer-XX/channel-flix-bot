@@ -57,7 +57,9 @@ function TitlePage() {
         .select("id, file_name, quality, resolution, language, file_size")
         .eq("title_id", titleQ.data!.id)
         .eq("is_active", true)
-        .order("quality", { ascending: false });
+        .order("resolution", { ascending: false, nullsFirst: false })
+        .order("quality", { ascending: false, nullsFirst: false })
+        .order("file_name", { ascending: true });
       return data ?? [];
     },
   });
@@ -164,13 +166,16 @@ function TitlePage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 lg:grid-cols-2">
+              <div className="grid gap-3 xl:grid-cols-2">
                 {filesQ.data.map((f) => (
-                  <div key={f.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface/50 p-3 sm:p-4 min-w-0">
+                  <div
+                    key={f.id}
+                    className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border border-border bg-surface/50 p-3 sm:p-4 min-w-0"
+                  >
                     <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
                       <Download className="h-5 w-5" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0">
                       <div className="font-medium truncate">{f.file_name}</div>
                       <div className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         {f.quality && <span>{f.quality}</span>}
@@ -179,7 +184,9 @@ function TitlePage() {
                         {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
                       </div>
                     </div>
-                    <DownloadButton mediaFileId={f.id} fileName={f.file_name} />
+                    <div className="shrink-0">
+                      <DownloadButton mediaFileId={f.id} fileName={f.file_name} titleId={t.id} />
+                    </div>
                   </div>
                 ))}
               </div>

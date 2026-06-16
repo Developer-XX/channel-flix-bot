@@ -39,21 +39,21 @@ export function SiteHeader() {
           : "bg-gradient-to-b from-background/90 to-transparent"
       }`}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 md:px-6">
-        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 md:px-6 min-w-0">
+        <Link to="/" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight shrink-0">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-primary glow-primary">
             <Film className="h-4 w-4 text-primary-foreground" />
           </span>
           <span className="hidden sm:inline">StreamVault</span>
         </Link>
 
-        <nav className="hidden lg:flex items-center gap-1 text-sm">
+        <nav className="hidden xl:flex items-center gap-1 text-sm min-w-0">
           {CATEGORIES.map((c) => (
             <Link
               key={c.slug}
               to="/browse/$category"
               params={{ category: c.slug }}
-              className="px-3 py-2 rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-surface"
+              className="px-3 py-2 rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-surface whitespace-nowrap"
               activeProps={{ className: "text-foreground bg-surface" }}
             >
               {c.label}
@@ -61,19 +61,20 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <form onSubmit={submit} className="ml-auto hidden md:flex items-center">
+        <form onSubmit={submit} className="ml-auto hidden md:flex items-center min-w-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search titles…"
-              className="h-9 w-56 rounded-md bg-surface pl-9 pr-3 text-sm outline-none border border-border focus:border-ring focus:ring-2 focus:ring-ring/40 transition"
+              className="h-9 w-40 lg:w-56 rounded-md bg-surface pl-9 pr-3 text-sm outline-none border border-border focus:border-ring focus:ring-2 focus:ring-ring/40 transition"
             />
           </div>
         </form>
 
-        <div className="ml-auto md:ml-2 flex items-center gap-2">
+
+        <div className="ml-auto md:ml-2 flex items-center gap-2 shrink-0">
           {isAdmin && (
             <Link to="/admin" className="hidden sm:block">
               <Button variant="outline" size="sm">Admin</Button>
@@ -104,7 +105,7 @@ export function SiteHeader() {
           )}
           <button
             onClick={() => setMobileOpen((v) => !v)}
-            className="lg:hidden grid h-9 w-9 place-items-center rounded-md text-foreground hover:bg-surface"
+            className="xl:hidden grid h-9 w-9 place-items-center rounded-md text-foreground hover:bg-surface"
             aria-label="Toggle menu"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -113,7 +114,7 @@ export function SiteHeader() {
       </div>
 
       {mobileOpen && (
-        <div className="lg:hidden border-t border-border bg-background/95 backdrop-blur-md">
+        <div className="xl:hidden border-t border-border bg-background/95 backdrop-blur-md">
           <div className="mx-auto max-w-7xl px-4 py-4 space-y-1">
             <form onSubmit={submit} className="mb-3 md:hidden">
               <div className="relative">

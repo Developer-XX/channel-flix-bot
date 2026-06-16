@@ -160,3 +160,25 @@ export const updateAdminRequestStatus = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+// Audit feed of verification rate-limit rejections, with token/file context,
+// for the Verification Limits admin page.
+export const listVerificationRateLimits = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("verification_provider_calls")
+      .select("id, created_at, user_id, provider, status, short_url_returned, error")
+      .eq("status", "rate_limited")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return (data ?? []).map((r) => {
+      let parsed: { mediaFileId?: string | null; used?: number; capacity?: number; windowMs?: number; retryAfterMs?: number } | null = null;
+      try { parsed = r.error ? JSON.parse(r.error) : null; } catch { /* keep raw */ }
+      return { ...r, parsed };
+    });
+  });
+
