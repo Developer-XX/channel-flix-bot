@@ -143,13 +143,13 @@ function SeasonBlock({
                   {files.map((f) => (
                     <div
                       key={f.id}
-                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-border bg-background/40 p-3 min-w-0"
+                      className="grid grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-border bg-background/40 p-3 min-w-0"
                     >
                       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
                         <Download className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{f.file_name}</div>
+                        <div className="text-sm font-medium break-words sm:truncate">{f.file_name}</div>
                         <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
                           {f.quality && <span>{f.quality}</span>}
                           {f.resolution && <span>· {f.resolution}</span>}
@@ -157,7 +157,7 @@ function SeasonBlock({
                           {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
                         </div>
                       </div>
-                      <div className="shrink-0">
+                      <div className="col-span-2 sm:col-span-1 shrink-0 justify-self-stretch sm:justify-self-end">
                         <DownloadButton
                           mediaFileId={f.id}
                           fileName={f.file_name}
