@@ -46,6 +46,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           failed: number
+          filters: Json | null
           finished_at: string | null
           id: string
           job_type: string
@@ -53,6 +54,7 @@ export type Database = {
           params: Json
           processed: number
           promoted: number
+          results: Json
           started_at: string
           status: string
           total: number
@@ -62,6 +64,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           failed?: number
+          filters?: Json | null
           finished_at?: string | null
           id?: string
           job_type: string
@@ -69,6 +72,7 @@ export type Database = {
           params?: Json
           processed?: number
           promoted?: number
+          results?: Json
           started_at?: string
           status?: string
           total?: number
@@ -78,6 +82,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           failed?: number
+          filters?: Json | null
           finished_at?: string | null
           id?: string
           job_type?: string
@@ -85,6 +90,7 @@ export type Database = {
           params?: Json
           processed?: number
           promoted?: number
+          results?: Json
           started_at?: string
           status?: string
           total?: number
@@ -418,6 +424,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      index_rebuild_runs: {
+        Row: {
+          error: string | null
+          finished_at: string | null
+          id: string
+          result: Json | null
+          skip_reason: string | null
+          skipped: boolean
+          started_at: string
+          trigger: string
+        }
+        Insert: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          result?: Json | null
+          skip_reason?: string | null
+          skipped?: boolean
+          started_at?: string
+          trigger?: string
+        }
+        Update: {
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          result?: Json | null
+          skip_reason?: string | null
+          skipped?: boolean
+          started_at?: string
+          trigger?: string
+        }
+        Relationships: []
       }
       master_titles: {
         Row: {
@@ -1073,6 +1112,45 @@ export type Database = {
           user_id?: string
           verification_count?: number
           verified_at?: string | null
+        }
+        Relationships: []
+      }
+      verification_provider_calls: {
+        Row: {
+          created_at: string
+          error: string | null
+          http_status: number | null
+          id: string
+          key_fingerprint: string | null
+          latency_ms: number | null
+          provider: string
+          short_url_returned: boolean
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          key_fingerprint?: string | null
+          latency_ms?: number | null
+          provider: string
+          short_url_returned?: boolean
+          status: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          key_fingerprint?: string | null
+          latency_ms?: number | null
+          provider?: string
+          short_url_returned?: boolean
+          status?: string
+          user_id?: string | null
         }
         Relationships: []
       }
