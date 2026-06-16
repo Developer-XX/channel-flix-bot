@@ -71,7 +71,10 @@ function BulkRematchPage() {
       toast.error(e?.message ?? "Failed to start job");
     } finally {
       setStarting(false);
+    }
   }
+
+
 
   async function onRetryFailed() {
     if (!current?.id) return;
