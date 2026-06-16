@@ -870,13 +870,38 @@ export const getTitleDebug = createServerFn({ method: "GET" })
       if (settings.require_category_match && !categoryOk) adjusted = 0;
       else if (!categoryOk) adjusted *= 0.85;
       const reasons: string[] = [];
-      if (adjusted < settings.threshold) reasons.push(`score ${adjusted.toFixed(2)} < threshold ${settings.threshold}`);
-      if (!yearOk) reasons.push(`year ${row.parsed_year} vs ${title.release_year}`);
-      if (!categoryOk) reasons.push(`category ${row.parsed_category} vs ${title.category}`);
-      if (row.matched_title_id && row.matched_title_id !== title.id) reasons.push(`already matched to another title`);
-      if (row.promoted_media_file_id) reasons.push("already promoted");
-      if (!row.parsed_title) reasons.push("parse_fail: empty title");
-      return { row, score, parts, adjusted, yearOk, categoryOk, reasons };
+      const reasonCodes: { code: string; detail: string }[] = [];
+      if (!row.parsed_title) {
+        reasonCodes.push({ code: "PARSE_FAIL_EMPTY_TITLE", detail: "Telegram caption produced no parsable title." });
+        reasons.push("parse_fail: empty title");
+      }
+      if (adjusted < settings.threshold) {
+        reasonCodes.push({ code: "SCORE_BELOW_THRESHOLD", detail: `score ${adjusted.toFixed(2)} < threshold ${settings.threshold}` });
+        reasons.push(`score ${adjusted.toFixed(2)} < threshold ${settings.threshold}`);
+      }
+      if (!yearOk) {
+        reasonCodes.push({ code: "YEAR_MISMATCH", detail: `parsed=${row.parsed_year} vs title=${title.release_year} (±${settings.year_window})` });
+        reasons.push(`year ${row.parsed_year} vs ${title.release_year}`);
+      }
+      if (!categoryOk) {
+        reasonCodes.push({ code: settings.require_category_match ? "CATEGORY_MISMATCH_HARD" : "CATEGORY_MISMATCH_SOFT", detail: `parsed=${row.parsed_category} vs title=${title.category}` });
+        reasons.push(`category ${row.parsed_category} vs ${title.category}`);
+      }
+      if (row.matched_title_id && row.matched_title_id !== title.id) {
+        reasonCodes.push({ code: "MATCHED_OTHER_TITLE", detail: `matched_title_id=${row.matched_title_id}` });
+        reasons.push(`already matched to another title`);
+      }
+      if (row.promoted_media_file_id) {
+        reasonCodes.push({ code: "ALREADY_PROMOTED", detail: `media_file=${row.promoted_media_file_id}` });
+        reasons.push("already promoted");
+      }
+      if (row.parsed_season == null && title.category !== "movie") {
+        reasonCodes.push({ code: "SEASON_PARSE_FAILED", detail: "no S## detected" });
+      }
+      if (row.parsed_episode == null && title.category !== "movie") {
+        reasonCodes.push({ code: "EPISODE_PARSE_FAILED", detail: "no E## detected" });
+      }
+      return { row, score, parts, adjusted, yearOk, categoryOk, reasons, reasonCodes };
     }).sort((a: any, b: any) => b.adjusted - a.adjusted);
 
     return {
