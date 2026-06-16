@@ -334,8 +334,18 @@ function IngestCard({
   }, [draft, row]);
 
   return (
-    <div className="rounded-lg border border-border p-3 text-sm">
-      <div className="flex items-start justify-between gap-3">
+    <div className={`rounded-lg border p-3 text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}>
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1.5 h-4 w-4 accent-primary"
+          checked={selected}
+          onChange={onSelectToggle}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Select row"
+        />
+        <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
+
         <button onClick={onToggle} className="text-left min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium truncate">{row.parsed_title ?? row.file_name ?? "(no title)"}</span>
