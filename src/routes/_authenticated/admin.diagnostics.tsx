@@ -1,10 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
 import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
+import { runIntegrationsHealth } from "@/lib/integrations-health.functions";
+import {
+  requestDatabaseWipe,
+  confirmDatabaseWipe,
+  listAdminAuditLog,
+} from "@/lib/destructive.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
@@ -46,6 +54,12 @@ function DiagnosticsPage() {
       </div>
 
       <WebVitalsPanel data={vitalsQ.data} loading={vitalsQ.isLoading} error={vitalsQ.error as Error | null} />
+
+      <IntegrationsHealthPanel />
+
+      <DestructiveActionsPanel />
+
+      <AdminAuditPanel />
 
       {q.isLoading && <div className="text-sm text-muted-foreground">Running checks…</div>}
       {q.error && (
@@ -284,6 +298,233 @@ function WebVitalsPanel({
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// External integrations health (Telegram, TMDB, link shorteners)
+// ---------------------------------------------------------------------------
+
+function IntegrationsHealthPanel() {
+  const run = useServerFn(runIntegrationsHealth);
+  const q = useQuery({
+    queryKey: ["integrations-health"],
+    queryFn: () => run(),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Plug className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">External integrations</h2>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          onClick={() => q.refetch()}
+          disabled={q.isFetching}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
+          <span className="hidden sm:inline">Test</span>
+        </Button>
+      </div>
+      {q.isLoading && <p className="text-xs text-muted-foreground">Pinging providers…</p>}
+      {q.error && (
+        <p className="text-xs text-destructive break-words">{(q.error as Error).message}</p>
+      )}
+      {q.data && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {q.data.checks.map((c) => (
+            <div
+              key={c.name}
+              className="rounded-md border border-border/60 p-2.5 grid grid-cols-[auto_minmax(0,1fr)] gap-2"
+            >
+              <StatusIcon status={c.ok ? "ok" : c.configured ? "fail" : "warn"} />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold">{c.name}</span>
+                  {c.latencyMs != null && (
+                    <span className="text-[10px] text-muted-foreground">{c.latencyMs} ms</span>
+                  )}
+                  {!c.configured && (
+                    <span className="text-[10px] uppercase tracking-wide text-amber-500">
+                      not configured
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground break-words">{c.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Destructive actions — database wipe with confirmation + rate limit
+// ---------------------------------------------------------------------------
+
+function DestructiveActionsPanel() {
+  const req = useServerFn(requestDatabaseWipe);
+  const confirm = useServerFn(confirmDatabaseWipe);
+  const [code, setCode] = useState("");
+  const [phrase, setPhrase] = useState("");
+  const [issued, setIssued] = useState<{ code: string; expiresAt: string; phrase: string } | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
+  const requestMut = useMutation({
+    mutationFn: () => req(),
+    onSuccess: (data) => {
+      setIssued({ code: data.confirmationCode, expiresAt: data.expiresAt, phrase: data.confirmationPhrase });
+      setResult(null);
+    },
+  });
+  const confirmMut = useMutation({
+    mutationFn: () =>
+      confirm({ data: { code: code.trim().toUpperCase(), confirmationPhrase: phrase } }),
+    onSuccess: () => {
+      setResult("✓ Database wiped successfully. The audit log below records this action.");
+      setIssued(null);
+      setCode("");
+      setPhrase("");
+    },
+  });
+
+  return (
+    <section className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="h-4 w-4 text-destructive" />
+        <h2 className="font-semibold text-sm">Destructive actions — Database wipe</h2>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Two-step, rate-limited (1/hr per admin · {3}/day project-wide). Confirmation codes expire
+        after 5 minutes. Wipes application data; users, roles, and configuration are preserved.
+      </p>
+
+      {!issued && (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => requestMut.mutate()}
+          disabled={requestMut.isPending}
+          aria-label="Request database wipe confirmation code"
+        >
+          {requestMut.isPending ? "Requesting…" : "Request wipe confirmation code"}
+        </Button>
+      )}
+      {requestMut.error && (
+        <p className="text-xs text-destructive break-words">{(requestMut.error as Error).message}</p>
+      )}
+
+      {issued && (
+        <div className="space-y-2 rounded-md border border-border bg-background p-3">
+          <p className="text-xs">
+            One-time code: <span className="font-mono text-base font-bold">{issued.code}</span>
+            <span className="text-muted-foreground"> · expires {new Date(issued.expiresAt).toLocaleTimeString()}</span>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Type the code and the exact phrase <code className="font-mono">{issued.phrase}</code> to confirm.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input
+              aria-label="Confirmation code"
+              placeholder="Code (6 chars)"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              maxLength={20}
+            />
+            <Input
+              aria-label="Confirmation phrase"
+              placeholder={issued.phrase}
+              value={phrase}
+              onChange={(e) => setPhrase(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => confirmMut.mutate()}
+              disabled={
+                confirmMut.isPending || !code.trim() || phrase !== issued.phrase
+              }
+              aria-label="Confirm database wipe"
+            >
+              {confirmMut.isPending ? "Wiping…" : "Confirm wipe"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setIssued(null)}>
+              Cancel
+            </Button>
+          </div>
+          {confirmMut.error && (
+            <p className="text-xs text-destructive break-words">{(confirmMut.error as Error).message}</p>
+          )}
+        </div>
+      )}
+      {result && <p className="text-xs text-emerald-500">{result}</p>}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Admin audit log (database wipes + other privileged actions)
+// ---------------------------------------------------------------------------
+
+function AdminAuditPanel() {
+  const list = useServerFn(listAdminAuditLog);
+  const q = useQuery({
+    queryKey: ["admin-audit-log"],
+    queryFn: () => list({ data: { limit: 50 } }),
+    retry: false,
+    refetchInterval: 30_000,
+  });
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-sm">Admin audit log</h2>
+        <span className="text-[10px] text-muted-foreground">{q.data?.length ?? 0} rows</span>
+      </div>
+      {q.error && (
+        <p className="text-xs text-destructive break-words">{(q.error as Error).message}</p>
+      )}
+      <div className="overflow-x-auto -mx-3 sm:mx-0">
+        <table className="w-full text-[11px] min-w-[680px]">
+          <thead className="text-muted-foreground">
+            <tr className="text-left">
+              <th className="p-1.5">Time</th>
+              <th className="p-1.5">Admin</th>
+              <th className="p-1.5">Action</th>
+              <th className="p-1.5">Status</th>
+              <th className="p-1.5">IP</th>
+              <th className="p-1.5">Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(q.data ?? []).map((r: any) => (
+              <tr key={r.id} className="border-t border-border/50 align-top">
+                <td className="p-1.5 whitespace-nowrap text-muted-foreground">
+                  {new Date(r.created_at).toLocaleString()}
+                </td>
+                <td className="p-1.5 break-all max-w-[180px]">{r.actor_email ?? "—"}</td>
+                <td className="p-1.5 font-mono">{r.action}</td>
+                <td className={`p-1.5 ${badgeClass(r.status)}`}>{r.status}</td>
+                <td className="p-1.5 text-muted-foreground">{r.ip ?? "—"}</td>
+                <td className="p-1.5 text-muted-foreground break-words max-w-[260px]">
+                  <code className="font-mono text-[10px]">
+                    {JSON.stringify(r.metadata ?? {}).slice(0, 160)}
+                  </code>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

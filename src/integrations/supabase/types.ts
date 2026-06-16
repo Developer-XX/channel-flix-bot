@@ -62,6 +62,42 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          ip: string | null
+          metadata: Json
+          status: string
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          ip?: string | null
+          metadata?: Json
+          status?: string
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          ip?: string | null
+          metadata?: Json
+          status?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       auth_rate_limits: {
         Row: {
           action: string
@@ -729,6 +765,36 @@ export type Database = {
           },
         ]
       }
+      pending_destructive_actions: {
+        Row: {
+          action: string
+          actor_user_id: string
+          confirmation_code: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          confirmation_code: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          confirmation_code?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1372,6 +1438,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      wipe_application_data: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
