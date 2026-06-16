@@ -27,19 +27,24 @@ function ResetPasswordPage() {
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const query = new URLSearchParams(window.location.search);
     const accessToken = hash.get("access_token");
     const refreshToken = hash.get("refresh_token");
-    const type = hash.get("type");
+    const code = query.get("code");
+    const type = hash.get("type") ?? query.get("type");
 
     (async () => {
       try {
         if (accessToken && refreshToken) {
           const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
           if (error) throw error;
-          window.history.replaceState(null, "", window.location.pathname);
+        } else if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
         }
         const { data, error } = await supabase.auth.getUser();
         if (error || !data.user || (type && type !== "recovery")) throw error ?? new Error("Invalid or expired reset link");
+        window.history.replaceState(null, "", window.location.pathname);
         setReady(true);
       } catch (error) {
         toast.error(formatAuthError(error, "Invalid or expired reset link"));

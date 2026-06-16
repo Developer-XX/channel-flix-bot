@@ -1,77 +1,18 @@
-import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router";
 import { Film, LayoutDashboard, MessageSquare, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { claimFirstAdmin, getAdminGate } from "@/lib/admin.functions";
+import { getAdminGate } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
+  beforeLoad: async () => {
+    const gate = await getAdminGate();
+    if (!gate.canAccessAdmin) throw redirect({ to: "/" });
+    return gate;
+  },
   component: AdminLayout,
 });
 
 function AdminLayout() {
-  const [checked, setChecked] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [hasAnyAdmin, setHasAnyAdmin] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const gate = await getAdminGate();
-        setIsAdmin(gate.canAccessAdmin);
-        setHasAnyAdmin(gate.hasAnyAdmin);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Admin check failed");
-      } finally {
-        setChecked(true);
-      }
-    })();
-  }, []);
-
-  const claimAdmin = async () => {
-    try {
-      await claimFirstAdmin();
-      toast.success("You are now the admin.");
-      setIsAdmin(true);
-      setHasAnyAdmin(true);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to claim admin role");
-    }
-  };
-
-  if (!checked) {
-    return <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>;
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="min-h-screen grid place-items-center px-4">
-        <div className="max-w-md text-center rounded-2xl border border-border bg-card p-8">
-          <h1 className="font-display text-2xl font-bold">Admin access required</h1>
-          {!hasAnyAdmin ? (
-            <>
-              <p className="mt-2 text-muted-foreground">
-                No admin has been set up yet. Since you're the first user here, you can claim admin.
-              </p>
-              <Button onClick={claimAdmin} className="mt-6 bg-gradient-primary text-primary-foreground border-0">
-                Claim admin role
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="mt-2 text-muted-foreground">
-                Your account doesn't have admin or moderator role. Contact the platform owner to be granted access.
-              </p>
-              <Link to="/" className="mt-6 inline-block">
-                <Button variant="outline"><ArrowLeft className="h-4 w-4 mr-1.5" />Back home</Button>
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex">
       <aside className="hidden md:flex flex-col w-60 shrink-0 border-r border-border bg-sidebar">
