@@ -69,7 +69,8 @@ export async function rebuildIndexes(
     trendingCount = payload.length;
   }
 
-  // 3) search — every published title
+  // 3) search — every published title (searchable tsvector is generated from
+  // searchable_text by Postgres)
   await supabase.from("idx_search").delete().neq("title_id", "00000000-0000-0000-0000-000000000000");
   const { data: titles } = await supabase
     .from("master_titles")
@@ -78,10 +79,6 @@ export async function rebuildIndexes(
     .limit(20000);
   let searchCount = 0;
   if (titles?.length) {
-    // Build tsvector via SQL — insert via RPC-ish raw inserts isn't possible
-    // without to_tsvector; do batched upserts using raw SQL via supabase.rpc
-    // would be ideal. Workaround: use rest insert with computed text and a
-    // server-side update to compute tsvector.
     const payload = titles.map((t: any) => ({
       title_id: t.id,
       title: t.title,
@@ -89,18 +86,14 @@ export async function rebuildIndexes(
       category: t.category,
       release_year: t.release_year,
       poster_url: t.poster_url,
-      // PostgREST accepts string and will cast to tsvector via to_tsvector through trigger; instead set plain text for now and rely on UPDATE below.
-      searchable: [t.title, t.original_title, t.overview, ...(t.genres ?? [])]
+      searchable_text: [t.title, t.original_title, t.overview, ...(t.genres ?? [])]
         .filter(Boolean)
         .join(" ")
         .toLowerCase(),
     }));
-    // Insert via RPC-friendly approach: split chunks
     for (let i = 0; i < payload.length; i += 500) {
       await supabase.from("idx_search").insert(payload.slice(i, i + 500) as any);
     }
-    // Recompute tsvector with proper to_tsvector via SQL
-    await supabase.rpc("rebuild_search_tsvector").catch(() => {});
     searchCount = payload.length;
   }
 
