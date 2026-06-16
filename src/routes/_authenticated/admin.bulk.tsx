@@ -71,7 +71,67 @@ function BulkRematchPage() {
       toast.error(e?.message ?? "Failed to start job");
     } finally {
       setStarting(false);
+  }
+
+  async function onRetryFailed() {
+    if (!current?.id) return;
+    setRetrying(true);
+    try {
+      const r = await retryFn({
+        data: {
+          sourceJobId: current.id,
+          days,
+          categories: cats.size > 0 ? (Array.from(cats) as Cat[]) : undefined,
+          dryRun,
+        },
+      });
+      setJobId(r.jobId);
+      toast.success(`Re-queued ${r.retried} failed entr${r.retried === 1 ? "y" : "ies"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to re-queue");
+    } finally {
+      setRetrying(false);
     }
+  }
+
+  function onExportCsv() {
+    if (!current) return;
+    const header = ["ingestId", "decision", "parsedTitle", "category", "titleId", "titleName", "score", "error"];
+    const rows = (results as any[]).map((r) => [
+      r.ingestId ?? "",
+      r.decision ?? "",
+      r.parsedTitle ?? "",
+      r.category ?? "",
+      r.titleId ?? "",
+      r.titleName ?? "",
+      typeof r.score === "number" ? r.score.toFixed(4) : "",
+      r.error ?? "",
+    ]);
+    const totals = [
+      ["", "", "", "", "", "", "", ""],
+      ["TOTALS", "", "", "", "", "", "", ""],
+      ["processed", String(current.processed ?? 0), "", "", "", "", "", ""],
+      ["promoted", String(current.promoted ?? 0), "", "", "", "", "", ""],
+      ["failed", String(current.failed ?? 0), "", "", "", "", "", ""],
+      ["still_unmatched", String(stillUnmatched), "", "", "", "", "", ""],
+    ];
+    const csv = [header, ...rows, ...totals]
+      .map((line) =>
+        line
+          .map((cell) => {
+            const s = String(cell ?? "");
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          })
+          .join(","),
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bulk-rematch-${String(current.id).slice(0, 8)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
