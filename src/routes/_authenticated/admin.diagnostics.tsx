@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
+import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
@@ -21,8 +22,15 @@ const RLS_CODES: { code: string; meaning: string }[] = [
 function DiagnosticsPage() {
   const run = useServerFn(runAuthDiagnostics);
   const audit = useServerFn(listAccessAudit);
+  const vitals = useServerFn(listWebVitalsSummary);
   const q = useQuery({ queryKey: ["auth-diagnostics"], queryFn: () => run(), retry: false });
   const auditQ = useQuery({ queryKey: ["access-audit"], queryFn: () => audit({ data: { limit: 50 } }), retry: false });
+  const vitalsQ = useQuery({
+    queryKey: ["web-vitals-summary"],
+    queryFn: () => vitals({ data: { limit: 200 } }),
+    retry: false,
+    refetchInterval: 60_000,
+  });
 
   return (
     <div className="p-3 sm:p-6 max-w-4xl mx-auto space-y-4">
@@ -31,11 +39,13 @@ function DiagnosticsPage() {
           <h1 className="text-lg sm:text-2xl font-bold truncate">Auth & Admin Diagnostics</h1>
           <p className="text-xs text-muted-foreground">Precise reasons why /admin may or may not load.</p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => { q.refetch(); auditQ.refetch(); }} disabled={q.isFetching}>
+        <Button size="sm" variant="outline" onClick={() => { q.refetch(); auditQ.refetch(); vitalsQ.refetch(); }} disabled={q.isFetching}>
           <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
           <span className="hidden sm:inline">Re-run</span>
         </Button>
       </div>
+
+      <WebVitalsPanel data={vitalsQ.data} loading={vitalsQ.isLoading} error={vitalsQ.error as Error | null} />
 
       {q.isLoading && <div className="text-sm text-muted-foreground">Running checks…</div>}
       {q.error && (

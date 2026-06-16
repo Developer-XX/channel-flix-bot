@@ -145,6 +145,11 @@ function RootComponent() {
       }
       queryClient.invalidateQueries();
     });
+
+    // Real-User Monitoring (RUM) — capture Core Web Vitals from real visitors.
+    // Lazy-imported so it never blocks the critical path and stays out of SSR.
+    void import("@/lib/web-vitals-client").then((m) => m.installWebVitals()).catch(() => {});
+
     return () => {
       window.removeEventListener("focus", refreshIfNeeded);
       data.subscription.unsubscribe();
