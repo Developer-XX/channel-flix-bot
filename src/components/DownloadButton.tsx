@@ -45,19 +45,37 @@ export function DownloadButton({
         return;
       }
 
-      // Re-resolve the episode file by (title, season, episode) so a stale
-      // mediaFileId after a re-promote is corrected automatically.
+      // For series episodes, we MUST re-resolve before sending — never let
+      // a stale mediaFileId leak through to Telegram.
+      const isEpisode = !!titleId && (season != null || episode != null);
+      const seasonValid = season == null || (Number.isFinite(season) && season >= 0);
+      const episodeValid = episode == null || (Number.isFinite(episode) && episode >= 0);
+
       let activeFileId = mediaFileId;
-      if (titleId && (season != null || episode != null)) {
+      if (isEpisode) {
+        if (!seasonValid || !episodeValid) {
+          toast.error("Couldn't read season/episode for this file. Please refresh and try again.");
+          return;
+        }
         try {
           const res = await resolveEp({
-            data: { titleId, season: season ?? null, episode: episode ?? null, expectedFileId: mediaFileId },
+            data: {
+              titleId: titleId!,
+              season: season ?? null,
+              episode: episode ?? null,
+              expectedFileId: mediaFileId,
+            },
           });
-          if (res.ok) {
-            activeFileId = res.file.id;
-            if (res.changed) toast.message("Episode file was updated to the latest version.");
+          if (!res.ok) {
+            toast.error("This episode is no longer available. Try refreshing the page.");
+            return;
           }
-        } catch { /* fall back to mediaFileId */ }
+          activeFileId = res.file.id;
+          if (res.changed) toast.message("Episode file was updated to the latest version.");
+        } catch (e: any) {
+          toast.error("Couldn't verify the episode file. Please retry.");
+          return;
+        }
       }
 
       const r = await reqDownload({ data: { mediaFileId: activeFileId } });
