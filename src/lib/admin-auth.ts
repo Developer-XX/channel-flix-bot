@@ -18,14 +18,14 @@ export async function getAdminAccess(context: SupabaseAuthContext) {
   return {
     isAdmin: Boolean(admin.data),
     isModerator: Boolean(moderator.data),
-    canAccessAdmin: Boolean(admin.data || moderator.data),
+    canAccessAdmin: Boolean(admin.data),
   };
 }
 
 export async function requireAdminAccess(context: SupabaseAuthContext) {
   const access = await getAdminAccess(context);
   if (!access.canAccessAdmin) {
-    throw new Error("Forbidden: admin or moderator role required");
+    throw new Error("Forbidden: admin role required");
   }
   return access;
 }
