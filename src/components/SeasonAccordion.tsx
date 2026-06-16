@@ -127,18 +127,18 @@ function SeasonBlock({
                   {epNum === "other" ? "Unassigned" : `Episode ${epNum}`}
                   {files[0]?.episodes?.name ? ` — ${files[0].episodes.name}` : ""}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 lg:grid-cols-2">
                   {files.map((f) => (
                     <div
                       key={f.id}
-                      className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3"
+                      className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-3 min-w-0"
                     >
-                      <div className="grid h-9 w-9 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-gradient-primary text-primary-foreground">
                         <Download className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{f.file_name}</div>
-                        <div className="text-[11px] text-muted-foreground flex gap-1.5 mt-0.5">
+                        <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
                           {f.quality && <span>{f.quality}</span>}
                           {f.resolution && <span>· {f.resolution}</span>}
                           {f.language && <span>· {f.language.toUpperCase()}</span>}
