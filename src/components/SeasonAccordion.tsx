@@ -92,11 +92,13 @@ export function SeasonAccordion({ titleId }: Props) {
 function SeasonBlock({
   season,
   titleId,
+  defaultOpen,
 }: {
   season: { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> };
   titleId: string;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(season.seasonNumber === 1 || season.seasonNumber === "other");
+  const [open, setOpen] = useState(defaultOpen ?? false);
   const episodes = Array.from(season.episodes.entries()).sort(([a], [b]) => {
     if (a === "other") return 1;
     if (b === "other") return -1;
