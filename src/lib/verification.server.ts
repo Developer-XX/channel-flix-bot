@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
+import { getPublicBaseUrl } from "./site-url.server";
 
 export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -15,12 +16,10 @@ export function nextProvider(last: string | null | undefined): Provider {
   return last === "nanolinks" ? "adrinolinks" : "nanolinks";
 }
 
-function siteOrigin(): string {
-  return (
-    process.env.SITE_URL ??
-    process.env.PUBLIC_SITE_URL ??
-    "https://channel-flix-bot.lovable.app"
-  );
+// Re-exported so existing imports keep working. Single source of truth lives
+// in `./site-url.server`.
+export function siteOrigin(): string {
+  return getPublicBaseUrl();
 }
 
 export function mintToken(): string {
