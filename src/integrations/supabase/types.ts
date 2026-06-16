@@ -1294,9 +1294,75 @@ export type Database = {
           },
         ]
       }
+      web_vitals_events: {
+        Row: {
+          connection_type: string | null
+          created_at: string
+          device_pixel_ratio: number | null
+          id: string
+          metric: string
+          navigation_type: string | null
+          rating: string | null
+          route: string
+          session_id: string
+          user_agent: string | null
+          user_id: string | null
+          value: number
+          viewport_height: number | null
+          viewport_width: number | null
+        }
+        Insert: {
+          connection_type?: string | null
+          created_at?: string
+          device_pixel_ratio?: number | null
+          id?: string
+          metric: string
+          navigation_type?: string | null
+          rating?: string | null
+          route: string
+          session_id: string
+          user_agent?: string | null
+          user_id?: string | null
+          value: number
+          viewport_height?: number | null
+          viewport_width?: number | null
+        }
+        Update: {
+          connection_type?: string | null
+          created_at?: string
+          device_pixel_ratio?: number | null
+          id?: string
+          metric?: string
+          navigation_type?: string | null
+          rating?: string | null
+          route?: string
+          session_id?: string
+          user_agent?: string | null
+          user_id?: string | null
+          value?: number
+          viewport_height?: number | null
+          viewport_width?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      web_vitals_recent_summary: {
+        Row: {
+          avg_value: number | null
+          good_count: number | null
+          last_seen_at: string | null
+          metric: string | null
+          needs_improvement_count: number | null
+          p50_value: number | null
+          p75_value: number | null
+          p95_value: number | null
+          poor_count: number | null
+          route: string | null
+          sample_count: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
