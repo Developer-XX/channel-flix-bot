@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      auth_rate_limits: {
+        Row: {
+          action: string
+          attempts: number
+          blocked_until: string | null
+          last_attempt_at: string
+          rate_key: string
+          window_start: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          blocked_until?: string | null
+          last_attempt_at?: string
+          rate_key: string
+          window_start?: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          blocked_until?: string | null
+          last_attempt_at?: string
+          rate_key?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       content_requests: {
         Row: {
           admin_notes: string | null
