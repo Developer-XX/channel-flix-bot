@@ -23,7 +23,9 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
+import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
+import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -95,11 +97,23 @@ const AuthenticatedAdminTitlesRoute =
     path: '/titles',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminTelegramRoute =
+  AuthenticatedAdminTelegramRouteImport.update({
+    id: '/telegram',
+    path: '/telegram',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminRequestsRoute =
   AuthenticatedAdminRequestsRouteImport.update({
     id: '/requests',
     path: '/requests',
     getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const ApiPublicTelegramWebhookRoute =
+  ApiPublicTelegramWebhookRouteImport.update({
+    id: '/api/public/telegram/webhook',
+    path: '/api/public/telegram/webhook',
+    getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -115,8 +129,10 @@ export interface FileRoutesByFullPath {
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
+  '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -130,8 +146,10 @@ export interface FileRoutesByTo {
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
+  '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -148,8 +166,10 @@ export interface FileRoutesById {
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
+  '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -166,8 +186,10 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/title/$slug'
     | '/admin/requests'
+    | '/admin/telegram'
     | '/admin/titles'
     | '/admin/'
+    | '/api/public/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -181,8 +203,10 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/title/$slug'
     | '/admin/requests'
+    | '/admin/telegram'
     | '/admin/titles'
     | '/admin'
+    | '/api/public/telegram/webhook'
   id:
     | '__root__'
     | '/'
@@ -198,8 +222,10 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/title/$slug'
     | '/_authenticated/admin/requests'
+    | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/'
+    | '/api/public/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -213,6 +239,7 @@ export interface RootRouteChildren {
   BrowseCategoryRoute: typeof BrowseCategoryRoute
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
+  ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -315,6 +342,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminTitlesRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/telegram': {
+      id: '/_authenticated/admin/telegram'
+      path: '/telegram'
+      fullPath: '/admin/telegram'
+      preLoaderRoute: typeof AuthenticatedAdminTelegramRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/requests': {
       id: '/_authenticated/admin/requests'
       path: '/requests'
@@ -322,17 +356,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRequestsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/public/telegram/webhook': {
+      id: '/api/public/telegram/webhook'
+      path: '/api/public/telegram/webhook'
+      fullPath: '/api/public/telegram/webhook'
+      preLoaderRoute: typeof ApiPublicTelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
+  AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
+  AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
 }
@@ -364,17 +407,8 @@ const rootRouteChildren: RootRouteChildren = {
   BrowseCategoryRoute: BrowseCategoryRoute,
   DebugAuthRoute: DebugAuthRoute,
   TitleSlugRoute: TitleSlugRoute,
+  ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

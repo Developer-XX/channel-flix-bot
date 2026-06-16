@@ -449,6 +449,115 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_ingest: {
+        Row: {
+          caption: string | null
+          channel_id: string | null
+          created_at: string
+          duration_seconds: number | null
+          file_name: string | null
+          file_size: number | null
+          id: string
+          match_score: number | null
+          match_status: Database["public"]["Enums"]["ingest_status"]
+          matched_title_id: string | null
+          mime_type: string | null
+          parsed_codec: string | null
+          parsed_episode: number | null
+          parsed_language: string | null
+          parsed_quality: string | null
+          parsed_resolution: string | null
+          parsed_season: number | null
+          parsed_title: string | null
+          parsed_year: number | null
+          promoted_media_file_id: string | null
+          raw_update: Json
+          telegram_channel_id: number
+          telegram_file_id: string | null
+          telegram_file_unique_id: string | null
+          telegram_message_id: number
+          updated_at: string
+        }
+        Insert: {
+          caption?: string | null
+          channel_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string
+          match_score?: number | null
+          match_status?: Database["public"]["Enums"]["ingest_status"]
+          matched_title_id?: string | null
+          mime_type?: string | null
+          parsed_codec?: string | null
+          parsed_episode?: number | null
+          parsed_language?: string | null
+          parsed_quality?: string | null
+          parsed_resolution?: string | null
+          parsed_season?: number | null
+          parsed_title?: string | null
+          parsed_year?: number | null
+          promoted_media_file_id?: string | null
+          raw_update: Json
+          telegram_channel_id: number
+          telegram_file_id?: string | null
+          telegram_file_unique_id?: string | null
+          telegram_message_id: number
+          updated_at?: string
+        }
+        Update: {
+          caption?: string | null
+          channel_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string
+          match_score?: number | null
+          match_status?: Database["public"]["Enums"]["ingest_status"]
+          matched_title_id?: string | null
+          mime_type?: string | null
+          parsed_codec?: string | null
+          parsed_episode?: number | null
+          parsed_language?: string | null
+          parsed_quality?: string | null
+          parsed_resolution?: string | null
+          parsed_season?: number | null
+          parsed_title?: string | null
+          parsed_year?: number | null
+          promoted_media_file_id?: string | null
+          raw_update?: Json
+          telegram_channel_id?: number
+          telegram_file_id?: string | null
+          telegram_file_unique_id?: string | null
+          telegram_message_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_ingest_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_ingest_matched_title_id_fkey"
+            columns: ["matched_title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_ingest_promoted_media_file_id_fkey"
+            columns: ["promoted_media_file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -493,6 +602,7 @@ export type Database = {
         | "kdrama"
         | "documentary"
       content_status: "draft" | "published" | "archived"
+      ingest_status: "pending" | "matched" | "unmatched" | "ignored"
       request_status: "pending" | "approved" | "rejected" | "fulfilled"
     }
     CompositeTypes: {
@@ -631,6 +741,7 @@ export const Constants = {
         "documentary",
       ],
       content_status: ["draft", "published", "archived"],
+      ingest_status: ["pending", "matched", "unmatched", "ignored"],
       request_status: ["pending", "approved", "rejected", "fulfilled"],
     },
   },
