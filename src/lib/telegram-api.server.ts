@@ -71,3 +71,37 @@ export async function getChatMember(chatId: string | number, userId: number) {
     can_manage_chat?: boolean;
   }>("getChatMember", { chat_id: chatId, user_id: userId });
 }
+
+// Forwards/copies a previously-posted channel message into another chat
+// (e.g. the user's DM). This is how we deliver files to website users
+// without re-uploading — Telegram already has them in the source channel.
+export async function copyMessage(args: {
+  toChatId: number | string;
+  fromChatId: number | string;
+  messageId: number;
+  caption?: string;
+}) {
+  return callTg<{ message_id: number }>("copyMessage", {
+    chat_id: args.toChatId,
+    from_chat_id: args.fromChatId,
+    message_id: args.messageId,
+    ...(args.caption ? { caption: args.caption, parse_mode: "HTML" } : {}),
+  });
+}
+
+// Best-effort: returns null on common "bot can't DM the user" cases so the
+// caller can show a helpful "press Start in the bot first" message.
+export async function tryCopyMessage(args: Parameters<typeof copyMessage>[0]):
+  Promise<{ ok: true; messageId: number } | { ok: false; error: string; kind: "blocked" | "not_started" | "not_found" | "other" }> {
+  try {
+    const r = await copyMessage(args);
+    return { ok: true, messageId: r.message_id };
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    let kind: "blocked" | "not_started" | "not_found" | "other" = "other";
+    if (/bot was blocked/i.test(msg)) kind = "blocked";
+    else if (/chat not found|user not found/i.test(msg)) kind = "not_started";
+    else if (/message to copy not found|MESSAGE_ID_INVALID/i.test(msg)) kind = "not_found";
+    return { ok: false, error: msg, kind };
+  }
+}
