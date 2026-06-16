@@ -21,6 +21,9 @@ export const startBulkRematch = createServerFn({ method: "POST" })
       .object({
         days: z.number().int().min(1).max(180).default(7),
         dryRun: z.boolean().optional(),
+        categories: z
+          .array(z.enum(["movie", "series", "anime", "documentary", "show"]))
+          .optional(),
       })
       .parse(d ?? {}),
   )
@@ -40,12 +43,16 @@ export const startBulkRematch = createServerFn({ method: "POST" })
     }
 
     const since = new Date(Date.now() - data.days * 24 * 60 * 60 * 1000).toISOString();
-    const { data: rows, error } = await supabaseAdmin
+    let q = supabaseAdmin
       .from("telegram_ingest")
       .select("id")
       .eq("match_status", "unmatched")
       .gte("created_at", since)
       .order("created_at", { ascending: false });
+    if (data.categories && data.categories.length > 0) {
+      q = q.in("parsed_category", data.categories as any);
+    }
+    const { data: rows, error } = await q;
     if (error) throw error;
     const ids = (rows ?? []).map((r: any) => r.id as string);
 
@@ -54,6 +61,7 @@ export const startBulkRematch = createServerFn({ method: "POST" })
       .insert({
         job_type: "force_rematch",
         params: { days: data.days, dryRun: !!data.dryRun },
+        filters: { days: data.days, categories: data.categories ?? null, dryRun: !!data.dryRun },
         total: ids.length,
         created_by: context.userId,
       })
@@ -61,9 +69,6 @@ export const startBulkRematch = createServerFn({ method: "POST" })
       .single();
     if (jobErr) throw jobErr;
 
-    // Fire-and-forget: process in background after returning.
-    // Note: serverless workers can be terminated; long batches will be picked
-    // up by the cron auto-rebuild cycle and the admin can re-trigger.
     void runRematchJob(job.id, ids, !!data.dryRun);
 
     return { jobId: job.id, total: ids.length };
@@ -80,10 +85,30 @@ async function runRematchJob(jobId: string, ids: string[], dryRun: boolean) {
   let processed = 0;
   let promoted = 0;
   let failed = 0;
+  let stillUnmatched = 0;
   let lastError: string | null = null;
+  const results: Array<{
+    ingestId: string;
+    parsedTitle: string | null;
+    category: string | null;
+    titleId: string | null;
+    titleName: string | null;
+    score: number | null;
+    decision: "promoted" | "still_unmatched" | "failed";
+    error?: string;
+  }> = [];
   const settings = await loadMatchingSettings(supabaseAdmin);
 
   for (const id of ids) {
+    let entry: (typeof results)[number] = {
+      ingestId: id,
+      parsedTitle: null,
+      category: null,
+      titleId: null,
+      titleName: null,
+      score: null,
+      decision: "still_unmatched",
+    };
     try {
       const { data: r } = await supabaseAdmin
         .from("telegram_ingest")
@@ -94,11 +119,23 @@ async function runRematchJob(jobId: string, ids: string[], dryRun: boolean) {
         processed++;
         continue;
       }
+      entry.parsedTitle = r.parsed_title ?? null;
+      entry.category = (r.parsed_category as any) ?? null;
       const match = await runMatcher(
         supabaseAdmin,
         { title: r.parsed_title ?? "", year: r.parsed_year, category: r.parsed_category },
         settings,
       );
+      entry.titleId = match.matchedTitleId ?? null;
+      entry.score = typeof match.matchScore === "number" ? match.matchScore : null;
+      if (entry.titleId) {
+        const { data: t } = await supabaseAdmin
+          .from("master_titles")
+          .select("title")
+          .eq("id", entry.titleId)
+          .maybeSingle();
+        entry.titleName = t?.title ?? null;
+      }
       let didPromote = false;
       if (!dryRun && match.matchedTitleId && r.telegram_file_id) {
         try {
@@ -121,11 +158,17 @@ async function runRematchJob(jobId: string, ids: string[], dryRun: boolean) {
           });
           didPromote = true;
           promoted++;
+          entry.decision = "promoted";
           await markPromotionForAutoRebuild(supabaseAdmin);
         } catch (e) {
           failed++;
+          entry.decision = "failed";
+          entry.error = (e as Error).message.slice(0, 200);
           lastError = (e as Error).message.slice(0, 300);
         }
+      } else {
+        stillUnmatched++;
+        entry.decision = "still_unmatched";
       }
       await writeMatchAudit(supabaseAdmin, {
         ingestId: r.id,
@@ -142,15 +185,24 @@ async function runRematchJob(jobId: string, ids: string[], dryRun: boolean) {
       });
     } catch (e) {
       failed++;
+      entry.decision = "failed";
+      entry.error = (e as Error).message.slice(0, 200);
       lastError = (e as Error).message.slice(0, 300);
     }
+    results.push(entry);
     processed++;
 
-    // Persist progress every 5 rows or on the last row
     if (processed % 5 === 0 || processed === ids.length) {
       await supabaseAdmin
         .from("bulk_job_runs")
-        .update({ processed, promoted, failed, last_error: lastError })
+        .update({
+          processed,
+          promoted,
+          failed,
+          last_error: lastError,
+          results: results as any,
+          params: { stillUnmatched } as any,
+        })
         .eq("id", jobId);
     }
   }
@@ -162,6 +214,8 @@ async function runRematchJob(jobId: string, ids: string[], dryRun: boolean) {
       promoted,
       failed,
       last_error: lastError,
+      results: results as any,
+      params: { stillUnmatched } as any,
       status: "completed",
       finished_at: new Date().toISOString(),
     })
