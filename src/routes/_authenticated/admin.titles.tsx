@@ -455,8 +455,8 @@ function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
               </div>
               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.overview || "No overview."}</p>
             </div>
-            <Button size="sm" onClick={() => importOne(r.tmdb_id, r.media_type)} disabled={importing === r.tmdb_id} className="shrink-0">
-              {importing === r.tmdb_id ? "…" : "Import"}
+            <Button size="sm" onClick={() => openPreview(r.tmdb_id, r.media_type)} disabled={importing === r.tmdb_id} className="shrink-0">
+              {importing === r.tmdb_id ? "…" : "Preview"}
             </Button>
           </div>
         ))}
