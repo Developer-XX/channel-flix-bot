@@ -64,44 +64,40 @@ describe("SeasonAccordion responsive structure", () => {
 
   it("renders all 24 episodes and their download buttons (none clipped/hidden)", async () => {
     renderWithClient();
-    // Wait for the first episode to show
-    await screen.findByText(/Episode 01/i);
-    // All 24 episode rows exist
+    await screen.findByText("Episode 01");
     for (let i = 1; i <= 24; i++) {
       const ep = String(i).padStart(2, "0");
-      expect(screen.getByText(new RegExp(`Episode ${ep}`))).toBeTruthy();
+      expect(screen.getByText(`Episode ${ep}`)).toBeTruthy();
     }
     expect(screen.getAllByTestId("download-btn")).toHaveLength(24);
   });
 
   it("applies the responsive primitives that prevent overflow at small widths", async () => {
     const { container } = renderWithClient();
-    await screen.findByText(/Episode 01/i);
+    await screen.findByText("Episode 01");
 
-    // Outer accordion wrapper present
     expect(container.querySelector('[data-testid="season-accordion"]')).toBeTruthy();
 
-    // Every download button is inside a `shrink-0` wrapper so it can't get pushed off.
+    // Download button wrappers must be `shrink-0` so the button can't get pushed off.
     const btns = screen.getAllByTestId("download-btn");
+    expect(btns.length).toBe(24);
     for (const btn of btns) {
-      const wrapper = btn.parentElement as HTMLElement;
-      expect(wrapper.className).toMatch(/shrink-0/);
+      expect((btn.parentElement as HTMLElement).className).toMatch(/shrink-0/);
     }
 
-    // Every file row uses the 3-column grid with min-w-0 (text col can shrink).
-    const fileRows = container.querySelectorAll(".grid.grid-cols-\\[auto_minmax\\(0\\,1fr\\)_auto\\]");
-    expect(fileRows.length).toBeGreaterThanOrEqual(24);
-    for (const row of Array.from(fileRows)) {
-      expect((row as HTMLElement).className).toMatch(/min-w-0/);
-      // The middle text column must have min-w-0 + truncate child
-      const truncated = within(row as HTMLElement).getAllByText(/Show Season|WEB-DL|1080p|EN|MB/i, { exact: false });
-      expect(truncated.length).toBeGreaterThan(0);
+    // Find every per-file row (one per download button) and assert min-w-0 / truncate primitives.
+    const fileRows = btns.map((b) => b.parentElement!.parentElement as HTMLElement);
+    for (const row of fileRows) {
+      expect(row.className).toMatch(/min-w-0/);
+      expect(row.className).toMatch(/grid-cols-\[auto_minmax\(0,1fr\)_auto\]/);
+      // The text column must contain a `truncate` filename child
+      const truncated = row.querySelector(".truncate");
+      expect(truncated).toBeTruthy();
     }
   });
 
   it("first season auto-opens regardless of its number (covers Chhota Bheem S18)", async () => {
     renderWithClient();
-    // Episode rows must be visible without any click
-    expect(await screen.findByText(/Episode 01/i)).toBeTruthy();
+    expect(await screen.findByText("Episode 01")).toBeTruthy();
   });
 });
