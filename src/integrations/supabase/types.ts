@@ -80,6 +80,9 @@ export type Database = {
       download_logs: {
         Row: {
           created_at: string
+          delivered_at: string | null
+          delivery_error: string | null
+          delivery_status: string | null
           file_id: string | null
           id: string
           source: string | null
@@ -88,6 +91,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivered_at?: string | null
+          delivery_error?: string | null
+          delivery_status?: string | null
           file_id?: string | null
           id?: string
           source?: string | null
@@ -96,6 +102,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivered_at?: string | null
+          delivery_error?: string | null
+          delivery_status?: string | null
           file_id?: string | null
           id?: string
           source?: string | null
@@ -171,6 +180,118 @@ export type Database = {
             foreignKeyName: "episodes_title_id_fkey"
             columns: ["title_id"]
             isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      idx_latest_releases: {
+        Row: {
+          media_file_id: string
+          promoted_at: string
+          rank: number
+          title_id: string
+        }
+        Insert: {
+          media_file_id: string
+          promoted_at: string
+          rank: number
+          title_id: string
+        }
+        Update: {
+          media_file_id?: string
+          promoted_at?: string
+          rank?: number
+          title_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idx_latest_releases_media_file_id_fkey"
+            columns: ["media_file_id"]
+            isOneToOne: true
+            referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "idx_latest_releases_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      idx_search: {
+        Row: {
+          category: string | null
+          poster_url: string | null
+          refreshed_at: string
+          release_year: number | null
+          searchable: unknown
+          searchable_text: string
+          slug: string
+          title: string
+          title_id: string
+        }
+        Insert: {
+          category?: string | null
+          poster_url?: string | null
+          refreshed_at?: string
+          release_year?: number | null
+          searchable?: unknown
+          searchable_text?: string
+          slug: string
+          title: string
+          title_id: string
+        }
+        Update: {
+          category?: string | null
+          poster_url?: string | null
+          refreshed_at?: string
+          release_year?: number | null
+          searchable?: unknown
+          searchable_text?: string
+          slug?: string
+          title?: string
+          title_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idx_search_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: true
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      idx_trending: {
+        Row: {
+          computed_at: string
+          download_count_7d: number
+          rank: number
+          score: number
+          title_id: string
+        }
+        Insert: {
+          computed_at?: string
+          download_count_7d?: number
+          rank: number
+          score: number
+          title_id: string
+        }
+        Update: {
+          computed_at?: string
+          download_count_7d?: number
+          rank?: number
+          score?: number
+          title_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idx_trending_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: true
             referencedRelation: "master_titles"
             referencedColumns: ["id"]
           },
@@ -259,6 +380,63 @@ export type Database = {
           view_count?: number
         }
         Relationships: []
+      }
+      match_audit_log: {
+        Row: {
+          actor: string
+          attempt_at: string
+          decision: string
+          id: string
+          master_title_id: string | null
+          parsed_snapshot: Json | null
+          reason: string | null
+          rules_used: Json
+          scores: Json
+          telegram_ingest_id: string | null
+          threshold: number | null
+        }
+        Insert: {
+          actor?: string
+          attempt_at?: string
+          decision: string
+          id?: string
+          master_title_id?: string | null
+          parsed_snapshot?: Json | null
+          reason?: string | null
+          rules_used?: Json
+          scores?: Json
+          telegram_ingest_id?: string | null
+          threshold?: number | null
+        }
+        Update: {
+          actor?: string
+          attempt_at?: string
+          decision?: string
+          id?: string
+          master_title_id?: string | null
+          parsed_snapshot?: Json | null
+          reason?: string | null
+          rules_used?: Json
+          scores?: Json
+          telegram_ingest_id?: string | null
+          threshold?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_audit_log_master_title_id_fkey"
+            columns: ["master_title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_audit_log_telegram_ingest_id_fkey"
+            columns: ["telegram_ingest_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_ingest"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       media_files: {
         Row: {
@@ -416,7 +594,9 @@ export type Database = {
       telegram_bot_state: {
         Row: {
           admin_telegram_user_ids: number[]
+          cache_version: number
           id: string
+          indexes_rebuilt_at: string | null
           last_run_at: string | null
           last_run_error: string | null
           last_run_status: string | null
@@ -426,7 +606,9 @@ export type Database = {
         }
         Insert: {
           admin_telegram_user_ids?: number[]
+          cache_version?: number
           id: string
+          indexes_rebuilt_at?: string | null
           last_run_at?: string | null
           last_run_error?: string | null
           last_run_status?: string | null
@@ -436,7 +618,9 @@ export type Database = {
         }
         Update: {
           admin_telegram_user_ids?: number[]
+          cache_version?: number
           id?: string
+          indexes_rebuilt_at?: string | null
           last_run_at?: string | null
           last_run_error?: string | null
           last_run_status?: string | null
@@ -608,6 +792,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      telegram_user_links: {
+        Row: {
+          created_at: string
+          link_code: string | null
+          link_code_expires_at: string | null
+          linked_at: string | null
+          telegram_first_name: string | null
+          telegram_user_id: number | null
+          telegram_username: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          link_code?: string | null
+          link_code_expires_at?: string | null
+          linked_at?: string | null
+          telegram_first_name?: string | null
+          telegram_user_id?: number | null
+          telegram_username?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          link_code?: string | null
+          link_code_expires_at?: string | null
+          linked_at?: string | null
+          telegram_first_name?: string | null
+          telegram_user_id?: number | null
+          telegram_username?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       telegram_webhook_events: {
         Row: {

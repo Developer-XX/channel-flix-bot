@@ -339,6 +339,14 @@ export async function ingestTelegramUpdate(
       .eq("id", chanRow.id);
   }
 
+  // Audit + auto-promotion
+  const { writeMatchAudit } = await import("@/lib/match-audit.server");
+  const parsedSnapshot = {
+    title: parsed.title, year: parsed.year, category: parsed.category,
+    season: parsed.season, episode: parsed.episode,
+    quality: parsed.quality, resolution: parsed.resolution, language: parsed.language,
+  };
+
   if (match.matchedTitleId && file.file_id) {
     try {
       await autoPromoteToMediaFile(supabase, {
@@ -358,9 +366,44 @@ export async function ingestTelegramUpdate(
         season: parsed.season,
         episode: parsed.episode,
       });
+      await writeMatchAudit(supabase, {
+        ingestId: ingestRow.id,
+        titleId: match.matchedTitleId,
+        match,
+        settings,
+        decision: match.matchedVia === "alias" ? "alias" : "promoted",
+        reason: `auto via ${match.matchedVia} score=${match.matchScore?.toFixed(3) ?? "?"}`,
+        parsedSnapshot,
+      });
+      // Bump cache_version so the website revalidates listings
+      try {
+        const { bumpCacheVersion } = await import("@/lib/indexes.server");
+        await bumpCacheVersion(supabase);
+      } catch {}
     } catch (e) {
       console.warn("[telegram-ingest] auto-promote failed:", (e as Error).message);
+      await writeMatchAudit(supabase, {
+        ingestId: ingestRow.id,
+        titleId: match.matchedTitleId,
+        match,
+        settings,
+        decision: "rejected",
+        reason: `promote_failed: ${(e as Error).message}`,
+        parsedSnapshot,
+      });
     }
+  } else {
+    await writeMatchAudit(supabase, {
+      ingestId: ingestRow.id,
+      titleId: null,
+      match,
+      settings,
+      decision: "rejected",
+      reason: match.matchScore != null
+        ? `below_threshold (top=${match.matchScore.toFixed(3)} < ${settings.threshold})`
+        : "no_candidates",
+      parsedSnapshot,
+    });
   }
 
   try {

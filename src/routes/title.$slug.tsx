@@ -1,11 +1,12 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Star, Clock, Calendar, Globe, Download, Send } from "lucide-react";
+import { Star, Clock, Calendar, Globe, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { CATEGORY_LABEL } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
+import { DownloadButton } from "@/components/DownloadButton";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
@@ -175,10 +176,8 @@ function TitlePage() {
                       {f.file_size && <span>· {(Number(f.file_size) / 1024 / 1024).toFixed(0)} MB</span>}
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" className="shrink-0" disabled title="Bot delivery coming in Phase 2">
-                    <Send className="h-4 w-4 mr-1.5" />
-                    via Bot
-                  </Button>
+                  <DownloadButton mediaFileId={f.id} fileName={f.file_name} />
+
                 </div>
               ))}
             </div>
