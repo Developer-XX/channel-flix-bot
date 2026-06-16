@@ -413,6 +413,33 @@ export type Database = {
           },
         ]
       }
+      telegram_bot_state: {
+        Row: {
+          id: string
+          last_run_at: string | null
+          last_run_error: string | null
+          last_run_status: string | null
+          last_update_id: number
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          last_run_at?: string | null
+          last_run_error?: string | null
+          last_run_status?: string | null
+          last_update_id?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_run_at?: string | null
+          last_run_error?: string | null
+          last_run_status?: string | null
+          last_update_id?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_channels: {
         Row: {
           channel_id: number
@@ -458,10 +485,14 @@ export type Database = {
           file_name: string | null
           file_size: number | null
           id: string
+          last_error: string | null
           match_score: number | null
           match_status: Database["public"]["Enums"]["ingest_status"]
           matched_title_id: string | null
           mime_type: string | null
+          parsed_category:
+            | Database["public"]["Enums"]["content_category"]
+            | null
           parsed_codec: string | null
           parsed_episode: number | null
           parsed_language: string | null
@@ -476,6 +507,7 @@ export type Database = {
           telegram_file_id: string | null
           telegram_file_unique_id: string | null
           telegram_message_id: number
+          update_id: number | null
           updated_at: string
         }
         Insert: {
@@ -486,10 +518,14 @@ export type Database = {
           file_name?: string | null
           file_size?: number | null
           id?: string
+          last_error?: string | null
           match_score?: number | null
           match_status?: Database["public"]["Enums"]["ingest_status"]
           matched_title_id?: string | null
           mime_type?: string | null
+          parsed_category?:
+            | Database["public"]["Enums"]["content_category"]
+            | null
           parsed_codec?: string | null
           parsed_episode?: number | null
           parsed_language?: string | null
@@ -504,6 +540,7 @@ export type Database = {
           telegram_file_id?: string | null
           telegram_file_unique_id?: string | null
           telegram_message_id: number
+          update_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -514,10 +551,14 @@ export type Database = {
           file_name?: string | null
           file_size?: number | null
           id?: string
+          last_error?: string | null
           match_score?: number | null
           match_status?: Database["public"]["Enums"]["ingest_status"]
           matched_title_id?: string | null
           mime_type?: string | null
+          parsed_category?:
+            | Database["public"]["Enums"]["content_category"]
+            | null
           parsed_codec?: string | null
           parsed_episode?: number | null
           parsed_language?: string | null
@@ -532,6 +573,7 @@ export type Database = {
           telegram_file_id?: string | null
           telegram_file_unique_id?: string | null
           telegram_message_id?: number
+          update_id?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -557,6 +599,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      telegram_webhook_events: {
+        Row: {
+          error: string | null
+          received_at: string
+          source: string
+          status: string
+          telegram_channel_id: number | null
+          telegram_message_id: number | null
+          update_id: number
+        }
+        Insert: {
+          error?: string | null
+          received_at?: string
+          source?: string
+          status?: string
+          telegram_channel_id?: number | null
+          telegram_message_id?: number | null
+          update_id: number
+        }
+        Update: {
+          error?: string | null
+          received_at?: string
+          source?: string
+          status?: string
+          telegram_channel_id?: number | null
+          telegram_message_id?: number | null
+          update_id?: number
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
