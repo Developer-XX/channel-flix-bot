@@ -7,18 +7,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Play } from "lucide-react";
+import { Loader2, Play, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { startBulkRematch, getBulkJobStatus } from "@/lib/bulk.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/bulk")({
   component: BulkRematchPage,
 });
 
+const CATEGORIES = ["movie", "series", "anime", "documentary", "show"] as const;
+type Cat = (typeof CATEGORIES)[number];
+
 function BulkRematchPage() {
   const startFn = useServerFn(startBulkRematch);
   const statusFn = useServerFn(getBulkJobStatus);
   const [days, setDays] = useState(7);
   const [dryRun, setDryRun] = useState(false);
+  const [cats, setCats] = useState<Set<Cat>>(new Set());
   const [jobId, setJobId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -34,11 +38,31 @@ function BulkRematchPage() {
   const pct =
     current && current.total > 0 ? Math.round((current.processed / current.total) * 100) : 0;
   const running = current?.status === "running";
+  const results: any[] = current?.results ?? [];
+  const stillUnmatched =
+    typeof current?.params?.stillUnmatched === "number"
+      ? current.params.stillUnmatched
+      : results.filter((r) => r.decision === "still_unmatched").length;
+
+  function toggleCat(c: Cat) {
+    setCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }
 
   async function onStart() {
     setStarting(true);
     try {
-      const r = await startFn({ data: { days, dryRun } });
+      const r = await startFn({
+        data: {
+          days,
+          dryRun,
+          categories: cats.size > 0 ? (Array.from(cats) as Cat[]) : undefined,
+        },
+      });
       setJobId(r.jobId);
       toast.success(`Started job for ${r.total} unmatched ingest(s)`);
     } catch (e: any) {
@@ -49,7 +73,7 @@ function BulkRematchPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl space-y-6">
+    <div className="p-6 max-w-4xl space-y-6">
       <header>
         <h1 className="text-2xl font-bold">Bulk rematch</h1>
         <p className="text-sm text-muted-foreground">
@@ -83,6 +107,26 @@ function BulkRematchPage() {
             </label>
           </div>
         </div>
+        <div className="space-y-1.5">
+          <Label>Media type filter <span className="text-xs text-muted-foreground">(empty = all)</span></Label>
+          <div className="flex flex-wrap gap-2">
+            {CATEGORIES.map((c) => (
+              <button
+                type="button"
+                key={c}
+                onClick={() => toggleCat(c)}
+                disabled={running || starting}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  cats.has(c)
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:bg-surface/60"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
         <Button onClick={onStart} disabled={running || starting}>
           {starting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Play className="h-4 w-4 mr-1.5" />}
           Start bulk rematch
@@ -97,6 +141,9 @@ function BulkRematchPage() {
               <div className="text-xs text-muted-foreground">
                 Status: <span className="font-mono">{current.status}</span> · Started{" "}
                 {new Date(current.started_at).toLocaleString()}
+                {current.filters?.categories?.length
+                  ? ` · cats: ${current.filters.categories.join(",")}`
+                  : ""}
               </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => setJobId(null)}>
@@ -104,14 +151,53 @@ function BulkRematchPage() {
             </Button>
           </div>
           <Progress value={pct} />
-          <div className="grid grid-cols-4 gap-3 text-sm">
+          <div className="grid grid-cols-5 gap-3 text-sm">
             <Stat label="Processed" value={`${current.processed}/${current.total}`} />
-            <Stat label="Promoted" value={current.promoted} />
-            <Stat label="Failed" value={current.failed} />
+            <Stat label="Rematched" value={current.promoted} tone="ok" />
+            <Stat label="Still unmatched" value={stillUnmatched} tone="warn" />
+            <Stat label="Failed" value={current.failed} tone="err" />
             <Stat label="%" value={`${pct}%`} />
           </div>
           {current.last_error && (
             <pre className="text-xs bg-muted p-2 rounded overflow-auto">{current.last_error}</pre>
+          )}
+
+          {results.length > 0 && (
+            <div className="mt-2 border-t border-border pt-3">
+              <h3 className="text-sm font-semibold mb-2">Per-title results ({results.length})</h3>
+              <div className="rounded-lg border border-border overflow-hidden">
+                <div className="max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-surface/60 sticky top-0">
+                      <tr className="text-left">
+                        <th className="px-2 py-1.5">Status</th>
+                        <th className="px-2 py-1.5">Parsed title</th>
+                        <th className="px-2 py-1.5">Cat</th>
+                        <th className="px-2 py-1.5">Matched to</th>
+                        <th className="px-2 py-1.5 text-right">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.map((r, i) => (
+                        <tr key={r.ingestId + i} className="border-t border-border">
+                          <td className="px-2 py-1.5">
+                            <DecisionPill decision={r.decision} />
+                          </td>
+                          <td className="px-2 py-1.5 truncate max-w-[240px]">{r.parsedTitle ?? "(?)"}</td>
+                          <td className="px-2 py-1.5 text-muted-foreground">{r.category ?? "—"}</td>
+                          <td className="px-2 py-1.5 truncate max-w-[240px]">
+                            {r.titleName ?? <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono">
+                            {typeof r.score === "number" ? r.score.toFixed(3) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -143,11 +229,47 @@ function BulkRematchPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "ok" | "warn" | "err";
+}) {
+  const color =
+    tone === "ok"
+      ? "text-emerald-500"
+      : tone === "warn"
+        ? "text-amber-500"
+        : tone === "err"
+          ? "text-red-500"
+          : "";
   return (
     <div className="rounded-lg border border-border bg-surface/40 p-2 text-center">
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="text-base font-semibold">{value}</div>
+      <div className={`text-base font-semibold ${color}`}>{value}</div>
     </div>
+  );
+}
+
+function DecisionPill({ decision }: { decision: string }) {
+  if (decision === "promoted")
+    return (
+      <span className="inline-flex items-center gap-1 text-emerald-500">
+        <CheckCircle2 className="h-3 w-3" /> rematched
+      </span>
+    );
+  if (decision === "failed")
+    return (
+      <span className="inline-flex items-center gap-1 text-red-500">
+        <XCircle className="h-3 w-3" /> failed
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 text-amber-500">
+      <AlertCircle className="h-3 w-3" /> unmatched
+    </span>
   );
 }
