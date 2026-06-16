@@ -154,7 +154,41 @@ export const runAuthDiagnostics = createServerFn({ method: "GET" })
       detail: `${adminCount ?? 0} admin role row(s) in system`,
     });
 
+    // Persist a row per check for auditability
+    await writeAudit(
+      checks.map((c) => ({
+        user_id: context.userId ?? null,
+        email,
+        event: "diagnostics_run",
+        code: c.code,
+        status: c.status,
+        path: "/admin/diagnostics",
+        detail: c.detail.slice(0, 500),
+        jwt_exp_in: exp ? exp - now : null,
+        has_admin_role: checks.find((x) => x.code === "ROLE_ADMIN")?.status === "ok",
+      })),
+    );
+
     return { userId: context.userId, email, checks };
+  });
+
+/** Returns the recent access audit rows (admin sees all; user sees own via RLS). */
+export const listAccessAudit = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { limit?: number; onlyFailures?: boolean }) => d)
+  .handler(async ({ context, data }) => {
+    let q = (context.supabase as any)
+      .from("access_audit_log")
+      .select("id, created_at, user_id, email, event, code, status, path, detail, jwt_exp_in, has_admin_role")
+      .order("created_at", { ascending: false })
+      .limit(Math.min(data.limit ?? 100, 500));
+    if (data.onlyFailures) q = q.in("status", ["fail", "warn"]);
+    const { data: rows, error } = await q;
+    if (error) {
+      const c = classifySupabaseError(error);
+      throw new Error(`[${c.code}] ${c.reason}`);
+    }
+    return rows ?? [];
   });
 
 /**
