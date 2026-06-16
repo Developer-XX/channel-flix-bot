@@ -101,7 +101,7 @@ function TitlePage() {
             />
           )}
           <div className="absolute inset-0 h-[55vh] sm:h-[65vh] md:h-[80vh] bg-gradient-to-b from-background/60 via-background/85 to-background" />
-          <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-24 sm:pt-28 pb-10 md:pb-12 grid gap-6 md:gap-8 grid-cols-[120px_minmax(0,1fr)] sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-24 sm:pt-28 pb-10 md:pb-12 grid gap-4 sm:gap-6 md:gap-8 grid-cols-[96px_minmax(0,1fr)] sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
             <div className="min-w-0">
               {t.poster_url ? (
                 <img
