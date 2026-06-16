@@ -323,3 +323,62 @@ test.describe("mobile visual regression — title page", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Aria-label coverage — runs on every project (320 / 360 / 375 / 390 / 414 / 768)
+// Asserts that critical interactive elements are present, visible, and labeled.
+// ---------------------------------------------------------------------------
+test.describe("aria-label & interactive coverage — mobile", () => {
+  test("homepage exposes labeled search, menu toggle, and brand link", async ({ page }, info) => {
+    await page.goto("/");
+    await waitForFontsAndImages(page);
+
+    // Critical interactive elements MUST exist and be inside the viewport.
+    const search = page.getByRole("button", { name: /search/i }).first();
+    const menu = page.getByRole("button", { name: /toggle menu/i }).first();
+    const brand = page.getByRole("link", { name: /streamvault/i }).first();
+    await assertVisible(page, search, `[${info.project.name}] search button`);
+    await assertVisible(page, menu, `[${info.project.name}] menu toggle`);
+    await assertVisible(page, brand, `[${info.project.name}] brand`);
+
+    // Every <button> and <a> in the header must be discoverable to AT — either
+    // by visible text content or an aria-label / aria-labelledby reference.
+    const issues = await page.locator("header button, header a").evaluateAll((els) =>
+      els
+        .filter((el) => (el as HTMLElement).offsetParent !== null)
+        .filter((el) => {
+          const text = (el.textContent ?? "").trim();
+          const aria = el.getAttribute("aria-label");
+          const labelled = el.getAttribute("aria-labelledby");
+          return !text && !aria && !labelled;
+        })
+        .map((el) => el.outerHTML.slice(0, 120)),
+    );
+    expect(issues, `header has unlabeled controls: ${issues.join(" | ")}`).toEqual([]);
+
+    // No element should be clipped horizontally off-viewport at any breakpoint.
+    await assertNoHorizontalOverflow(page);
+  });
+
+  test("open mobile menu has no clipped category links", async ({ page }, info) => {
+    await page.goto("/");
+    await waitForFontsAndImages(page);
+    const toggle = page.getByRole("button", { name: /toggle menu/i }).first();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    const viewport = page.viewportSize();
+    const cats = page.locator("a", { hasText: /movie|series|anime|drama|cartoon/i });
+    const count = await cats.count();
+    expect(count, `[${info.project.name}] mobile menu should expose categories`).toBeGreaterThan(0);
+    for (let i = 0; i < Math.min(count, 6); i++) {
+      const box = await cats.nth(i).boundingBox();
+      if (box && viewport) {
+        expect(box.x).toBeGreaterThanOrEqual(-1);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
+        expect(box.width).toBeGreaterThan(40);
+        expect(box.height).toBeGreaterThanOrEqual(36);
+      }
+    }
+  });
+});
