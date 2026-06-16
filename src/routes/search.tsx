@@ -40,17 +40,22 @@ function SearchPage() {
     }
   }, [debounced]);
 
+  const isImdb = /^tt\d{6,10}$/i.test(q.trim());
+
   const { data, isLoading } = useQuery({
-    queryKey: ["search", q],
+    queryKey: ["search", q, isImdb],
     enabled: q.length > 0,
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("master_titles")
         .select("id, slug, title, poster_url, release_year, rating, category")
-        .eq("status", "published")
-        .ilike("title", `%${q}%`)
-        .order("view_count", { ascending: false })
-        .limit(48);
+        .eq("status", "published");
+      if (isImdb) {
+        query = query.eq("imdb_id", q.trim().toLowerCase());
+      } else {
+        query = query.ilike("title", `%${q}%`).order("view_count", { ascending: false });
+      }
+      const { data } = await query.limit(48);
       return (data ?? []) as TitleCardData[];
     },
   });
@@ -67,13 +72,25 @@ function SearchPage() {
               autoFocus
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a title…"
-              className="h-14 w-full rounded-xl bg-surface pl-12 pr-4 text-base outline-none border border-border focus:border-ring focus:ring-2 focus:ring-ring/40 transition"
+              placeholder="Type a title or paste an IMDb ID (tt1234567)…"
+              className="h-14 w-full rounded-xl bg-surface pl-12 pr-24 text-base outline-none border border-border focus:border-ring focus:ring-2 focus:ring-ring/40 transition"
             />
+            {isImdb && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md bg-primary/15 text-primary px-2 py-1 text-[11px] font-medium uppercase tracking-wider">
+                IMDb
+              </span>
+            )}
           </div>
+          {isImdb && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Looking up <code className="bg-surface px-1 rounded">{q.trim().toLowerCase()}</code> by IMDb ID.
+            </p>
+          )}
           <div className="mt-10">
             {!q ? (
-              <p className="text-muted-foreground">Start typing to search the catalog.</p>
+              <p className="text-muted-foreground">Start typing to search the catalog, or paste an IMDb ID like <code className="bg-surface px-1 rounded">tt0903747</code>.</p>
+            ) : isImdb && !isLoading && (!data || data.length === 0) ? (
+              <p className="text-muted-foreground">No published title matches IMDb ID <code className="bg-surface px-1 rounded">{q.trim().toLowerCase()}</code>.</p>
             ) : (
               <TitleGrid items={data} loading={isLoading} />
             )}
