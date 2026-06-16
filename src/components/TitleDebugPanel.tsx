@@ -4,7 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getTitleDebug } from "@/lib/telegram.functions";
+import { getTitleDebug, resyncTitleFiles } from "@/lib/telegram.functions";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Wrench } from "lucide-react";
 
 export function TitleDebugPanel({ slug }: { slug: string }) {
