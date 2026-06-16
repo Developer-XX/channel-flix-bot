@@ -73,7 +73,7 @@ export function SeasonAccordion({ titleId }: Props) {
   return (
     <div className="space-y-3">
       {grouped.map((s) => (
-        <SeasonBlock key={String(s.seasonNumber)} season={s} />
+        <SeasonBlock key={String(s.seasonNumber)} season={s} titleId={titleId} />
       ))}
     </div>
   );
@@ -81,8 +81,10 @@ export function SeasonAccordion({ titleId }: Props) {
 
 function SeasonBlock({
   season,
+  titleId,
 }: {
   season: { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> };
+  titleId: string;
 }) {
   const [open, setOpen] = useState(season.seasonNumber === 1 || season.seasonNumber === "other");
   const episodes = Array.from(season.episodes.entries()).sort(([a], [b]) => {
