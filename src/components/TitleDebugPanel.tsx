@@ -190,3 +190,34 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function HideMetrics({ candidates }: { candidates: any[] }) {
+  const counts = new Map<string, number>();
+  let hidden = 0;
+  for (const c of candidates ?? []) {
+    const codes: { code: string }[] = c.reasonCodes ?? [];
+    if (codes.length) hidden++;
+    for (const rc of codes) counts.set(rc.code, (counts.get(rc.code) ?? 0) + 1);
+  }
+  const total = candidates?.length ?? 0;
+  const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const hideRate = total > 0 ? Math.round((hidden / total) * 100) : 0;
+  if (total === 0) return null;
+  return (
+    <div className="rounded-md border border-border bg-background/30 p-2 space-y-1.5">
+      <div className="flex flex-wrap gap-3 text-[11px]">
+        <span><span className="text-muted-foreground">Candidates:</span> <b>{total}</b></span>
+        <span><span className="text-muted-foreground">Hidden:</span> <b>{hidden}</b></span>
+        <span><span className="text-muted-foreground">Hide-rate:</span> <b>{hideRate}%</b></span>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {top.map(([code, n]) => (
+          <span key={code} className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-700 dark:text-amber-300">
+            {code} <b className="text-foreground/80">{n}</b>
+          </span>
+        ))}
+        {top.length === 0 && <span className="text-[11px] text-muted-foreground">No hide reasons recorded.</span>}
+      </div>
+    </div>
+  );
+}
