@@ -60,7 +60,7 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
         let promoted = 0;
         let skipped = 0;
         const errors: string[] = [];
-        const traces: Array<Parameters<typeof recordTrace>[0]> = [];
+        const traces: import("@/lib/sync-trace.server").TraceRow[] = [];
 
         for (const t of titles ?? []) {
           scannedTitles++;
