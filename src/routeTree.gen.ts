@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TitleSlugRouteImport } from './routes/title.$slug'
+import { Route as DebugAuthRouteImport } from './routes/debug.auth'
 import { Route as BrowseCategoryRouteImport } from './routes/browse.$category'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
@@ -55,6 +56,11 @@ const IndexRoute = IndexRouteImport.update({
 const TitleSlugRoute = TitleSlugRouteImport.update({
   id: '/title/$slug',
   path: '/title/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DebugAuthRoute = DebugAuthRouteImport.update({
+  id: '/debug/auth',
+  path: '/debug/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BrowseCategoryRoute = BrowseCategoryRouteImport.update({
@@ -99,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AuthenticatedAccountRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/browse/$category': typeof BrowseCategoryRoute
+  '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/account': typeof AuthenticatedAccountRoute
   '/browse/$category': typeof BrowseCategoryRoute
+  '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/browse/$category': typeof BrowseCategoryRoute
+  '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/browse/$category'
+    | '/debug/auth'
     | '/title/$slug'
     | '/admin/requests'
     | '/admin/titles'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/account'
     | '/browse/$category'
+    | '/debug/auth'
     | '/title/$slug'
     | '/admin/requests'
     | '/admin/titles'
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | '/_authenticated/account'
     | '/_authenticated/admin'
     | '/browse/$category'
+    | '/debug/auth'
     | '/title/$slug'
     | '/_authenticated/admin/requests'
     | '/_authenticated/admin/titles'
@@ -186,6 +198,7 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   BrowseCategoryRoute: typeof BrowseCategoryRoute
+  DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
 }
 
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/title/$slug'
       fullPath: '/title/$slug'
       preLoaderRoute: typeof TitleSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/debug/auth': {
+      id: '/debug/auth'
+      path: '/debug/auth'
+      fullPath: '/debug/auth'
+      preLoaderRoute: typeof DebugAuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/browse/$category': {
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   BrowseCategoryRoute: BrowseCategoryRoute,
+  DebugAuthRoute: DebugAuthRoute,
   TitleSlugRoute: TitleSlugRoute,
 }
 export const routeTree = rootRouteImport
