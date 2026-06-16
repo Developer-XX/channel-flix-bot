@@ -162,6 +162,22 @@ function TelegramAdmin() {
             </Button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => ingest.refetch()}>Refresh</Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              try {
+                const r = await rematch();
+                toast.success(`Rematch: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
+                ingest.refetch();
+                router.invalidate();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Rematch failed");
+              }
+            }}
+          >
+            Rematch unmatched
+          </Button>
         </div>
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
