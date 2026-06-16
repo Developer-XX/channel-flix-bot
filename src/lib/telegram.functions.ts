@@ -213,9 +213,124 @@ export const getBotState = createServerFn({ method: "GET" })
     await requireAdminAccess(context);
     const { data, error } = await context.supabase
       .from("telegram_bot_state")
-      .select("last_update_id, last_run_at, last_run_status, last_run_error")
+      .select("last_update_id, last_run_at, last_run_status, last_run_error, admin_telegram_user_ids")
       .eq("id", "global")
       .maybeSingle();
     if (error) throw error;
     return data;
+  });
+
+// --- Channel wizard -----------------------------------------------------
+
+export const listTelegramChannels = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { data, error } = await context.supabase
+      .from("telegram_channels")
+      .select("id, channel_id, name, username, description, is_active, confirm_with_reply, last_synced_at, created_at")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  });
+
+export const verifyTelegramChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ref: string }) => z.object({ ref: z.string().min(1).max(120) }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { getChat, getChatMember, getMe } = await import("@/lib/telegram-api.server");
+    let ref: string | number = data.ref.trim();
+    if (/^-?\d+$/.test(ref)) ref = Number(ref);
+    else if (!ref.startsWith("@")) ref = `@${ref}`;
+
+    try {
+      const [chat, me] = await Promise.all([getChat(ref), getMe()]);
+      let isAdmin = false;
+      let canRead = false;
+      let memberStatus = "unknown";
+      try {
+        const m = await getChatMember(chat.id, me.id);
+        memberStatus = m.status;
+        isAdmin = m.status === "administrator" || m.status === "creator";
+        // For channels Telegram requires the bot to be an admin to receive
+        // channel_post updates at all; can_post is optional for read-only.
+        canRead = isAdmin;
+      } catch (e: any) {
+        memberStatus = `error: ${e.message}`;
+      }
+      return {
+        ok: true as const,
+        chat: {
+          id: chat.id,
+          type: chat.type,
+          title: chat.title ?? null,
+          username: chat.username ?? null,
+          description: chat.description ?? null,
+        },
+        bot: { id: me.id, username: me.username ?? null },
+        isAdmin,
+        canRead,
+        memberStatus,
+      };
+    } catch (e: any) {
+      return { ok: false as const, error: e.message };
+    }
+  });
+
+export const saveTelegramChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      channel_id: z.number().int(),
+      name: z.string().min(1).max(200),
+      username: z.string().max(64).nullable().optional(),
+      description: z.string().max(2000).nullable().optional(),
+      is_active: z.boolean().optional(),
+      confirm_with_reply: z.boolean().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("telegram_channels")
+      .upsert(
+        {
+          channel_id: data.channel_id,
+          name: data.name,
+          username: data.username ?? null,
+          description: data.description ?? null,
+          is_active: data.is_active ?? true,
+          confirm_with_reply: data.confirm_with_reply ?? false,
+        },
+        { onConflict: "channel_id" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const deleteTelegramChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { error } = await context.supabase.from("telegram_channels").delete().eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const setBotAdminIds = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { ids: number[] }) =>
+    z.object({ ids: z.array(z.number().int()).max(50) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("telegram_bot_state")
+      .upsert({ id: "global", admin_telegram_user_ids: data.ids }, { onConflict: "id" });
+    if (error) throw error;
+    return { ok: true };
   });
