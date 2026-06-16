@@ -9,7 +9,7 @@ export type TraceRow = {
   source: string;
   title_id?: string | null;
   title_slug?: string | null;
-  channel_id?: number | null;
+  channel_id?: number | string | null;
   message_id?: number | null;
   ingest_id?: string | null;
   season_number?: number | null;
