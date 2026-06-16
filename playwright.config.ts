@@ -8,10 +8,18 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
-  reporter: [["list"]],
+  reporter: [
+    ["list"],
+    ["html", { outputFolder: "playwright-report", open: "never" }],
+    ["json", { outputFile: "playwright-report/results.json" }],
+  ],
+  outputDir: "test-results",
+  preserveOutput: "failures-only",
   use: {
     baseURL,
     trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
   },
   projects: [
     { name: "mobile-320", use: { ...devices["iPhone SE"], viewport: { width: 320, height: 568 } } },
