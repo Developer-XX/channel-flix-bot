@@ -247,7 +247,10 @@ test.describe("mobile visual regression — homepage", () => {
   });
 
   test("search results page renders without clipping", async ({ page }, info) => {
+    // Wait for the actual master_titles search response, not just networkidle.
+    const apiPromise = waitForApiResponse(page, /master_titles.*ilike|imdb_id=eq/i);
     await page.goto("/search?q=a");
+    await apiPromise;
     await waitForFontsAndImages(page);
 
     await assertVisible(page, page.locator("header").first(), "header on search");
