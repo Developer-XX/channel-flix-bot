@@ -31,6 +31,27 @@ I watch your Telegram channels and import posted media files into the catalog.
 /channels — list connected channels
 /broadcast &lt;text&gt; — (admins only) send a message to every active channel`;
 
+// Returns true if the Telegram user (by fromId) is a bot admin: either linked
+// to a website account that has the `admin` role, or listed explicitly in
+// telegram_bot_state.admin_telegram_user_ids (legacy fallback).
+async function isBotAdmin(supabaseAdmin: any, fromId: number | undefined): Promise<boolean> {
+  if (!fromId) return false;
+  const { data: link } = await supabaseAdmin
+    .from("telegram_user_links").select("user_id")
+    .eq("telegram_user_id", fromId).maybeSingle();
+  if (link?.user_id) {
+    const { data: role } = await supabaseAdmin
+      .from("user_roles").select("role")
+      .eq("user_id", link.user_id).eq("role", "admin").maybeSingle();
+    if (role) return true;
+  }
+  const { data: state } = await supabaseAdmin
+    .from("telegram_bot_state").select("admin_telegram_user_ids")
+    .eq("id", "global").maybeSingle();
+  const admins: number[] = state?.admin_telegram_user_ids ?? [];
+  return admins.includes(fromId);
+}
+
 async function handleCommand(
   update: any,
   supabaseAdmin: any,
@@ -46,6 +67,19 @@ async function handleCommand(
   const args = rest.join(" ");
   const chatId = msg.chat.id;
   const fromId: number | undefined = msg.from?.id;
+
+  // Admin-only commands (operational visibility / broadcast).
+  if (cmd === "/status" || cmd === "/channels" || cmd === "/broadcast") {
+    if (!(await isBotAdmin(supabaseAdmin, fromId))) {
+      await sendMessage(
+        chatId,
+        `❌ This command is admin-only. Your Telegram user id is <code>${fromId ?? "?"}</code>. ` +
+        `Ask an existing admin to link your account on the website or add your id in the admin panel.`,
+      );
+      return { handled: true };
+    }
+  }
+
 
   switch (cmd) {
     case "/start":
@@ -147,16 +181,7 @@ async function handleCommand(
       return { handled: true };
     }
     case "/broadcast": {
-      const { data: state } = await supabaseAdmin
-        .from("telegram_bot_state")
-        .select("admin_telegram_user_ids")
-        .eq("id", "global")
-        .maybeSingle();
-      const admins: number[] = state?.admin_telegram_user_ids ?? [];
-      if (!fromId || !admins.includes(fromId)) {
-        await sendMessage(chatId, `❌ Not authorized. Ask an admin to add your Telegram user id (<code>${fromId ?? "?"}</code>) in the admin panel.`);
-        return { handled: true };
-      }
+      // Admin check already enforced at the top of handleCommand.
       if (!args) {
         await sendMessage(chatId, "Usage: /broadcast &lt;message&gt;");
         return { handled: true };
@@ -173,6 +198,8 @@ async function handleCommand(
       await sendMessage(chatId, `📣 Broadcast complete: ${ok} sent, ${fail} failed.`);
       return { handled: true };
     }
+
+
     default: {
       await sendMessage(chatId, "Unknown command. Type /help for the list.");
       return { handled: true };
