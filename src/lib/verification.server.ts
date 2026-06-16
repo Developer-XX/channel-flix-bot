@@ -144,10 +144,10 @@ export async function consumeToken(args: {
     },
     { onConflict: "user_id" },
   );
-  // Bump count atomically
-  await supabase.rpc("increment_verification_count", { _user_id: row.user_id }).catch(() => {
-    // Optional RPC — ignored if not defined.
-  });
+  // Best-effort count bump
+  try {
+    await (supabase.rpc as any)("increment_verification_count", { _user_id: row.user_id });
+  } catch { /* optional RPC */ }
 
   return {
     ok: true,
