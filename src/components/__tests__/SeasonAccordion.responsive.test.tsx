@@ -73,10 +73,10 @@ describe("SeasonAccordion responsive structure", () => {
   });
 
   it("applies the responsive primitives that prevent overflow at small widths", async () => {
-    const { container } = renderWithClient();
+    renderWithClient();
     await screen.findByText("Episode 1");
 
-    expect(container.querySelector('[data-testid="season-accordion"]')).toBeTruthy();
+    expect(screen.getByTestId("season-accordion")).toBeTruthy();
 
     // Download button wrappers must be `shrink-0` so the button can't get pushed off.
     const btns = screen.getAllByTestId("download-btn");
