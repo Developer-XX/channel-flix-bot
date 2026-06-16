@@ -64,17 +64,17 @@ describe("SeasonAccordion responsive structure", () => {
 
   it("renders all 24 episodes and their download buttons (none clipped/hidden)", async () => {
     renderWithClient();
-    await screen.findByText("Episode 01");
+    await screen.findByText("Episode 1");
     for (let i = 1; i <= 24; i++) {
-      const ep = String(i).padStart(2, "0");
-      expect(screen.getByText(`Episode ${ep}`)).toBeTruthy();
+      const ep = String(i);
+      expect(screen.getByText(`Episode ${i}`)).toBeTruthy();
     }
     expect(screen.getAllByTestId("download-btn")).toHaveLength(24);
   });
 
   it("applies the responsive primitives that prevent overflow at small widths", async () => {
     const { container } = renderWithClient();
-    await screen.findByText("Episode 01");
+    await screen.findByText("Episode 1");
 
     expect(container.querySelector('[data-testid="season-accordion"]')).toBeTruthy();
 
@@ -98,6 +98,6 @@ describe("SeasonAccordion responsive structure", () => {
 
   it("first season auto-opens regardless of its number (covers Chhota Bheem S18)", async () => {
     renderWithClient();
-    expect(await screen.findByText("Episode 01")).toBeTruthy();
+    expect(await screen.findByText("Episode 1")).toBeTruthy();
   });
 });
