@@ -18,16 +18,19 @@ interface Props {
   episode?: number | null;
 }
 
-interface Props {
-  mediaFileId: string;
-  fileName?: string | null;
-  size?: "sm" | "default";
-  variant?: "outline" | "default";
-}
-
-export function DownloadButton({ mediaFileId, fileName, size = "sm", variant = "outline" }: Props) {
+export function DownloadButton({
+  mediaFileId,
+  fileName,
+  size = "sm",
+  variant = "outline",
+  titleId,
+  season,
+  episode,
+}: Props) {
   const reqDownload = useServerFn(requestDownload);
   const reqCode = useServerFn(requestLinkCode);
+  const resolveEp = useServerFn(resolveEpisodeFile);
+  const startVerify = useServerFn(startVerification);
   const [loading, setLoading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
