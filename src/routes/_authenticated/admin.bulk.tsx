@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Play, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { startBulkRematch, getBulkJobStatus } from "@/lib/bulk.functions";
+import { Loader2, Play, CheckCircle2, XCircle, AlertCircle, RotateCw, Download } from "lucide-react";
+import { startBulkRematch, getBulkJobStatus, retryFailedFromJob } from "@/lib/bulk.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/bulk")({
   component: BulkRematchPage,
