@@ -58,6 +58,8 @@ function DiagnosticsPage() {
 
       <IntegrationsHealthPanel />
 
+      <VerificationRedirectPanel />
+
       <DestructiveActionsPanel />
 
       <AdminAuditPanel />
