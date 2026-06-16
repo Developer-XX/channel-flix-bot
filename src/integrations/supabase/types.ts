@@ -752,6 +752,57 @@ export type Database = {
           },
         ]
       }
+      sync_trace_log: {
+        Row: {
+          channel_id: number | null
+          created_at: string
+          decision: string
+          details: Json
+          episode_number: number | null
+          id: string
+          ingest_id: string | null
+          message_id: number | null
+          reason_code: string
+          run_id: string
+          season_number: number | null
+          source: string
+          title_id: string | null
+          title_slug: string | null
+        }
+        Insert: {
+          channel_id?: number | null
+          created_at?: string
+          decision: string
+          details?: Json
+          episode_number?: number | null
+          id?: string
+          ingest_id?: string | null
+          message_id?: number | null
+          reason_code: string
+          run_id: string
+          season_number?: number | null
+          source: string
+          title_id?: string | null
+          title_slug?: string | null
+        }
+        Update: {
+          channel_id?: number | null
+          created_at?: string
+          decision?: string
+          details?: Json
+          episode_number?: number | null
+          id?: string
+          ingest_id?: string | null
+          message_id?: number | null
+          reason_code?: string
+          run_id?: string
+          season_number?: number | null
+          source?: string
+          title_id?: string | null
+          title_slug?: string | null
+        }
+        Relationships: []
+      }
       telegram_bot_state: {
         Row: {
           admin_telegram_user_ids: number[]
