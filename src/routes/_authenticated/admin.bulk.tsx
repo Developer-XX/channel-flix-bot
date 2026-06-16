@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Play, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { startBulkRematch, getBulkJobStatus } from "@/lib/bulk.functions";
+import { Loader2, Play, CheckCircle2, XCircle, AlertCircle, RotateCw, Download } from "lucide-react";
+import { startBulkRematch, getBulkJobStatus, retryFailedFromJob } from "@/lib/bulk.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/bulk")({
   component: BulkRematchPage,
@@ -20,11 +20,13 @@ type Cat = (typeof CATEGORIES)[number];
 function BulkRematchPage() {
   const startFn = useServerFn(startBulkRematch);
   const statusFn = useServerFn(getBulkJobStatus);
+  const retryFn = useServerFn(retryFailedFromJob);
   const [days, setDays] = useState(7);
   const [dryRun, setDryRun] = useState(false);
   const [cats, setCats] = useState<Set<Cat>>(new Set());
   const [jobId, setJobId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const job = useQuery({
     queryKey: ["bulk-job", jobId],
@@ -70,6 +72,69 @@ function BulkRematchPage() {
     } finally {
       setStarting(false);
     }
+  }
+
+
+
+  async function onRetryFailed() {
+    if (!current?.id) return;
+    setRetrying(true);
+    try {
+      const r = await retryFn({
+        data: {
+          sourceJobId: current.id,
+          days,
+          categories: cats.size > 0 ? (Array.from(cats) as Cat[]) : undefined,
+          dryRun,
+        },
+      });
+      setJobId(r.jobId);
+      toast.success(`Re-queued ${r.retried} failed entr${r.retried === 1 ? "y" : "ies"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to re-queue");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  function onExportCsv() {
+    if (!current) return;
+    const header = ["ingestId", "decision", "parsedTitle", "category", "titleId", "titleName", "score", "error"];
+    const rows = (results as any[]).map((r) => [
+      r.ingestId ?? "",
+      r.decision ?? "",
+      r.parsedTitle ?? "",
+      r.category ?? "",
+      r.titleId ?? "",
+      r.titleName ?? "",
+      typeof r.score === "number" ? r.score.toFixed(4) : "",
+      r.error ?? "",
+    ]);
+    const totals = [
+      ["", "", "", "", "", "", "", ""],
+      ["TOTALS", "", "", "", "", "", "", ""],
+      ["processed", String(current.processed ?? 0), "", "", "", "", "", ""],
+      ["promoted", String(current.promoted ?? 0), "", "", "", "", "", ""],
+      ["failed", String(current.failed ?? 0), "", "", "", "", "", ""],
+      ["still_unmatched", String(stillUnmatched), "", "", "", "", "", ""],
+    ];
+    const csv = [header, ...rows, ...totals]
+      .map((line) =>
+        line
+          .map((cell) => {
+            const s = String(cell ?? "");
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          })
+          .join(","),
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bulk-rematch-${String(current.id).slice(0, 8)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -146,9 +211,29 @@ function BulkRematchPage() {
                   : ""}
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setJobId(null)}>
-              View history
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onRetryFailed}
+                disabled={retrying || running || !(current.failed > 0)}
+                title={current.failed > 0 ? "Re-queue only failed entries" : "No failed entries to retry"}
+              >
+                {retrying ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5 mr-1.5" />}
+                Retry failed
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onExportCsv}
+                disabled={results.length === 0}
+              >
+                <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setJobId(null)}>
+                View history
+              </Button>
+            </div>
           </div>
           <Progress value={pct} />
           <div className="grid grid-cols-5 gap-3 text-sm">

@@ -35,9 +35,25 @@ export function DownloadButton({
   const [linkOpen, setLinkOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string | null>(null);
+  const [errorState, setErrorState] = useState<{ message: string; detail?: string; cid: string } | null>(null);
+
+  function newCorrelationId(): string {
+    try {
+      return (crypto as any).randomUUID().replace(/-/g, "").slice(0, 12);
+    } catch {
+      return Math.random().toString(36).slice(2, 14);
+    }
+  }
+
+  function failWith(message: string, cid: string, detail?: string) {
+    setErrorState({ message, detail, cid });
+    toast.error(`${message} · ref ${cid}`, { description: detail });
+  }
 
   async function handleClick() {
     setLoading(true);
+    const cid = newCorrelationId();
+    setErrorState(null);
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
@@ -45,35 +61,41 @@ export function DownloadButton({
         return;
       }
 
-      // For series episodes, we MUST re-resolve before sending — never let
-      // a stale mediaFileId leak through to Telegram.
       const isEpisode = !!titleId && (season != null || episode != null);
-      const seasonValid = season == null || (Number.isFinite(season) && season >= 0);
-      const episodeValid = episode == null || (Number.isFinite(episode) && episode >= 0);
-
       let activeFileId = mediaFileId;
       if (isEpisode) {
-        if (!seasonValid || !episodeValid) {
-          toast.error("Couldn't read season/episode for this file. Please refresh and try again.");
-          return;
-        }
         try {
-          const res = await resolveEp({
+          const res: any = await resolveEp({
             data: {
               titleId: titleId!,
               season: season ?? null,
               episode: episode ?? null,
               expectedFileId: mediaFileId,
+              correlationId: cid,
             },
           });
           if (!res.ok) {
-            toast.error("This episode is no longer available. Try refreshing the page.");
+            if (res.reason === "parse_failed") {
+              failWith(
+                "Couldn't read season/episode for this file.",
+                cid,
+                res.detail ?? "Season/episode parse failed.",
+              );
+            } else if (res.reason === "not_found") {
+              failWith(
+                "No matching episode file in the library.",
+                cid,
+                res.detail ?? `S${season ?? "?"} · E${episode ?? "?"}`,
+              );
+            } else {
+              failWith("This episode is no longer available.", cid, String(res.reason));
+            }
             return;
           }
           activeFileId = res.file.id;
           if (res.changed) toast.message("Episode file was updated to the latest version.");
         } catch (e: any) {
-          toast.error("Couldn't verify the episode file. Please retry.");
+          failWith("Couldn't verify the episode file. Please retry.", cid, e?.message);
           return;
         }
       }
@@ -96,9 +118,9 @@ export function DownloadButton({
         setLinkOpen(true);
         return;
       }
-      toast.error(`Couldn't deliver: ${r.reason}`);
+      failWith(`Couldn't deliver: ${r.reason}`, cid, (r as any).error);
     } catch (e: any) {
-      toast.error(e?.message ?? "Download failed");
+      failWith(e?.message ?? "Download failed", cid);
     } finally {
       setLoading(false);
     }
@@ -108,10 +130,22 @@ export function DownloadButton({
 
   return (
     <>
-      <Button size={size} variant={variant} onClick={handleClick} disabled={loading} className="shrink-0">
-        {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-        via Bot
-      </Button>
+      <div className="flex flex-col gap-1 shrink-0">
+        <Button size={size} variant={variant} onClick={handleClick} disabled={loading} className="shrink-0">
+          {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
+          via Bot
+        </Button>
+        {errorState && (
+          <div
+            role="alert"
+            className="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] leading-tight text-red-300"
+          >
+            <div className="font-medium">{errorState.message}</div>
+            {errorState.detail && <div className="opacity-80">{errorState.detail}</div>}
+            <div className="mt-0.5 font-mono opacity-70">support ref: {errorState.cid}</div>
+          </div>
+        )}
+      </div>
 
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
         <DialogContent>

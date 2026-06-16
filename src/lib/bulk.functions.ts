@@ -245,3 +245,87 @@ export const getBulkJobStatus = createServerFn({ method: "GET" })
       .limit(10);
     return { recent: rows ?? [] };
   });
+
+// Re-queue only the ingests that were marked `failed` in a previous bulk
+// job, respecting the same window + category filters used originally (or
+// the new ones passed in by the admin).
+export const retryFailedFromJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        sourceJobId: z.string().uuid(),
+        days: z.number().int().min(1).max(180).optional(),
+        categories: z
+          .array(z.enum(["movie", "series", "anime", "documentary", "show"]))
+          .optional(),
+        dryRun: z.boolean().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: src, error: srcErr } = await supabaseAdmin
+      .from("bulk_job_runs")
+      .select("results, filters")
+      .eq("id", data.sourceJobId)
+      .maybeSingle();
+    if (srcErr) throw srcErr;
+    if (!src) throw new Error("Source job not found");
+
+    const results = Array.isArray((src as any).results) ? ((src as any).results as any[]) : [];
+    const failedIds = results
+      .filter((r) => r?.decision === "failed" && typeof r.ingestId === "string")
+      .map((r) => r.ingestId as string);
+
+    if (failedIds.length === 0) {
+      throw new Error("No failed entries in the source job to retry");
+    }
+
+    // Optional window narrowing: refuse ingests outside the window.
+    let ids = failedIds;
+    const days = data.days ?? (src as any).filters?.days ?? 7;
+    const cats = data.categories ?? (src as any).filters?.categories ?? null;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    let q = supabaseAdmin
+      .from("telegram_ingest")
+      .select("id")
+      .in("id", failedIds)
+      .gte("created_at", since);
+    if (cats && cats.length > 0) q = q.in("parsed_category", cats as any);
+    const { data: filtered, error: fErr } = await q;
+    if (fErr) throw fErr;
+    ids = (filtered ?? []).map((r: any) => r.id as string);
+    if (ids.length === 0) {
+      throw new Error("No failed entries match the selected filters");
+    }
+
+    // Refuse if another rematch job is currently running
+    const { data: inflight } = await supabaseAdmin
+      .from("bulk_job_runs")
+      .select("id")
+      .eq("job_type", "force_rematch")
+      .eq("status", "running")
+      .limit(1);
+    if (inflight && inflight.length > 0) {
+      throw new Error("A bulk rematch job is already running.");
+    }
+
+    const { data: job, error: jobErr } = await supabaseAdmin
+      .from("bulk_job_runs")
+      .insert({
+        job_type: "force_rematch",
+        params: { days, dryRun: !!data.dryRun, retryOf: data.sourceJobId } as any,
+        filters: { days, categories: cats, dryRun: !!data.dryRun, retryOf: data.sourceJobId } as any,
+        total: ids.length,
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (jobErr) throw jobErr;
+
+    void runRematchJob(job.id, ids, !!data.dryRun);
+    return { jobId: job.id, total: ids.length, retried: ids.length };
+  });
