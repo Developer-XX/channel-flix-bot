@@ -28,7 +28,15 @@ import {
   setBotAdminIds,
   addTitleAlias,
   rematchUnmatched,
+  getMatchingSettings,
+  updateMatchingSettings,
+  diagnoseIngest,
+  rematchOne,
+  bulkAssignTitle,
+  bulkAddAlias,
 } from "@/lib/telegram.functions";
+import { Switch } from "@/components/ui/switch";
+
 
 export const Route = createFileRoute("/_authenticated/admin/telegram")({
   component: TelegramAdmin,
@@ -51,16 +59,24 @@ function TelegramAdmin() {
   const search = useServerFn(searchMasterTitles);
   const addAlias = useServerFn(addTitleAlias);
   const rematch = useServerFn(rematchUnmatched);
+  const rematchSingle = useServerFn(rematchOne);
+  const diagnose = useServerFn(diagnoseIngest);
+  const bulkAssign = useServerFn(bulkAssignTitle);
+  const bulkAlias = useServerFn(bulkAddAlias);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
-  // Telegram needs a stable, externally reachable HTTPS URL. The `id-preview--…`
-  // host goes through Lovable's auth bridge and is NOT reachable for Telegram.
-  // Use the stable `project--<id>-dev.lovable.app` (preview) or
-  // `project--<id>.lovable.app` (published) host instead.
   const STABLE_DEV_URL = "https://project--d54ff009-ac17-477f-85a3-112a949d0888-dev.lovable.app";
   const [baseUrl, setBaseUrl] = useState(STABLE_DEV_URL);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSel = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const ingest = useQuery({
     queryKey: ["tg-ingest", statusFilter],
@@ -68,6 +84,7 @@ function TelegramAdmin() {
   });
   const hook = useQuery({ queryKey: ["tg-webhook-info"], queryFn: () => getHook() });
   const state = useQuery({ queryKey: ["tg-bot-state"], queryFn: () => botState() });
+
 
   return (
     <div className="p-6 space-y-6 max-w-6xl">
@@ -149,6 +166,8 @@ function TelegramAdmin() {
         </p>
       </section>
 
+      <MatchingSettingsPanel />
+
       <section className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           {(["all", "pending", "matched", "unmatched", "ignored"] as const).map((s) => (
@@ -156,7 +175,7 @@ function TelegramAdmin() {
               key={s}
               variant={statusFilter === s ? "default" : "outline"}
               size="sm"
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); setSelected(new Set()); }}
             >
               {s}
             </Button>
@@ -168,17 +187,48 @@ function TelegramAdmin() {
             onClick={async () => {
               try {
                 const r = await rematch();
-                toast.success(`Rematch: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
+                toast.success(`Reindex: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
                 ingest.refetch();
                 router.invalidate();
               } catch (e: any) {
-                toast.error(e?.message ?? "Rematch failed");
+                toast.error(e?.message ?? "Reindex failed");
               }
             }}
           >
-            Rematch unmatched
+            Reindex / Refresh website
           </Button>
         </div>
+
+        {selected.size > 0 && (
+          <BulkActionBar
+            count={selected.size}
+            ingestIds={Array.from(selected)}
+            search={search}
+            onClear={() => setSelected(new Set())}
+            onAssign={async (titleId) => {
+              const r = await bulkAssign({ data: { ingestIds: Array.from(selected), titleId, promote: true } });
+              toast.success(`Assigned ${r.assigned} · promoted ${r.promoted}`);
+              setSelected(new Set());
+              ingest.refetch();
+              router.invalidate();
+            }}
+            onAddAlias={async (titleId) => {
+              const r = await bulkAlias({ data: { ingestIds: Array.from(selected), titleId } });
+              const re = await rematch({ data: { ingestIds: Array.from(selected) } });
+              toast.success(`Added ${r.added} alias(es) · promoted ${re.promoted}`);
+              setSelected(new Set());
+              ingest.refetch();
+              router.invalidate();
+            }}
+            onPromoteSelected={async () => {
+              const r = await rematch({ data: { ingestIds: Array.from(selected) } });
+              toast.success(`Promoted ${r.promoted}/${r.scanned}`);
+              setSelected(new Set());
+              ingest.refetch();
+              router.invalidate();
+            }}
+          />
+        )}
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {ingest.error && <p className="text-sm text-destructive">{(ingest.error as Error).message}</p>}
@@ -189,11 +239,21 @@ function TelegramAdmin() {
               key={row.id}
               row={row}
               expanded={expanded === row.id}
+              selected={selected.has(row.id)}
+              onSelectToggle={() => toggleSel(row.id)}
               onToggle={() => setExpanded(expanded === row.id ? null : row.id)}
               onUpdate={async (patch) => {
                 await update({ data: { ingestId: row.id, ...patch } });
                 ingest.refetch();
               }}
+              onRematch={async () => {
+                const r = await rematchSingle({ data: { ingestId: row.id, autoPromote: true } });
+                if (r.match.matchedTitleId) toast.success(`Matched · score ${r.match.matchScore?.toFixed(2)}${r.promoted ? " · promoted" : ""}`);
+                else toast.message(`No match · best score ${(r.match.matchScore ?? 0).toFixed(2)}`);
+                ingest.refetch();
+                router.invalidate();
+              }}
+              onDiagnose={() => diagnose({ data: { ingestId: row.id } })}
               onPromote={async (titleId, overrides) => {
                 await promote({ data: { ingestId: row.id, titleId, overrides } });
                 toast.success("Promoted to media_files");
@@ -221,20 +281,29 @@ function TelegramAdmin() {
       </section>
     </div>
   );
+
 }
 
 function IngestCard({
-  row, expanded, onToggle, onUpdate, onPromote, onSaveAliasAndPromote, onIgnore, search,
+  row, expanded, selected, onSelectToggle, onToggle, onUpdate, onPromote,
+  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, search,
 }: {
   row: IngestRow;
   expanded: boolean;
+  selected: boolean;
+  onSelectToggle: () => void;
   onToggle: () => void;
   onUpdate: (patch: Record<string, any>) => Promise<void>;
   onPromote: (titleId: string, overrides?: any) => Promise<void>;
   onSaveAliasAndPromote: (titleId: string, alias: string) => Promise<void>;
   onIgnore: () => Promise<void>;
+  onRematch: () => Promise<void>;
+  onDiagnose: () => Promise<any>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
 }) {
+  const [diag, setDiag] = useState<any>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
   const [draft, setDraft] = useState({
     parsed_title: row.parsed_title ?? "",
     parsed_year: row.parsed_year ?? ("" as number | ""),
@@ -265,8 +334,18 @@ function IngestCard({
   }, [draft, row]);
 
   return (
-    <div className="rounded-lg border border-border p-3 text-sm">
-      <div className="flex items-start justify-between gap-3">
+    <div className={`rounded-lg border p-3 text-sm ${selected ? "border-primary bg-primary/5" : "border-border"}`}>
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1.5 h-4 w-4 accent-primary"
+          checked={selected}
+          onChange={onSelectToggle}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Select row"
+        />
+        <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
+
         <button onClick={onToggle} className="text-left min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium truncate">{row.parsed_title ?? row.file_name ?? "(no title)"}</span>
@@ -295,7 +374,9 @@ function IngestCard({
           </p>
         </button>
         <Button size="sm" variant="ghost" onClick={onToggle}>{expanded ? "Close" : "Review"}</Button>
+        </div>
       </div>
+
 
       {expanded && (
         <div className="mt-4 grid gap-3 border-t border-border pt-4">
@@ -451,12 +532,84 @@ function IngestCard({
               >
                 Ignore
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  try { await onRematch(); } catch (e: any) { toast.error(e?.message ?? "Rematch failed"); }
+                }}
+              >
+                Rematch now
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  setDiagLoading(true);
+                  try { setDiag(await onDiagnose()); }
+                  catch (e: any) { toast.error(e?.message ?? "Diagnose failed"); }
+                  finally { setDiagLoading(false); }
+                }}
+              >
+                {diagLoading ? "Diagnosing…" : "Diagnose"}
+              </Button>
             </div>
           </div>
+
+          {diag && (
+            <div className="border-t border-border pt-3 space-y-2">
+              <Label className="text-xs uppercase text-muted-foreground">Diagnostics</Label>
+              <div className="text-xs text-muted-foreground">
+                Threshold: <code>{diag.threshold}</code> · Best score: <code>{(diag.matchScore ?? 0).toFixed(3)}</code>
+                {diag.matchedVia ? <> · Matched via <Badge variant="secondary">{diag.matchedVia}</Badge></> : <> · <span className="text-amber-500">no match (below threshold)</span></>}
+              </div>
+              <div className="text-xs">
+                Parsed: <code>"{diag.parsed.parsed_title}"</code>
+                {diag.parsed.parsed_year ? ` · year ${diag.parsed.parsed_year}` : ""}
+                {diag.parsed.parsed_season != null ? ` · S${String(diag.parsed.parsed_season).padStart(2,"0")}${diag.parsed.parsed_episode != null ? `E${String(diag.parsed.parsed_episode).padStart(2,"0")}` : ""}` : ""}
+                {diag.parsed.parsed_category ? ` · ${diag.parsed.parsed_category}` : ""}
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mt-2">Alias hits ({diag.aliasHits.length})</div>
+                {diag.aliasHits.length === 0 && <div className="text-xs text-muted-foreground">— no aliases matched —</div>}
+                {diag.aliasHits.map((a: any, i: number) => (
+                  <div key={i} className="text-xs font-mono">
+                    {a.exact ? "✓ exact" : "≈ contained"} · "{a.alias}" → {a.titleId.slice(0, 8)}…
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mt-2">Top fuzzy candidates ({diag.candidates.length})</div>
+                {diag.candidates.length === 0 && <div className="text-xs text-muted-foreground">— no candidates found (head token did not match any master title) —</div>}
+                <table className="w-full text-xs">
+                  <thead className="text-muted-foreground">
+                    <tr><th className="text-left">Title</th><th>Adj</th><th>Jacc</th><th>Cont</th><th>Sub</th><th>Year</th><th>Cat</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {diag.candidates.map((c: any) => (
+                      <tr key={c.titleId} className="border-t border-border/50">
+                        <td className="py-1">{c.title} {c.release_year ? `(${c.release_year})` : ""}</td>
+                        <td className="text-center font-semibold">{c.adjustedScore.toFixed(2)}</td>
+                        <td className="text-center">{c.parts.jaccard.toFixed(2)}</td>
+                        <td className="text-center">{c.parts.containment.toFixed(2)}</td>
+                        <td className="text-center">{c.parts.substring.toFixed(2)}</td>
+                        <td className="text-center">{c.yearOk ? "✓" : "✗"}</td>
+                        <td className="text-center">{c.categoryOk ? "✓" : "✗"}</td>
+                        <td>
+                          <Button size="sm" variant="ghost" onClick={() => onPromote(c.titleId)}>Use</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -642,4 +795,117 @@ function ChannelWizard() {
     </section>
   );
 }
+
+function MatchingSettingsPanel() {
+  const get = useServerFn(getMatchingSettings);
+  const upd = useServerFn(updateMatchingSettings);
+  const q = useQuery({ queryKey: ["tg-matching-settings"], queryFn: () => get() });
+  const [draft, setDraft] = useState<any>(null);
+  const s = draft ?? q.data;
+
+  return (
+    <section className="rounded-lg border border-border p-4 space-y-3">
+      <div>
+        <h2 className="font-semibold">Matching rules</h2>
+        <p className="text-xs text-muted-foreground">Tune when an ingested file maps to a master title.</p>
+      </div>
+      {!s ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="text-xs">Match threshold: <code>{Number(s.threshold).toFixed(2)}</code></Label>
+            <input type="range" min={0} max={1} step={0.05} value={s.threshold}
+              onChange={(e) => setDraft({ ...s, threshold: Number(e.target.value) })}
+              className="w-full" />
+            <p className="text-[11px] text-muted-foreground">Lower = more aggressive. Higher = stricter.</p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Year window: ±<code>{s.year_window}</code></Label>
+            <Input type="number" min={0} max={10} value={s.year_window}
+              onChange={(e) => setDraft({ ...s, year_window: Number(e.target.value) })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Use aliases</Label>
+            <Switch checked={s.use_aliases} onCheckedChange={(v) => setDraft({ ...s, use_aliases: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Jaccard token overlap</Label>
+            <Switch checked={s.use_jaccard} onCheckedChange={(v) => setDraft({ ...s, use_jaccard: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Containment scoring</Label>
+            <Switch checked={s.use_containment} onCheckedChange={(v) => setDraft({ ...s, use_containment: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Substring boost</Label>
+            <Switch checked={s.use_substring} onCheckedChange={(v) => setDraft({ ...s, use_substring: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2 md:col-span-2">
+            <Label className="text-sm">Require category to match</Label>
+            <Switch checked={s.require_category_match} onCheckedChange={(v) => setDraft({ ...s, require_category_match: v })} />
+          </div>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          disabled={!draft}
+          onClick={async () => {
+            try { await upd({ data: draft }); toast.success("Saved"); setDraft(null); q.refetch(); }
+            catch (e: any) { toast.error(e?.message ?? "Save failed"); }
+          }}
+        >Save rules</Button>
+        <Button size="sm" variant="ghost" disabled={!draft} onClick={() => setDraft(null)}>Reset</Button>
+      </div>
+    </section>
+  );
+}
+
+function BulkActionBar({
+  count, ingestIds, search, onClear, onAssign, onAddAlias, onPromoteSelected,
+}: {
+  count: number;
+  ingestIds: string[];
+  search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
+  onClear: () => void;
+  onAssign: (titleId: string) => Promise<void>;
+  onAddAlias: (titleId: string) => Promise<void>;
+  onPromoteSelected: () => Promise<void>;
+}) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Array<{ id: string; title: string; release_year: number | null; category: string }>>([]);
+  const [pick, setPick] = useState<string | null>(null);
+  return (
+    <div className="sticky top-2 z-10 rounded-lg border border-primary bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm font-medium">{count} selected ({ingestIds.length} ids)</div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" onClick={onPromoteSelected}>Rematch & promote selected</Button>
+          <Button size="sm" variant="ghost" onClick={onClear}>Clear</Button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search master title to assign…" />
+        <Button size="sm" variant="outline" onClick={async () => setResults(await search({ data: { q } }))}>Search</Button>
+      </div>
+      {results.length > 0 && (
+        <div className="max-h-32 overflow-auto space-y-1">
+          {results.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setPick(r.id)}
+              className={`w-full text-left text-xs px-2 py-1 rounded border ${pick === r.id ? "border-primary bg-primary/10" : "border-border"}`}
+            >
+              {r.title}{r.release_year ? ` (${r.release_year})` : ""} · {r.category}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={!pick} onClick={() => pick && onAssign(pick)}>Assign master title (+ promote)</Button>
+        <Button size="sm" variant="outline" disabled={!pick} onClick={() => pick && onAddAlias(pick)}>Add as alias (+ rematch)</Button>
+      </div>
+    </div>
+  );
+}
+
 
