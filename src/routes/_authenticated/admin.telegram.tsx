@@ -26,6 +26,8 @@ import {
   saveTelegramChannel,
   deleteTelegramChannel,
   setBotAdminIds,
+  addTitleAlias,
+  rematchUnmatched,
 } from "@/lib/telegram.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/telegram")({
@@ -47,6 +49,8 @@ function TelegramAdmin() {
   const backfill = useServerFn(runBackfillNow);
   const botState = useServerFn(getBotState);
   const search = useServerFn(searchMasterTitles);
+  const addAlias = useServerFn(addTitleAlias);
+  const rematch = useServerFn(rematchUnmatched);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
@@ -158,6 +162,22 @@ function TelegramAdmin() {
             </Button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => ingest.refetch()}>Refresh</Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              try {
+                const r = await rematch();
+                toast.success(`Rematch: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
+                ingest.refetch();
+                router.invalidate();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Rematch failed");
+              }
+            }}
+          >
+            Rematch unmatched
+          </Button>
         </div>
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
@@ -180,6 +200,13 @@ function TelegramAdmin() {
                 router.invalidate();
                 ingest.refetch();
               }}
+              onSaveAliasAndPromote={async (titleId, alias) => {
+                await addAlias({ data: { titleId, alias } });
+                const r = await rematch();
+                toast.success(`Saved alias · promoted ${r.promoted}`);
+                router.invalidate();
+                ingest.refetch();
+              }}
               onIgnore={async () => {
                 await ignore({ data: { ingestId: row.id } });
                 ingest.refetch();
@@ -197,13 +224,14 @@ function TelegramAdmin() {
 }
 
 function IngestCard({
-  row, expanded, onToggle, onUpdate, onPromote, onIgnore, search,
+  row, expanded, onToggle, onUpdate, onPromote, onSaveAliasAndPromote, onIgnore, search,
 }: {
   row: IngestRow;
   expanded: boolean;
   onToggle: () => void;
   onUpdate: (patch: Record<string, any>) => Promise<void>;
   onPromote: (titleId: string, overrides?: any) => Promise<void>;
+  onSaveAliasAndPromote: (titleId: string, alias: string) => Promise<void>;
   onIgnore: () => Promise<void>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
 }) {
@@ -398,6 +426,20 @@ function IngestCard({
                 }}
               >
                 Promote to media_files
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!selectedTitleId || !draft.parsed_title}
+                title="Save this parsed title as an alias for the selected master title, then auto-promote every matching unmatched file"
+                onClick={async () => {
+                  if (!selectedTitleId) return;
+                  try {
+                    await onSaveAliasAndPromote(selectedTitleId, draft.parsed_title);
+                  } catch (e: any) { toast.error(e?.message ?? "Save alias failed"); }
+                }}
+              >
+                Save as alias + auto-promote all
               </Button>
               <Button
                 size="sm"

@@ -334,3 +334,133 @@ export const setBotAdminIds = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+// --- Title aliases ------------------------------------------------------
+// Aliases let admins map free-form caption text (e.g. "Shaktimaan Animation")
+// to a published master_title. The Telegram ingest pipeline checks aliases
+// first when deciding which title an incoming file belongs to.
+
+export const listTitleAliases = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { titleId?: string }) =>
+    z.object({ titleId: z.string().uuid().optional() }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    let q = context.supabase
+      .from("title_aliases")
+      .select("id, title_id, alias, normalized_alias, created_at")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (data.titleId) q = q.eq("title_id", data.titleId);
+    const { data: rows, error } = await q;
+    if (error) throw error;
+    return rows ?? [];
+  });
+
+export const addTitleAlias = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { titleId: string; alias: string }) =>
+    z.object({
+      titleId: z.string().uuid(),
+      alias: z.string().min(1).max(200),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { normalizeTitle } = await import("@/lib/telegram-parser");
+    const normalized = normalizeTitle(data.alias);
+    if (!normalized) throw new Error("Alias is empty after normalization");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("title_aliases")
+      .upsert(
+        { title_id: data.titleId, alias: data.alias.trim(), normalized_alias: normalized },
+        { onConflict: "title_id,normalized_alias" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const deleteTitleAlias = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.from("title_aliases").delete().eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+// Re-run the matcher against every unmatched ingest row and auto-promote
+// any that now resolve to a master_title. Useful after adding aliases.
+export const rematchUnmatched = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { normalizeTitle } = await import("@/lib/telegram-parser");
+    const { autoPromoteToMediaFile } = await import("@/lib/telegram-ingest.server");
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("*")
+      .eq("match_status", "unmatched")
+      .is("promoted_media_file_id", null)
+      .limit(500);
+    if (error) throw error;
+
+    let promoted = 0;
+    let stillUnmatched = 0;
+
+    for (const r of rows ?? []) {
+      const parsedTitle: string = r.parsed_title ?? "";
+      const normalized = normalizeTitle(parsedTitle);
+      if (!normalized || !r.telegram_file_id) {
+        stillUnmatched++;
+        continue;
+      }
+      // Alias exact / substring match
+      const { data: aliasHits } = await supabaseAdmin
+        .from("title_aliases")
+        .select("title_id, normalized_alias")
+        .or(`normalized_alias.eq.${normalized},normalized_alias.ilike.%${normalized}%`)
+        .limit(5);
+      let matchedTitleId: string | null = null;
+      for (const a of aliasHits ?? []) {
+        if (a.normalized_alias === normalized || normalized.includes(a.normalized_alias) || a.normalized_alias.includes(normalized)) {
+          matchedTitleId = a.title_id;
+          break;
+        }
+      }
+      if (!matchedTitleId) {
+        stillUnmatched++;
+        continue;
+      }
+      try {
+        await autoPromoteToMediaFile(supabaseAdmin, {
+          ingestId: r.id,
+          titleId: matchedTitleId,
+          channelRowId: r.channel_id,
+          telegramFileId: r.telegram_file_id,
+          telegramMessageId: r.telegram_message_id,
+          fileName: r.file_name ?? r.parsed_title ?? "file",
+          caption: r.caption,
+          mimeType: r.mime_type,
+          fileSize: r.file_size,
+          durationSeconds: r.duration_seconds,
+          quality: r.parsed_quality,
+          resolution: r.parsed_resolution,
+          language: r.parsed_language,
+          season: r.parsed_season,
+          episode: r.parsed_episode,
+        });
+        promoted++;
+      } catch (e) {
+        console.warn("rematch promote failed", r.id, (e as Error).message);
+        stillUnmatched++;
+      }
+    }
+    return { ok: true, promoted, stillUnmatched, scanned: rows?.length ?? 0 };
+  });

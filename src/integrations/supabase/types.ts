@@ -636,6 +636,41 @@ export type Database = {
         }
         Relationships: []
       }
+      title_aliases: {
+        Row: {
+          alias: string
+          created_at: string
+          id: string
+          normalized_alias: string
+          title_id: string
+          updated_at: string
+        }
+        Insert: {
+          alias: string
+          created_at?: string
+          id?: string
+          normalized_alias: string
+          title_id: string
+          updated_at?: string
+        }
+        Update: {
+          alias?: string
+          created_at?: string
+          id?: string
+          normalized_alias?: string
+          title_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "title_aliases_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

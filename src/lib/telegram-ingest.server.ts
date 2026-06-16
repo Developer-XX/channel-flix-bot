@@ -11,7 +11,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseMedia, normalizeTitle, titleSimilarity } from "@/lib/telegram-parser";
 
-const MATCH_THRESHOLD = 0.55;
+const MATCH_THRESHOLD = 0.45;
+
+// Stronger similarity: max of jaccard, containment, and substring boost.
+function bestTitleScore(parsedTitle: string, candidate: string): number {
+  const a = normalizeTitle(parsedTitle);
+  const b = normalizeTitle(candidate);
+  if (!a || !b) return 0;
+  const jacc = titleSimilarity(parsedTitle, candidate);
+  const A = new Set(a.split(" ").filter(Boolean));
+  const B = new Set(b.split(" ").filter(Boolean));
+  const small = A.size <= B.size ? A : B;
+  const big = small === A ? B : A;
+  let inter = 0;
+  for (const t of small) if (big.has(t)) inter++;
+  const containment = small.size ? inter / small.size : 0;
+  const substr = a.includes(b) || b.includes(a) ? 0.9 : 0;
+  return Math.max(jacc, containment, substr);
+}
 
 export type TgMessage = {
   message_id: number;
@@ -122,28 +139,54 @@ export async function ingestTelegramUpdate(
 
   const parsed = parseMedia(caption, file.file_name);
 
-  // Fuzzy match against published master_titles
+  // Match resolution order:
+  //   1. Exact normalized alias (admin-curated, highest confidence)
+  //   2. Token-overlap / containment scoring against master_titles
   let matchedTitleId: string | null = null;
   let matchScore: number | null = null;
   const normalized = normalizeTitle(parsed.title);
+
   if (normalized) {
-    const head = normalized.split(" ").filter((w) => w.length >= 3)[0] ?? normalized.split(" ")[0] ?? "";
-    if (head) {
-      const { data: candidates } = await supabase
-        .from("master_titles")
-        .select("id, title, release_year, category")
-        .ilike("title", `%${head}%`)
-        .limit(25);
-      for (const c of candidates ?? []) {
-        const score = titleSimilarity(parsed.title, c.title);
-        const yearOk = !parsed.year || !c.release_year || Math.abs(parsed.year - c.release_year) <= 1;
-        const catOk = !parsed.category || c.category === parsed.category;
-        let adj = score;
-        if (!yearOk) adj *= 0.6;
-        if (!catOk) adj *= 0.85;
-        if (matchScore === null || adj > matchScore) {
-          matchScore = adj;
-          if (adj >= MATCH_THRESHOLD) matchedTitleId = c.id;
+    // 1. Alias lookup (exact or substring on normalized form)
+    const { data: aliasHits } = await supabase
+      .from("title_aliases")
+      .select("title_id, normalized_alias")
+      .or(`normalized_alias.eq.${normalized},normalized_alias.ilike.%${normalized}%`)
+      .limit(10);
+    for (const a of aliasHits ?? []) {
+      if (a.normalized_alias === normalized) {
+        matchedTitleId = a.title_id;
+        matchScore = 1.0;
+        break;
+      }
+      if (normalized.includes(a.normalized_alias) || a.normalized_alias.includes(normalized)) {
+        matchedTitleId = a.title_id;
+        matchScore = 0.95;
+      }
+    }
+
+    // 2. Fuzzy title scoring (skip if alias already matched)
+    if (!matchedTitleId) {
+      const head =
+        normalized.split(" ").filter((w) => w.length >= 3)[0] ??
+        normalized.split(" ")[0] ?? "";
+      if (head) {
+        const { data: candidates } = await supabase
+          .from("master_titles")
+          .select("id, title, release_year, category")
+          .ilike("title", `%${head}%`)
+          .limit(25);
+        for (const c of candidates ?? []) {
+          const score = bestTitleScore(parsed.title, c.title);
+          const yearOk = !parsed.year || !c.release_year || Math.abs(parsed.year - c.release_year) <= 1;
+          const catOk = !parsed.category || c.category === parsed.category;
+          let adj = score;
+          if (!yearOk) adj *= 0.6;
+          if (!catOk) adj *= 0.85;
+          if (matchScore === null || adj > matchScore) {
+            matchScore = adj;
+            if (adj >= MATCH_THRESHOLD) matchedTitleId = c.id;
+          }
         }
       }
     }
@@ -203,6 +246,33 @@ export async function ingestTelegramUpdate(
       .eq("id", chanRow.id);
   }
 
+  // Auto-promote matched ingest rows into media_files so the website
+  // shows the file without manual admin action.
+  let promotedFileId: string | null = null;
+  if (matchedTitleId && file.file_id) {
+    try {
+      promotedFileId = await autoPromoteToMediaFile(supabase, {
+        ingestId: ingestRow.id,
+        titleId: matchedTitleId,
+        channelRowId: chanRow?.id ?? null,
+        telegramFileId: file.file_id,
+        telegramMessageId: tgMessageId,
+        fileName: file.file_name ?? parsed.title ?? "file",
+        caption,
+        mimeType: file.mime_type,
+        fileSize: file.file_size,
+        durationSeconds: file.duration_seconds,
+        quality: parsed.quality,
+        resolution: parsed.resolution,
+        language: parsed.language,
+        season: parsed.season,
+        episode: parsed.episode,
+      });
+    } catch (e) {
+      console.warn("[telegram-ingest] auto-promote failed:", (e as Error).message);
+    }
+  }
+
   // Visual confirmation back to the channel: 👀 reaction always, plus a
   // small reply if the channel opted in via confirm_with_reply.
   try {
@@ -231,4 +301,108 @@ export async function ingestTelegramUpdate(
   }
 
   return { ok: true, status: "ingested", ingestId: ingestRow.id, matched: !!matchedTitleId, matchScore };
+}
+
+// Auto-promotion: creates (or updates) season → episode → media_files rows
+// for a matched ingest. Idempotent on telegram_file_id (media_files PK).
+export async function autoPromoteToMediaFile(
+  supabase: SupabaseClient<any, any, any>,
+  args: {
+    ingestId: string;
+    titleId: string;
+    channelRowId: string | null;
+    telegramFileId: string;
+    telegramMessageId: number;
+    fileName: string;
+    caption: string | null;
+    mimeType: string | null;
+    fileSize: number | null;
+    durationSeconds: number | null;
+    quality: string | null;
+    resolution: string | null;
+    language: string | null;
+    season: number | null;
+    episode: number | null;
+  },
+): Promise<string | null> {
+  let episodeId: string | null = null;
+
+  // Find / create season + episode rows when this is a series file.
+  if (args.season != null) {
+    const { data: existingSeason } = await supabase
+      .from("seasons")
+      .select("id")
+      .eq("title_id", args.titleId)
+      .eq("season_number", args.season)
+      .maybeSingle();
+    let seasonId = existingSeason?.id ?? null;
+    if (!seasonId) {
+      const { data: ins } = await supabase
+        .from("seasons")
+        .insert({ title_id: args.titleId, season_number: args.season })
+        .select("id")
+        .single();
+      seasonId = ins?.id ?? null;
+    }
+
+    if (seasonId && args.episode != null) {
+      const { data: existingEp } = await supabase
+        .from("episodes")
+        .select("id")
+        .eq("title_id", args.titleId)
+        .eq("season_id", seasonId)
+        .eq("episode_number", args.episode)
+        .maybeSingle();
+      episodeId = existingEp?.id ?? null;
+      if (!episodeId) {
+        const { data: ins } = await supabase
+          .from("episodes")
+          .insert({
+            title_id: args.titleId,
+            season_id: seasonId,
+            episode_number: args.episode,
+          })
+          .select("id")
+          .single();
+        episodeId = ins?.id ?? null;
+      }
+    }
+  }
+
+  const { data: file, error: fileErr } = await supabase
+    .from("media_files")
+    .upsert(
+      {
+        title_id: args.titleId,
+        episode_id: episodeId,
+        channel_id: args.channelRowId,
+        telegram_file_id: args.telegramFileId,
+        telegram_message_id: args.telegramMessageId,
+        file_name: args.fileName,
+        caption: args.caption,
+        file_size: args.fileSize,
+        mime_type: args.mimeType,
+        quality: args.quality,
+        resolution: args.resolution,
+        language: args.language,
+        duration_seconds: args.durationSeconds,
+        is_active: true,
+      },
+      { onConflict: "telegram_file_id" },
+    )
+    .select("id")
+    .single();
+  if (fileErr) throw fileErr;
+
+  await supabase
+    .from("telegram_ingest")
+    .update({
+      match_status: "matched",
+      matched_title_id: args.titleId,
+      promoted_media_file_id: file.id,
+      last_error: null,
+    })
+    .eq("id", args.ingestId);
+
+  return file.id;
 }
