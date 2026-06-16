@@ -92,3 +92,44 @@ export const tmdbDetails = createServerFn({ method: "POST" })
       imdb_id: r.imdb_id ?? r.external_ids?.imdb_id ?? null,
     };
   });
+
+const FindByImdbSchema = z.object({
+  imdb_id: z
+    .string()
+    .trim()
+    .regex(/^tt\d{6,10}$/i, "IMDb ID must look like tt1234567"),
+});
+
+/**
+ * Resolve an IMDb ID (tt1234567) to a TMDB record via /find/{external_id}.
+ * Returns the first movie or tv match so the admin can import without
+ * knowing the TMDB ID.
+ */
+export const tmdbFindByImdb = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => FindByImdbSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    await requireAdminAccess(context);
+    const imdb = data.imdb_id.toLowerCase();
+    const url = new URL(`${TMDB_BASE}/find/${imdb}`);
+    url.searchParams.set("api_key", key());
+    url.searchParams.set("external_source", "imdb_id");
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`TMDB ${res.status}`);
+    const json = (await res.json()) as {
+      movie_results?: Array<Record<string, unknown>>;
+      tv_results?: Array<Record<string, unknown>>;
+    };
+    const movie = json.movie_results?.[0];
+    const tv = json.tv_results?.[0];
+    const pick = movie ?? tv;
+    if (!pick) throw new Error(`No TMDB match for ${imdb}`);
+    const media_type: "movie" | "tv" = movie ? "movie" : "tv";
+    return {
+      tmdb_id: pick.id as number,
+      media_type,
+      imdb_id: imdb,
+      title: ((media_type === "tv" ? pick.name : pick.title) as string) ?? "Untitled",
+      poster_url: pick.poster_path ? `${IMAGE_BASE}/w500${pick.poster_path}` : null,
+    };
+  });

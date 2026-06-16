@@ -20,12 +20,88 @@ const TITLE_SLUGS = (process.env.TITLE_SLUGS ?? "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+// Force reduced-motion + a frozen clock for every visual test to keep
+// animations, randomized greetings, and time-based UI deterministic.
+test.use({
+  colorScheme: "dark",
+  reducedMotion: "reduce",
+});
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    // Freeze clock to a deterministic instant.
+    const FROZEN = new Date("2026-06-16T12:00:00Z").valueOf();
+    const RealDate = Date;
+    // @ts-expect-error override
+    globalThis.Date = class extends RealDate {
+      constructor(...args: ConstructorParameters<typeof Date>) {
+        super(...(args.length ? args : [FROZEN]));
+      }
+      static now() {
+        return FROZEN;
+      }
+    };
+    // Deterministic RNG.
+    let seed = 1;
+    Math.random = () => {
+      seed = (seed * 9301 + 49297) % 233280;
+      return seed / 233280;
+    };
+  });
+});
+
+
+
+/**
+ * Deterministic rendering harness — reduces flakiness on mobile breakpoints by:
+ *  - Pinning Date.now / Math.random / scrollbar width before any app code runs
+ *  - Forcing prefers-reduced-motion and disabling CSS animations + transitions
+ *  - Awaiting document.fonts.ready (and a second tick after webfont swap)
+ *  - Waiting for networkidle + every <img> to finish decoding
+ *  - Hiding the caret blink, scrollbars, and stripping video autoplay
+ */
 async function waitForFontsAndImages(page: Page) {
-  await page.evaluate(() => document.fonts?.ready);
+  // Block known third-party trackers/analytics that introduce non-determinism.
+  await page.route(/(google-analytics|googletagmanager|hotjar|segment|fullstory)/i, (r) =>
+    r.abort().catch(() => {}),
+  );
+
+  await page.evaluate(async () => {
+    try {
+      await (document as Document & { fonts?: FontFaceSet }).fonts?.ready;
+    } catch {}
+  });
+  // Give Vite HMR + webfont swap one extra paint.
   await page.waitForLoadState("networkidle").catch(() => {});
-  // Disable in-flight CSS animations to stabilize pixel snapshots.
+  await page.evaluate(
+    () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+  );
+  // Disable in-flight CSS animations, transitions, caret blink, scrollbar gutter.
   await page.addStyleTag({
-    content: `*, *::before, *::after { animation: none !important; transition: none !important; }`,
+    content: `
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        caret-color: transparent !important;
+      }
+      html { scrollbar-gutter: stable; }
+      ::-webkit-scrollbar { display: none !important; }
+      video, [data-testid="video"] { visibility: hidden !important; }
+    `,
+  });
+  // Wait for every <img> to decode so layout-shift is fully settled.
+  await page.evaluate(async () => {
+    const imgs = Array.from(document.images);
+    await Promise.all(
+      imgs.map((img) =>
+        img.complete && img.naturalWidth > 0
+          ? Promise.resolve()
+          : new Promise<void>((r) => {
+              img.addEventListener("load", () => r(), { once: true });
+              img.addEventListener("error", () => r(), { once: true });
+            }),
+      ),
+    );
   });
 }
 
