@@ -196,7 +196,15 @@ export function DownloadButton({
   return (
     <>
       <div className="flex flex-col gap-1 shrink-0">
-        <Button size={size} variant={variant} onClick={handleClick} disabled={loading} className="shrink-0">
+        <Button
+          size={size}
+          variant={variant}
+          onClick={handleClick}
+          disabled={loading}
+          className="shrink-0"
+          data-testid="download-btn"
+          data-media-file-id={mediaFileId}
+        >
           {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
           via Bot
         </Button>
