@@ -82,11 +82,78 @@ export const unlinkTelegram = createServerFn({ method: "POST" })
 
 // Click "Download" on a file → bot DMs the user with the file via copyMessage.
 // Requires telegram_user_links.telegram_user_id to be set (account linked).
+// Re-resolve a series file by (title, season, episode) before delivery so
+// stale file_ids (after a rematch/repromote) are corrected automatically.
+export const resolveEpisodeFile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        titleId: z.string().uuid(),
+        season: z.number().int().nullable().optional(),
+        episode: z.number().int().nullable().optional(),
+        expectedFileId: z.string().uuid().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let query = supabaseAdmin
+      .from("media_files")
+      .select(
+        "id, file_name, quality, resolution, language, file_size, episode_id, episodes!inner(episode_number, season_id, seasons!inner(season_number, title_id))",
+      )
+      .eq("is_active", true)
+      .eq("title_id", data.titleId)
+      .order("created_at", { ascending: false });
+    if (data.season != null) {
+      query = query.eq("episodes.seasons.season_number", data.season);
+    }
+    if (data.episode != null) {
+      query = query.eq("episodes.episode_number", data.episode);
+    }
+    const { data: rows, error } = await query.limit(1);
+    if (error) throw error;
+    const row = rows?.[0];
+    if (!row) return { ok: false as const, reason: "not_found" as const };
+    const changed = data.expectedFileId ? row.id !== data.expectedFileId : false;
+    return {
+      ok: true as const,
+      file: {
+        id: row.id,
+        file_name: row.file_name,
+        quality: row.quality,
+        resolution: row.resolution,
+        language: row.language,
+        file_size: row.file_size,
+      },
+      changed,
+    };
+  });
+
 export const requestDownload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ mediaFileId: z.string().uuid() }).parse(d))
   .handler(async ({ context, data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getVerificationState } = await import("@/lib/verification.server");
+    const {
+      makeIdempotencyKey,
+      getBotUserId,
+      deliverWithRetry,
+      upsertDeliveryAttempt,
+      existingDelivery,
+    } = await import("@/lib/delivery.server");
+
+    // 0. Verification gate (24h)
+    const ver = await getVerificationState(supabaseAdmin, context.userId);
+    if (!ver.verified) {
+      return {
+        ok: false as const,
+        reason: "needs_verification" as const,
+        expiresAt: ver.expiresAt,
+      };
+    }
 
     // 1. Resolve the file + its source channel/message
     const { data: file, error: fileErr } = await supabaseAdmin
@@ -100,7 +167,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "source_missing" as const };
     }
 
-    // 2. Resolve the user's linked Telegram id
+    // 2. Resolve linked Telegram id
     const { data: link } = await supabaseAdmin
       .from("telegram_user_links")
       .select("telegram_user_id, telegram_username")
@@ -110,17 +177,43 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "not_linked" as const };
     }
 
-    // 3. Forward the file via Bot API copyMessage
-    const { tryCopyMessage } = await import("@/lib/telegram-api.server");
-    const result = await tryCopyMessage({
+    // 3. Idempotency check — same user+file inside the same hour bucket
+    const idemKey = makeIdempotencyKey(context.userId, file.id);
+    const existing = await existingDelivery(supabaseAdmin, idemKey);
+    if (existing?.status === "delivered" && existing.telegramMessageId) {
+      // Re-send the same message id is undefined; treat as success and let
+      // the user know. (We don't re-copy to avoid Telegram dedupe surprises.)
+      return {
+        ok: true as const,
+        delivered: true,
+        deduped: true,
+        messageId: existing.telegramMessageId,
+      };
+    }
+
+    const botUserId = await getBotUserId();
+
+    // 4. Deliver with retries
+    const { result, history } = await deliverWithRetry({
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
       messageId: file.telegram_message_id,
       caption: `📥 ${file.file_name ?? "Your file"}\nDelivered by StreamVault`,
     });
 
-    // 4. Log the delivery attempt
-    const logRow = {
+    await upsertDeliveryAttempt(supabaseAdmin, {
+      userId: context.userId,
+      mediaFileId: file.id,
+      idempotencyKey: idemKey,
+      attemptNo: history.length,
+      status: result.ok ? "delivered" : "failed",
+      error: result.ok ? null : result.error.slice(0, 500),
+      telegramMessageId: result.ok ? result.messageId : null,
+      botUserId,
+      history,
+    });
+
+    await supabaseAdmin.from("download_logs").insert({
       user_id: context.userId,
       file_id: file.id,
       title_id: file.title_id,
@@ -128,8 +221,13 @@ export const requestDownload = createServerFn({ method: "POST" })
       delivery_status: result.ok ? "delivered" : result.kind,
       delivery_error: result.ok ? null : result.error.slice(0, 500),
       delivered_at: result.ok ? new Date().toISOString() : null,
-    };
-    await supabaseAdmin.from("download_logs").insert(logRow);
+      verification_status: "verified",
+      verification_provider: ver.lastProvider,
+      bot_user_id: botUserId,
+      idempotency_key: idemKey,
+      attempt_count: history.length,
+      attempt_history: history,
+    });
 
     if (result.ok) return { ok: true as const, delivered: true, messageId: result.messageId };
     if (result.kind === "blocked" || result.kind === "not_started") {

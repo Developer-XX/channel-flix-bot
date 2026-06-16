@@ -41,6 +41,57 @@ export type Database = {
         }
         Relationships: []
       }
+      bulk_job_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          failed: number
+          finished_at: string | null
+          id: string
+          job_type: string
+          last_error: string | null
+          params: Json
+          processed: number
+          promoted: number
+          started_at: string
+          status: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          job_type: string
+          last_error?: string | null
+          params?: Json
+          processed?: number
+          promoted?: number
+          started_at?: string
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          job_type?: string
+          last_error?: string | null
+          params?: Json
+          processed?: number
+          promoted?: number
+          started_at?: string
+          status?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       content_requests: {
         Row: {
           admin_notes: string | null
@@ -77,39 +128,110 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_attempts: {
+        Row: {
+          attempt_no: number
+          bot_user_id: number | null
+          created_at: string
+          error: string | null
+          history: Json
+          id: string
+          idempotency_key: string
+          media_file_id: string
+          status: string
+          telegram_message_id: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempt_no?: number
+          bot_user_id?: number | null
+          created_at?: string
+          error?: string | null
+          history?: Json
+          id?: string
+          idempotency_key: string
+          media_file_id: string
+          status?: string
+          telegram_message_id?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempt_no?: number
+          bot_user_id?: number | null
+          created_at?: string
+          error?: string | null
+          history?: Json
+          id?: string
+          idempotency_key?: string
+          media_file_id?: string
+          status?: string
+          telegram_message_id?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_attempts_media_file_id_fkey"
+            columns: ["media_file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       download_logs: {
         Row: {
+          attempt_count: number
+          attempt_history: Json
+          bot_user_id: number | null
           created_at: string
           delivered_at: string | null
           delivery_error: string | null
           delivery_status: string | null
           file_id: string | null
           id: string
+          idempotency_key: string | null
           source: string | null
           title_id: string | null
           user_id: string | null
+          verification_provider: string | null
+          verification_status: string | null
         }
         Insert: {
+          attempt_count?: number
+          attempt_history?: Json
+          bot_user_id?: number | null
           created_at?: string
           delivered_at?: string | null
           delivery_error?: string | null
           delivery_status?: string | null
           file_id?: string | null
           id?: string
+          idempotency_key?: string | null
           source?: string | null
           title_id?: string | null
           user_id?: string | null
+          verification_provider?: string | null
+          verification_status?: string | null
         }
         Update: {
+          attempt_count?: number
+          attempt_history?: Json
+          bot_user_id?: number | null
           created_at?: string
           delivered_at?: string | null
           delivery_error?: string | null
           delivery_status?: string | null
           file_id?: string | null
           id?: string
+          idempotency_key?: string | null
           source?: string | null
           title_id?: string | null
           user_id?: string | null
+          verification_provider?: string | null
+          verification_status?: string | null
         }
         Relationships: [
           {
@@ -594,38 +716,50 @@ export type Database = {
       telegram_bot_state: {
         Row: {
           admin_telegram_user_ids: number[]
+          auto_rebuild_threshold: number
           cache_version: number
           id: string
+          indexes_rebuilding_at: string | null
           indexes_rebuilt_at: string | null
           last_run_at: string | null
           last_run_error: string | null
           last_run_status: string | null
           last_update_id: number
           matching_settings: Json
+          pending_index_rebuild: boolean
+          promotions_since_last_index: number
           updated_at: string
         }
         Insert: {
           admin_telegram_user_ids?: number[]
+          auto_rebuild_threshold?: number
           cache_version?: number
           id: string
+          indexes_rebuilding_at?: string | null
           indexes_rebuilt_at?: string | null
           last_run_at?: string | null
           last_run_error?: string | null
           last_run_status?: string | null
           last_update_id?: number
           matching_settings?: Json
+          pending_index_rebuild?: boolean
+          promotions_since_last_index?: number
           updated_at?: string
         }
         Update: {
           admin_telegram_user_ids?: number[]
+          auto_rebuild_threshold?: number
           cache_version?: number
           id?: string
+          indexes_rebuilding_at?: string | null
           indexes_rebuilt_at?: string | null
           last_run_at?: string | null
           last_run_error?: string | null
           last_run_status?: string | null
           last_update_id?: number
           matching_settings?: Json
+          pending_index_rebuild?: boolean
+          promotions_since_last_index?: number
           updated_at?: string
         }
         Relationships: []
@@ -914,6 +1048,74 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_verifications: {
+        Row: {
+          expires_at: string | null
+          last_provider: string | null
+          updated_at: string
+          user_id: string
+          verification_count: number
+          verified_at: string | null
+        }
+        Insert: {
+          expires_at?: string | null
+          last_provider?: string | null
+          updated_at?: string
+          user_id: string
+          verification_count?: number
+          verified_at?: string | null
+        }
+        Update: {
+          expires_at?: string | null
+          last_provider?: string | null
+          updated_at?: string
+          user_id?: string
+          verification_count?: number
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
+      verification_tokens: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          ip_hash: string | null
+          media_file_id: string | null
+          provider: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          ip_hash?: string | null
+          media_file_id?: string | null
+          provider: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          ip_hash?: string | null
+          media_file_id?: string | null
+          provider?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_tokens_media_file_id_fkey"
+            columns: ["media_file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

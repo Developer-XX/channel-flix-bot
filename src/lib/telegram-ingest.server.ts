@@ -375,10 +375,11 @@ export async function ingestTelegramUpdate(
         reason: `auto via ${match.matchedVia} score=${match.matchScore?.toFixed(3) ?? "?"}`,
         parsedSnapshot,
       });
-      // Bump cache_version so the website revalidates listings
+      // Bump cache_version + auto-rebuild counter
       try {
-        const { bumpCacheVersion } = await import("@/lib/indexes.server");
+        const { bumpCacheVersion, markPromotionForAutoRebuild } = await import("@/lib/indexes.server");
         await bumpCacheVersion(supabase);
+        await markPromotionForAutoRebuild(supabase);
       } catch {}
     } catch (e) {
       console.warn("[telegram-ingest] auto-promote failed:", (e as Error).message);

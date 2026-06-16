@@ -5,18 +5,32 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Send, Loader2, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { requestDownload, requestLinkCode } from "@/lib/downloads.functions";
+import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
+import { startVerification } from "@/lib/verification.functions";
 
 interface Props {
   mediaFileId: string;
   fileName?: string | null;
   size?: "sm" | "default";
   variant?: "outline" | "default";
+  titleId?: string;
+  season?: number | null;
+  episode?: number | null;
 }
 
-export function DownloadButton({ mediaFileId, fileName, size = "sm", variant = "outline" }: Props) {
+export function DownloadButton({
+  mediaFileId,
+  fileName,
+  size = "sm",
+  variant = "outline",
+  titleId,
+  season,
+  episode,
+}: Props) {
   const reqDownload = useServerFn(requestDownload);
   const reqCode = useServerFn(requestLinkCode);
+  const resolveEp = useServerFn(resolveEpisodeFile);
+  const startVerify = useServerFn(startVerification);
   const [loading, setLoading] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
@@ -30,15 +44,37 @@ export function DownloadButton({ mediaFileId, fileName, size = "sm", variant = "
         toast.error("Please sign in to download.");
         return;
       }
-      const r = await reqDownload({ data: { mediaFileId } });
+
+      // Re-resolve the episode file by (title, season, episode) so a stale
+      // mediaFileId after a re-promote is corrected automatically.
+      let activeFileId = mediaFileId;
+      if (titleId && (season != null || episode != null)) {
+        try {
+          const res = await resolveEp({
+            data: { titleId, season: season ?? null, episode: episode ?? null, expectedFileId: mediaFileId },
+          });
+          if (res.ok) {
+            activeFileId = res.file.id;
+            if (res.changed) toast.message("Episode file was updated to the latest version.");
+          }
+        } catch { /* fall back to mediaFileId */ }
+      }
+
+      const r = await reqDownload({ data: { mediaFileId: activeFileId } });
       if (r.ok) {
         toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
         return;
       }
+      if (r.reason === "needs_verification") {
+        toast.message("Verification required — opening verification link…");
+        const v = await startVerify({ data: { mediaFileId: activeFileId } });
+        window.location.href = v.redirectUrl;
+        return;
+      }
       if (r.reason === "not_linked" || r.reason === "bot_blocked") {
-        const code = await reqCode();
-        setCode(code.code);
-        setBotUsername(code.botUsername);
+        const codeRes = await reqCode();
+        setCode(codeRes.code);
+        setBotUsername(codeRes.botUsername);
         setLinkOpen(true);
         return;
       }

@@ -25,8 +25,10 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
+import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
+import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -110,6 +112,11 @@ const AuthenticatedAdminRequestsRoute =
     path: '/requests',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const ApiPublicVTokenRoute = ApiPublicVTokenRouteImport.update({
+  id: '/api/public/v/$token',
+  path: '/api/public/v/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTelegramWebhookRoute =
   ApiPublicTelegramWebhookRouteImport.update({
     id: '/api/public/telegram/webhook',
@@ -120,6 +127,12 @@ const ApiPublicTelegramBackfillRoute =
   ApiPublicTelegramBackfillRouteImport.update({
     id: '/api/public/telegram/backfill',
     path: '/api/public/telegram/backfill',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksMaybeRebuildIndexesRoute =
+  ApiPublicHooksMaybeRebuildIndexesRouteImport.update({
+    id: '/api/public/hooks/maybe-rebuild-indexes',
+    path: '/api/public/hooks/maybe-rebuild-indexes',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -139,8 +152,10 @@ export interface FileRoutesByFullPath {
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
+  '/api/public/v/$token': typeof ApiPublicVTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -157,8 +172,10 @@ export interface FileRoutesByTo {
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
+  '/api/public/v/$token': typeof ApiPublicVTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,8 +195,10 @@ export interface FileRoutesById {
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
+  '/api/public/v/$token': typeof ApiPublicVTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,8 +218,10 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin/'
+    | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
+    | '/api/public/v/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -217,8 +238,10 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin'
+    | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
+    | '/api/public/v/$token'
   id:
     | '__root__'
     | '/'
@@ -237,8 +260,10 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/'
+    | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
+    | '/api/public/v/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -252,8 +277,10 @@ export interface RootRouteChildren {
   BrowseCategoryRoute: typeof BrowseCategoryRoute
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
+  ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
+  ApiPublicVTokenRoute: typeof ApiPublicVTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -370,6 +397,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRequestsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/public/v/$token': {
+      id: '/api/public/v/$token'
+      path: '/api/public/v/$token'
+      fullPath: '/api/public/v/$token'
+      preLoaderRoute: typeof ApiPublicVTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/telegram/webhook': {
       id: '/api/public/telegram/webhook'
       path: '/api/public/telegram/webhook'
@@ -382,6 +416,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/telegram/backfill'
       fullPath: '/api/public/telegram/backfill'
       preLoaderRoute: typeof ApiPublicTelegramBackfillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/maybe-rebuild-indexes': {
+      id: '/api/public/hooks/maybe-rebuild-indexes'
+      path: '/api/public/hooks/maybe-rebuild-indexes'
+      fullPath: '/api/public/hooks/maybe-rebuild-indexes'
+      preLoaderRoute: typeof ApiPublicHooksMaybeRebuildIndexesRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -428,8 +469,11 @@ const rootRouteChildren: RootRouteChildren = {
   BrowseCategoryRoute: BrowseCategoryRoute,
   DebugAuthRoute: DebugAuthRoute,
   TitleSlugRoute: TitleSlugRoute,
+  ApiPublicHooksMaybeRebuildIndexesRoute:
+    ApiPublicHooksMaybeRebuildIndexesRoute,
   ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
+  ApiPublicVTokenRoute: ApiPublicVTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
