@@ -101,3 +101,37 @@ function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label
     </div>
   );
 }
+
+function CronStat({
+  label,
+  value,
+  hint,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+  tone?: "ok" | "warn";
+  icon?: React.ReactNode;
+}) {
+  const color = tone === "ok" ? "text-emerald-500" : tone === "warn" ? "text-amber-500" : "";
+  return (
+    <div className="rounded-lg border border-border bg-surface/40 p-3">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <div className={`mt-1 font-display text-xl font-semibold ${color}`}>{value}</div>
+      {hint && <div className="text-[11px] text-muted-foreground">{hint}</div>}
+    </div>
+  );
+}
+
+function formatMs(ms: number): string {
+  if (!ms || ms < 0) return "—";
+  if (ms < 1000) return `${ms} ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)} s`;
+  return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+}
