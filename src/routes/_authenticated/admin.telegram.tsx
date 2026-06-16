@@ -285,17 +285,25 @@ function TelegramAdmin() {
 }
 
 function IngestCard({
-  row, expanded, onToggle, onUpdate, onPromote, onSaveAliasAndPromote, onIgnore, search,
+  row, expanded, selected, onSelectToggle, onToggle, onUpdate, onPromote,
+  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, search,
 }: {
   row: IngestRow;
   expanded: boolean;
+  selected: boolean;
+  onSelectToggle: () => void;
   onToggle: () => void;
   onUpdate: (patch: Record<string, any>) => Promise<void>;
   onPromote: (titleId: string, overrides?: any) => Promise<void>;
   onSaveAliasAndPromote: (titleId: string, alias: string) => Promise<void>;
   onIgnore: () => Promise<void>;
+  onRematch: () => Promise<void>;
+  onDiagnose: () => Promise<any>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
 }) {
+  const [diag, setDiag] = useState<any>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
   const [draft, setDraft] = useState({
     parsed_title: row.parsed_title ?? "",
     parsed_year: row.parsed_year ?? ("" as number | ""),
