@@ -139,6 +139,34 @@ function TitlesAdmin() {
 }
 
 function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [mode, setMode] = useState<"tmdb" | "manual">("tmdb");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-card max-h-[88vh] flex flex-col">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="font-display text-xl font-bold">Add title</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="flex gap-1 px-5 pt-3 border-b border-border">
+          {(["tmdb", "manual"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-3 py-2 text-sm rounded-t-md border-b-2 -mb-px transition ${
+                mode === m ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {m === "tmdb" ? "Import from TMDB" : "Manual entry"}
+            </button>
+          ))}
+        </div>
+        {mode === "tmdb" ? <TmdbImportPane onCreated={onCreated} /> : <ManualEntryPane onCreated={onCreated} />}
+      </div>
+    </div>
+  );
+}
+
+function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"movie" | "tv" | "multi">("multi");
   const [category, setCategory] = useState<CategorySlug>("movie");
@@ -166,7 +194,7 @@ function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated
       const d = await tmdbDetails({ data: { tmdb_id, media_type: mt as "movie" | "tv" } });
       const finalCategory: CategorySlug = mt === "tv" ? (category === "movie" ? "series" : category) : "movie";
       const baseSlug = slugify(`${d.title}-${d.release_year ?? ""}`);
-      const result = await createAdminTitle({ data: {
+      await createAdminTitle({ data: {
         slug: baseSlug,
         title: d.title,
         original_title: d.original_title,
@@ -185,7 +213,6 @@ function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated
         tmdb_id: d.tmdb_id,
         imdb_id: d.imdb_id,
       } });
-      void result;
       toast.success(`Imported "${d.title}"`);
       onCreated();
     } catch (e) {
@@ -196,58 +223,193 @@ function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-sm p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-card max-h-[88vh] flex flex-col">
-        <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="font-display text-xl font-bold">Import from TMDB</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+    <>
+      <div className="p-5 space-y-3 border-b border-border">
+        <div className="flex flex-wrap gap-2">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") search(); }}
+            placeholder="Search TMDB…"
+            className="flex-1 min-w-[180px] h-10 rounded-md bg-surface px-3 text-sm outline-none border border-border focus:border-ring transition"
+          />
+          <select value={kind} onChange={(e) => setKind(e.target.value as "movie" | "tv" | "multi")} className="h-10 rounded-md bg-surface border border-border px-2 text-sm">
+            <option value="multi">Any</option>
+            <option value="movie">Movies</option>
+            <option value="tv">TV</option>
+          </select>
+          <Button onClick={search} disabled={searching} className="bg-gradient-primary text-primary-foreground border-0">
+            <Search className="h-4 w-4 mr-1.5" />{searching ? "…" : "Search"}
+          </Button>
         </div>
-        <div className="p-5 space-y-3 border-b border-border">
-          <div className="flex gap-2">
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") search(); }}
-              placeholder="Search TMDB…"
-              className="flex-1 h-10 rounded-md bg-surface px-3 text-sm outline-none border border-border focus:border-ring transition"
-            />
-            <select value={kind} onChange={(e) => setKind(e.target.value as "movie" | "tv" | "multi")} className="h-10 rounded-md bg-surface border border-border px-2 text-sm">
-              <option value="multi">Any</option>
-              <option value="movie">Movies</option>
-              <option value="tv">TV</option>
-            </select>
-            <Button onClick={search} disabled={searching} className="bg-gradient-primary text-primary-foreground border-0">
-              <Search className="h-4 w-4 mr-1.5" />{searching ? "…" : "Search"}
-            </Button>
-          </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Save TV imports as:</span>
-            <select value={category} onChange={(e) => setCategory(e.target.value as CategorySlug)} className="bg-surface border border-border rounded px-2 py-1">
-              {CATEGORIES.filter((c) => c.slug !== "movie").map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 space-y-2">
-          {results.length === 0 && !searching && <p className="text-sm text-muted-foreground text-center py-6">Search TMDB to import titles with full metadata.</p>}
-          {results.map((r) => (
-            <div key={`${r.media_type}-${r.tmdb_id}`} className="flex gap-3 rounded-xl border border-border bg-surface/50 p-3">
-              {r.poster_url ? <img src={r.poster_url} alt="" className="h-24 w-16 object-cover rounded" /> : <div className="h-24 w-16 bg-surface rounded" />}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wider bg-surface px-1.5 py-0.5 rounded">{r.media_type}</span>
-                  <span className="font-semibold truncate">{r.title}</span>
-                  {r.release_year && <span className="text-xs text-muted-foreground">{r.release_year}</span>}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.overview || "No overview."}</p>
-              </div>
-              <Button size="sm" onClick={() => importOne(r.tmdb_id, r.media_type)} disabled={importing === r.tmdb_id} className="shrink-0">
-                {importing === r.tmdb_id ? "…" : "Import"}
-              </Button>
-            </div>
-          ))}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Save TV imports as:</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value as CategorySlug)} className="bg-surface border border-border rounded px-2 py-1">
+            {CATEGORIES.filter((c) => c.slug !== "movie").map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+          </select>
         </div>
       </div>
-    </div>
+      <div className="flex-1 overflow-y-auto p-5 space-y-2">
+        {results.length === 0 && !searching && <p className="text-sm text-muted-foreground text-center py-6">Search TMDB to import titles with full metadata.</p>}
+        {results.map((r) => (
+          <div key={`${r.media_type}-${r.tmdb_id}`} className="flex gap-3 rounded-xl border border-border bg-surface/50 p-3 min-w-0">
+            {r.poster_url ? <img src={r.poster_url} alt="" className="h-24 w-16 shrink-0 object-cover rounded" /> : <div className="h-24 w-16 shrink-0 bg-surface rounded" />}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] uppercase tracking-wider bg-surface px-1.5 py-0.5 rounded">{r.media_type}</span>
+                <span className="font-semibold truncate">{r.title}</span>
+                {r.release_year && <span className="text-xs text-muted-foreground">{r.release_year}</span>}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.overview || "No overview."}</p>
+            </div>
+            <Button size="sm" onClick={() => importOne(r.tmdb_id, r.media_type)} disabled={importing === r.tmdb_id} className="shrink-0">
+              {importing === r.tmdb_id ? "…" : "Import"}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ManualEntryPane({ onCreated }: { onCreated: () => void }) {
+  const [form, setForm] = useState({
+    title: "",
+    original_title: "",
+    slug: "",
+    category: "movie" as CategorySlug,
+    status: "published" as "draft" | "published" | "archived",
+    overview: "",
+    poster_url: "",
+    backdrop_url: "",
+    release_year: "",
+    release_date: "",
+    runtime_minutes: "",
+    rating: "",
+    language: "",
+    genres: "",
+    cast_names: "",
+    tmdb_id: "",
+    imdb_id: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  function update<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
+    setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) { toast.error("Title is required"); return; }
+    setSaving(true);
+    try {
+      const slug = (form.slug.trim() || slugify(`${form.title}-${form.release_year || ""}`)).trim();
+      const toNum = (s: string) => (s.trim() ? Number(s) : null);
+      const toArr = (s: string) => (s.trim() ? s.split(",").map((x) => x.trim()).filter(Boolean) : null);
+      await createAdminTitle({ data: {
+        slug,
+        title: form.title.trim(),
+        original_title: form.original_title.trim() || null,
+        category: form.category as never,
+        status: form.status as never,
+        overview: form.overview.trim() || null,
+        poster_url: form.poster_url.trim() || null,
+        backdrop_url: form.backdrop_url.trim() || null,
+        release_year: toNum(form.release_year),
+        release_date: form.release_date.trim() || null,
+        runtime_minutes: toNum(form.runtime_minutes),
+        rating: toNum(form.rating),
+        language: form.language.trim() || null,
+        genres: toArr(form.genres),
+        cast_names: toArr(form.cast_names),
+        tmdb_id: toNum(form.tmdb_id),
+        imdb_id: form.imdb_id.trim() || null,
+      } });
+      toast.success(`Created "${form.title}"`);
+      onCreated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Create failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const Field = (props: { label: string; children: React.ReactNode; full?: boolean }) => (
+    <label className={`block ${props.full ? "sm:col-span-2" : ""}`}>
+      <span className="text-xs uppercase tracking-wider text-muted-foreground">{props.label}</span>
+      <div className="mt-1">{props.children}</div>
+    </label>
+  );
+  const inputCls =
+    "w-full h-9 rounded-md bg-surface px-3 text-sm outline-none border border-border focus:border-ring transition";
+
+  return (
+    <form onSubmit={submit} className="flex-1 overflow-y-auto p-5">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Title*">
+          <input className={inputCls} value={form.title} onChange={(e) => update("title", e.target.value)} required />
+        </Field>
+        <Field label="Original title">
+          <input className={inputCls} value={form.original_title} onChange={(e) => update("original_title", e.target.value)} />
+        </Field>
+        <Field label="Slug (auto if blank)">
+          <input className={inputCls} value={form.slug} onChange={(e) => update("slug", e.target.value)} placeholder="my-title-2024" />
+        </Field>
+        <Field label="Category">
+          <select className={inputCls} value={form.category} onChange={(e) => update("category", e.target.value as CategorySlug)}>
+            {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Status">
+          <select className={inputCls} value={form.status} onChange={(e) => update("status", e.target.value as typeof form.status)}>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </select>
+        </Field>
+        <Field label="Release year">
+          <input className={inputCls} type="number" value={form.release_year} onChange={(e) => update("release_year", e.target.value)} />
+        </Field>
+        <Field label="Release date">
+          <input className={inputCls} type="date" value={form.release_date} onChange={(e) => update("release_date", e.target.value)} />
+        </Field>
+        <Field label="Runtime (min)">
+          <input className={inputCls} type="number" value={form.runtime_minutes} onChange={(e) => update("runtime_minutes", e.target.value)} />
+        </Field>
+        <Field label="Rating (0-10)">
+          <input className={inputCls} type="number" step="0.1" value={form.rating} onChange={(e) => update("rating", e.target.value)} />
+        </Field>
+        <Field label="Language (ISO)">
+          <input className={inputCls} value={form.language} onChange={(e) => update("language", e.target.value)} placeholder="en" />
+        </Field>
+        <Field label="TMDB ID">
+          <input className={inputCls} type="number" value={form.tmdb_id} onChange={(e) => update("tmdb_id", e.target.value)} />
+        </Field>
+        <Field label="IMDB ID">
+          <input className={inputCls} value={form.imdb_id} onChange={(e) => update("imdb_id", e.target.value)} placeholder="tt1234567" />
+        </Field>
+        <Field label="Poster URL" full>
+          <input className={inputCls} value={form.poster_url} onChange={(e) => update("poster_url", e.target.value)} placeholder="https://…" />
+        </Field>
+        <Field label="Backdrop URL" full>
+          <input className={inputCls} value={form.backdrop_url} onChange={(e) => update("backdrop_url", e.target.value)} placeholder="https://…" />
+        </Field>
+        <Field label="Genres (comma-separated)" full>
+          <input className={inputCls} value={form.genres} onChange={(e) => update("genres", e.target.value)} placeholder="Action, Drama" />
+        </Field>
+        <Field label="Cast (comma-separated)" full>
+          <input className={inputCls} value={form.cast_names} onChange={(e) => update("cast_names", e.target.value)} placeholder="Actor One, Actor Two" />
+        </Field>
+        <Field label="Overview" full>
+          <textarea className={`${inputCls} h-24 py-2`} value={form.overview} onChange={(e) => update("overview", e.target.value)} />
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-border">
+        <Button type="submit" disabled={saving} className="bg-gradient-primary text-primary-foreground border-0">
+          {saving ? "Saving…" : "Create title"}
+        </Button>
+      </div>
+    </form>
   );
 }
