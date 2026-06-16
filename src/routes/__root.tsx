@@ -119,12 +119,27 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   useEffect(() => {
+    const refreshIfNeeded = async () => {
+      const { data } = await supabase.auth.getSession();
+      const expiresAt = data.session?.expires_at;
+      if (expiresAt && expiresAt * 1000 - Date.now() < 60_000) {
+        await supabase.auth.refreshSession();
+      }
+    };
+
     supabase.auth.startAutoRefresh();
+    void refreshIfNeeded();
+    window.addEventListener("focus", refreshIfNeeded);
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      if (event === "SIGNED_OUT") {
+        queryClient.clear();
+        return;
+      }
       queryClient.invalidateQueries();
     });
     return () => {
+      window.removeEventListener("focus", refreshIfNeeded);
       data.subscription.unsubscribe();
       supabase.auth.stopAutoRefresh();
     };
