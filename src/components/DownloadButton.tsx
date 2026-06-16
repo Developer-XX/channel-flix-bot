@@ -107,7 +107,8 @@ export function DownloadButton({
       }
       if (r.reason === "needs_verification") {
         toast.message("Verification required — opening verification link…");
-        const v = await startVerify({ data: { mediaFileId: activeFileId } });
+        const v = await startVerifyWithBackoff(activeFileId, cid);
+        if (!v) return; // error already surfaced
         // Shorteners (nanolinks/adrinolinks) send X-Frame-Options: DENY,
         // so opening inside the Lovable preview iframe shows Firefox's
         // "Can't open this page" error. Always break out of frames.
