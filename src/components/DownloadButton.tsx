@@ -5,7 +5,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Send, Loader2, Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { requestDownload, requestLinkCode } from "@/lib/downloads.functions";
+import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
+import { startVerification } from "@/lib/verification.functions";
+
+interface Props {
+  mediaFileId: string;
+  fileName?: string | null;
+  size?: "sm" | "default";
+  variant?: "outline" | "default";
+  titleId?: string;
+  season?: number | null;
+  episode?: number | null;
+}
 
 interface Props {
   mediaFileId: string;
