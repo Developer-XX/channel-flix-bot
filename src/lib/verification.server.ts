@@ -46,29 +46,91 @@ export async function getVerificationState(
   return { verified, expiresAt: data.expires_at, lastProvider: data.last_provider ?? null };
 }
 
+// Read shortener API keys ONLY from server env. Never logged, never returned
+// to the client. We expose a stable, non-reversible fingerprint for audit.
+function readKey(provider: Provider): string | null {
+  const raw =
+    provider === "nanolinks"
+      ? process.env.NANOLINKS_API_KEY
+      : process.env.ADRINOLINKS_API_KEY;
+  if (!raw || raw.length < 8) return null;
+  return raw;
+}
+
+function keyFingerprint(key: string): string {
+  return "sha256:" + createHash("sha256").update(key).digest("hex").slice(0, 12);
+}
+
 // Shorten a URL through a provider. Returns the original URL if no key is
 // configured (passthrough stub) so end-to-end flow still works.
-async function shorten(provider: Provider, longUrl: string): Promise<string> {
-  const key =
-    provider === "nanolinks" ? process.env.NANOLINKS_API_KEY : process.env.ADRINOLINKS_API_KEY;
+async function shorten(
+  supabase: SupabaseClient<any, any, any>,
+  userId: string,
+  provider: Provider,
+  longUrl: string,
+): Promise<string> {
+  const key = readKey(provider);
+  const startedAt = Date.now();
   if (!key) {
+    // Audit no-key path (passthrough)
+    await supabase.from("verification_provider_calls").insert({
+      user_id: userId,
+      provider,
+      status: "no_key",
+      short_url_returned: false,
+    });
     console.warn(`[verification] ${provider} key missing — using passthrough`);
     return longUrl;
   }
-  // Both nanolinks.in and adrinolinks.in expose a similar quick-link API.
+  const fingerprint = keyFingerprint(key);
   const host = provider === "nanolinks" ? "nanolinks.in" : "adrinolinks.in";
   const u = new URL(`https://${host}/api`);
   u.searchParams.set("api", key);
   u.searchParams.set("url", longUrl);
+  let httpStatus: number | null = null;
   try {
     const res = await fetch(u.toString());
+    httpStatus = res.status;
     const json = await res.json().catch(() => ({}));
     const short = json?.shortenedUrl ?? json?.shortUrl ?? json?.short ?? json?.data?.url;
-    if (typeof short === "string" && short.startsWith("http")) return short;
-    console.warn(`[verification] ${provider} unexpected response`, json);
+    if (typeof short === "string" && short.startsWith("http")) {
+      await supabase.from("verification_provider_calls").insert({
+        user_id: userId,
+        provider,
+        status: "ok",
+        http_status: httpStatus,
+        latency_ms: Date.now() - startedAt,
+        key_fingerprint: fingerprint,
+        short_url_returned: true,
+      });
+      // Never log the key or full URL with the key embedded.
+      console.info(`[verification] ${provider} ok (${fingerprint})`);
+      return short;
+    }
+    await supabase.from("verification_provider_calls").insert({
+      user_id: userId,
+      provider,
+      status: "fallback",
+      http_status: httpStatus,
+      latency_ms: Date.now() - startedAt,
+      key_fingerprint: fingerprint,
+      short_url_returned: false,
+      error: "unexpected_response_shape",
+    });
+    console.warn(`[verification] ${provider} unexpected response (${fingerprint})`);
     return longUrl;
-  } catch (e) {
-    console.error(`[verification] ${provider} request failed`, e);
+  } catch (e: any) {
+    await supabase.from("verification_provider_calls").insert({
+      user_id: userId,
+      provider,
+      status: "error",
+      http_status: httpStatus,
+      latency_ms: Date.now() - startedAt,
+      key_fingerprint: fingerprint,
+      short_url_returned: false,
+      error: String(e?.message ?? e).slice(0, 300),
+    });
+    console.error(`[verification] ${provider} request failed (${fingerprint})`);
     return longUrl;
   }
 }
@@ -102,7 +164,7 @@ export async function startVerificationForUser(args: {
   });
 
   const longUrl = `${siteOrigin()}/api/public/v/${token}`;
-  const redirectUrl = await shorten(provider, longUrl);
+  const redirectUrl = await shorten(supabase, userId, provider, longUrl);
   return { provider, redirectUrl, token, expiresAt };
 }
 
