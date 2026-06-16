@@ -45,9 +45,12 @@ function TelegramAdmin() {
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
-  const [baseUrl, setBaseUrl] = useState(
-    typeof window !== "undefined" ? window.location.origin : "",
-  );
+  // Telegram needs a stable, externally reachable HTTPS URL. The `id-preview--…`
+  // host goes through Lovable's auth bridge and is NOT reachable for Telegram.
+  // Use the stable `project--<id>-dev.lovable.app` (preview) or
+  // `project--<id>.lovable.app` (published) host instead.
+  const STABLE_DEV_URL = "https://project--d54ff009-ac17-477f-85a3-112a949d0888-dev.lovable.app";
+  const [baseUrl, setBaseUrl] = useState(STABLE_DEV_URL);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const ingest = useQuery({
