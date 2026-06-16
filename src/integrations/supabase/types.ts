@@ -228,6 +228,7 @@ export type Database = {
           refreshed_at: string
           release_year: number | null
           searchable: unknown
+          searchable_text: string
           slug: string
           title: string
           title_id: string
@@ -237,7 +238,8 @@ export type Database = {
           poster_url?: string | null
           refreshed_at?: string
           release_year?: number | null
-          searchable: unknown
+          searchable?: unknown
+          searchable_text?: string
           slug: string
           title: string
           title_id: string
@@ -248,6 +250,7 @@ export type Database = {
           refreshed_at?: string
           release_year?: number | null
           searchable?: unknown
+          searchable_text?: string
           slug?: string
           title?: string
           title_id?: string
