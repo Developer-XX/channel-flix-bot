@@ -98,9 +98,9 @@ export function TitleDebugPanel({ slug }: { slug: string }) {
                       </thead>
                       <tbody>
                         {debugQ.data.candidates.slice(0, 25).map((c: any) => (
-                          <tr key={c.row.id} className="border-t border-border/50">
+                          <tr key={c.row.id} className="border-t border-border/50 align-top">
                             <td className="p-1 truncate max-w-[220px]">{c.row.parsed_title ?? "—"}</td>
-                            <td className="text-center">
+                            <td className="text-center whitespace-nowrap">
                               {c.row.parsed_season != null
                                 ? `S${c.row.parsed_season}${c.row.parsed_episode != null ? `E${c.row.parsed_episode}` : ""}`
                                 : "—"}
@@ -109,13 +109,30 @@ export function TitleDebugPanel({ slug }: { slug: string }) {
                             <td className="text-center">
                               <Badge variant="secondary">{c.row.match_status}</Badge>
                             </td>
-                            <td className="text-[10px] text-muted-foreground">{c.reasons.join("; ") || "—"}</td>
+                            <td className="text-[10px] text-muted-foreground p-1">
+                              {c.reasonCodes?.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {c.reasonCodes.map((rc: any, i: number) => (
+                                    <span
+                                      key={i}
+                                      title={rc.detail}
+                                      className="inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-700 dark:text-amber-300"
+                                    >
+                                      {rc.code}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                c.reasons.join("; ") || "—"
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
+
               </>
             )}
             <div className="pt-2 flex flex-wrap gap-2">
