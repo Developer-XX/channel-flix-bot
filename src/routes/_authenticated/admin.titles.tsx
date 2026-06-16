@@ -3,11 +3,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Plus, Trash2, Search, Star, X } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { tmdbSearch, tmdbDetails } from "@/lib/tmdb.functions";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, type CategorySlug } from "@/lib/categories";
+import { createAdminTitle, deleteAdminTitle, listAdminTitles, updateAdminTitleFlag, updateAdminTitleStatus } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/titles")({
   component: TitlesAdmin,
@@ -19,20 +19,12 @@ function TitlesAdmin() {
 
   const list = useQuery({
     queryKey: ["admin-titles"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("master_titles")
-        .select("id, slug, title, category, status, release_year, rating, poster_url, is_trending, is_featured")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      return data ?? [];
-    },
+    queryFn: () => listAdminTitles(),
   });
 
   const togglePublish = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("master_titles").update({ status: status as never }).eq("id", id);
-      if (error) throw error;
+      await updateAdminTitleStatus({ data: { id, status: status as "draft" | "published" | "archived" } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-titles"] });
@@ -43,17 +35,14 @@ function TitlesAdmin() {
 
   const toggleFlag = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: "is_trending" | "is_featured"; value: boolean }) => {
-      const update: Record<string, boolean> = { [field]: value };
-      const { error } = await supabase.from("master_titles").update(update as never).eq("id", id);
-      if (error) throw error;
+      await updateAdminTitleFlag({ data: { id, field, value } });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-titles"] }),
   });
 
   const deleteTitle = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("master_titles").delete().eq("id", id);
-      if (error) throw error;
+      await deleteAdminTitle({ data: { id } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-titles"] });
@@ -177,7 +166,7 @@ function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated
       const d = await tmdbDetails({ data: { tmdb_id, media_type: mt as "movie" | "tv" } });
       const finalCategory: CategorySlug = mt === "tv" ? (category === "movie" ? "series" : category) : "movie";
       const baseSlug = slugify(`${d.title}-${d.release_year ?? ""}`);
-      const { error } = await supabase.from("master_titles").insert({
+      const result = await createAdminTitle({ data: {
         slug: baseSlug,
         title: d.title,
         original_title: d.original_title,
@@ -195,13 +184,8 @@ function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated
         cast_names: d.cast_names,
         tmdb_id: d.tmdb_id,
         imdb_id: d.imdb_id,
-      });
-      if (error) {
-        if (error.code === "23505") {
-          toast.error("Already imported (duplicate slug or TMDB id).");
-        } else throw error;
-        return;
-      }
+      } });
+      void result;
       toast.success(`Imported "${d.title}"`);
       onCreated();
     } catch (e) {
