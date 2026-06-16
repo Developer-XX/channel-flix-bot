@@ -796,3 +796,116 @@ function ChannelWizard() {
   );
 }
 
+function MatchingSettingsPanel() {
+  const get = useServerFn(getMatchingSettings);
+  const upd = useServerFn(updateMatchingSettings);
+  const q = useQuery({ queryKey: ["tg-matching-settings"], queryFn: () => get() });
+  const [draft, setDraft] = useState<any>(null);
+  const s = draft ?? q.data;
+
+  return (
+    <section className="rounded-lg border border-border p-4 space-y-3">
+      <div>
+        <h2 className="font-semibold">Matching rules</h2>
+        <p className="text-xs text-muted-foreground">Tune when an ingested file maps to a master title.</p>
+      </div>
+      {!s ? <p className="text-sm text-muted-foreground">Loading…</p> : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="text-xs">Match threshold: <code>{Number(s.threshold).toFixed(2)}</code></Label>
+            <input type="range" min={0} max={1} step={0.05} value={s.threshold}
+              onChange={(e) => setDraft({ ...s, threshold: Number(e.target.value) })}
+              className="w-full" />
+            <p className="text-[11px] text-muted-foreground">Lower = more aggressive. Higher = stricter.</p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Year window: ±<code>{s.year_window}</code></Label>
+            <Input type="number" min={0} max={10} value={s.year_window}
+              onChange={(e) => setDraft({ ...s, year_window: Number(e.target.value) })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Use aliases</Label>
+            <Switch checked={s.use_aliases} onCheckedChange={(v) => setDraft({ ...s, use_aliases: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Jaccard token overlap</Label>
+            <Switch checked={s.use_jaccard} onCheckedChange={(v) => setDraft({ ...s, use_jaccard: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Containment scoring</Label>
+            <Switch checked={s.use_containment} onCheckedChange={(v) => setDraft({ ...s, use_containment: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2">
+            <Label className="text-sm">Substring boost</Label>
+            <Switch checked={s.use_substring} onCheckedChange={(v) => setDraft({ ...s, use_substring: v })} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border p-2 md:col-span-2">
+            <Label className="text-sm">Require category to match</Label>
+            <Switch checked={s.require_category_match} onCheckedChange={(v) => setDraft({ ...s, require_category_match: v })} />
+          </div>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          disabled={!draft}
+          onClick={async () => {
+            try { await upd({ data: draft }); toast.success("Saved"); setDraft(null); q.refetch(); }
+            catch (e: any) { toast.error(e?.message ?? "Save failed"); }
+          }}
+        >Save rules</Button>
+        <Button size="sm" variant="ghost" disabled={!draft} onClick={() => setDraft(null)}>Reset</Button>
+      </div>
+    </section>
+  );
+}
+
+function BulkActionBar({
+  count, ingestIds, search, onClear, onAssign, onAddAlias, onPromoteSelected,
+}: {
+  count: number;
+  ingestIds: string[];
+  search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
+  onClear: () => void;
+  onAssign: (titleId: string) => Promise<void>;
+  onAddAlias: (titleId: string) => Promise<void>;
+  onPromoteSelected: () => Promise<void>;
+}) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Array<{ id: string; title: string; release_year: number | null; category: string }>>([]);
+  const [pick, setPick] = useState<string | null>(null);
+  return (
+    <div className="sticky top-2 z-10 rounded-lg border border-primary bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm font-medium">{count} selected ({ingestIds.length} ids)</div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" onClick={onPromoteSelected}>Rematch & promote selected</Button>
+          <Button size="sm" variant="ghost" onClick={onClear}>Clear</Button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search master title to assign…" />
+        <Button size="sm" variant="outline" onClick={async () => setResults(await search({ data: { q } }))}>Search</Button>
+      </div>
+      {results.length > 0 && (
+        <div className="max-h-32 overflow-auto space-y-1">
+          {results.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setPick(r.id)}
+              className={`w-full text-left text-xs px-2 py-1 rounded border ${pick === r.id ? "border-primary bg-primary/10" : "border-border"}`}
+            >
+              {r.title}{r.release_year ? ` (${r.release_year})` : ""} · {r.category}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button size="sm" disabled={!pick} onClick={() => pick && onAssign(pick)}>Assign master title (+ promote)</Button>
+        <Button size="sm" variant="outline" disabled={!pick} onClick={() => pick && onAddAlias(pick)}>Add as alias (+ rematch)</Button>
+      </div>
+    </div>
+  );
+}
+
+
