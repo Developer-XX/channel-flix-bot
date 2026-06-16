@@ -45,9 +45,12 @@ function TelegramAdmin() {
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
-  const [baseUrl, setBaseUrl] = useState(
-    typeof window !== "undefined" ? window.location.origin : "",
-  );
+  // Telegram needs a stable, externally reachable HTTPS URL. The `id-preview--…`
+  // host goes through Lovable's auth bridge and is NOT reachable for Telegram.
+  // Use the stable `project--<id>-dev.lovable.app` (preview) or
+  // `project--<id>.lovable.app` (published) host instead.
+  const STABLE_DEV_URL = "https://project--d54ff009-ac17-477f-85a3-112a949d0888-dev.lovable.app";
+  const [baseUrl, setBaseUrl] = useState(STABLE_DEV_URL);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const ingest = useQuery({
@@ -93,6 +96,13 @@ function TelegramAdmin() {
         <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-64">
           {hook.isLoading ? "Loading..." : JSON.stringify(hook.data ?? hook.error, null, 2)}
         </pre>
+        <p className="text-xs text-muted-foreground">
+          Telegram cannot reach <code>id-preview--…</code> URLs (auth-bridged).
+          Use the stable <code>project--&lt;id&gt;-dev.lovable.app</code> URL above
+          (already filled in), and make sure the bot is added as an
+          <strong> admin</strong> of every channel you want to ingest from —
+          otherwise Telegram does not deliver <code>channel_post</code> updates.
+        </p>
       </section>
 
       <section className="rounded-lg border border-border p-4 space-y-3">
