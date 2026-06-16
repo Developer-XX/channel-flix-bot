@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Film, Users, MessageSquare, Download } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { getAdminStats } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   component: Dashboard,
@@ -10,20 +10,7 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 function Dashboard() {
   const stats = useQuery({
     queryKey: ["admin-stats"],
-    queryFn: async () => {
-      const [titles, requests, files, downloads] = await Promise.all([
-        supabase.from("master_titles").select("id", { count: "exact", head: true }),
-        supabase.from("content_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-        supabase.from("media_files").select("id", { count: "exact", head: true }),
-        supabase.from("download_logs").select("id", { count: "exact", head: true }),
-      ]);
-      return {
-        titles: titles.count ?? 0,
-        requests: requests.count ?? 0,
-        files: files.count ?? 0,
-        downloads: downloads.count ?? 0,
-      };
-    },
+    queryFn: () => getAdminStats(),
   });
 
   return (

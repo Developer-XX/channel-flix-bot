@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import { listAdminRequests, updateAdminRequestStatus } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/requests")({
   component: RequestsAdmin,
@@ -14,20 +13,12 @@ function RequestsAdmin() {
   const qc = useQueryClient();
   const list = useQuery({
     queryKey: ["admin-requests"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("content_requests")
-        .select("id, title, category, notes, status, created_at, user_id")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      return data ?? [];
-    },
+    queryFn: () => listAdminRequests(),
   });
 
   const update = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("content_requests").update({ status: status as never }).eq("id", id);
-      if (error) throw error;
+      await updateAdminRequestStatus({ data: { id, status: status as (typeof STATUSES)[number] } });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-requests"] });
