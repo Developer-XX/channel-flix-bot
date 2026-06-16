@@ -169,17 +169,37 @@ function AddTitleDialog({ onClose, onCreated }: { onClose: () => void; onCreated
 function TmdbImportPane({ onCreated }: { onCreated: () => void }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"movie" | "tv" | "multi">("multi");
+  const [lookupBy, setLookupBy] = useState<"name" | "imdb">("name");
   const [category, setCategory] = useState<CategorySlug>("movie");
   const [results, setResults] = useState<Awaited<ReturnType<typeof tmdbSearch>>["results"]>([]);
   const [searching, setSearching] = useState(false);
   const [importing, setImporting] = useState<number | null>(null);
 
   const search = async () => {
-    if (!query.trim()) return;
+    const q = query.trim();
+    if (!q) return;
     setSearching(true);
     try {
-      const r = await tmdbSearch({ data: { query: query.trim(), kind } });
-      setResults(r.results);
+      if (lookupBy === "imdb") {
+        const match = await tmdbFindByImdb({ data: { imdb_id: q } });
+        setResults([
+          {
+            tmdb_id: match.tmdb_id,
+            media_type: match.media_type,
+            title: match.title,
+            overview: "",
+            poster_url: match.poster_url,
+            backdrop_url: null,
+            release_year: null,
+            release_date: null,
+            rating: null,
+            language: null,
+          },
+        ]);
+      } else {
+        const r = await tmdbSearch({ data: { query: q, kind } });
+        setResults(r.results);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Search failed");
     } finally {
