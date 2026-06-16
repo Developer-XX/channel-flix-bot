@@ -97,55 +97,65 @@ function TitlePage() {
             <img
               src={t.backdrop_url}
               alt=""
-              className="absolute inset-0 h-[80vh] w-full object-cover object-top"
+              className="absolute inset-0 h-[55vh] sm:h-[65vh] md:h-[80vh] w-full object-cover object-top"
             />
           )}
-          <div className="absolute inset-0 h-[80vh] bg-gradient-to-b from-background/50 via-background/85 to-background" />
-          <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-28 pb-12 grid gap-8 md:grid-cols-[280px_1fr]">
-            <div className="hidden md:block">
+          <div className="absolute inset-0 h-[55vh] sm:h-[65vh] md:h-[80vh] bg-gradient-to-b from-background/60 via-background/85 to-background" />
+          <div className="relative mx-auto max-w-7xl px-4 md:px-6 pt-24 sm:pt-28 pb-10 md:pb-12 grid gap-6 md:gap-8 grid-cols-[120px_minmax(0,1fr)] sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+            <div className="min-w-0">
               {t.poster_url ? (
-                <img src={t.poster_url} alt={`${t.title} poster`} className="rounded-2xl shadow-card aspect-[2/3] w-full object-cover" />
+                <img
+                  src={t.poster_url}
+                  alt={`${t.title} poster`}
+                  className="rounded-xl md:rounded-2xl shadow-card aspect-[2/3] w-full object-cover"
+                  loading="eager"
+                />
               ) : (
-                <div className="rounded-2xl bg-surface aspect-[2/3]" />
+                <div className="rounded-xl md:rounded-2xl bg-surface aspect-[2/3]" />
               )}
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-primary font-semibold">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs uppercase tracking-widest text-primary font-semibold">
                 {CATEGORY_LABEL[t.category as keyof typeof CATEGORY_LABEL]}
               </p>
-              <h1 className="mt-2 font-display text-3xl md:text-5xl font-bold leading-tight">{t.title}</h1>
+              <h1 className="mt-2 font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold leading-tight break-words">
+                {t.title}
+              </h1>
               {t.original_title && t.original_title !== t.title && (
-                <p className="text-muted-foreground mt-1">{t.original_title}</p>
+                <p className="text-muted-foreground mt-1 text-sm sm:text-base truncate">{t.original_title}</p>
               )}
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+              <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs sm:text-sm text-muted-foreground">
                 {t.rating != null && (
                   <span className="inline-flex items-center gap-1.5">
-                    <Star className="h-4 w-4 fill-gold text-gold" />
+                    <Star className="h-4 w-4 fill-gold text-gold shrink-0" />
                     <span className="text-foreground font-medium">{Number(t.rating).toFixed(1)}</span>
                   </span>
                 )}
                 {t.release_year && (
-                  <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4" />{t.release_year}</span>
+                  <span className="inline-flex items-center gap-1.5"><Calendar className="h-4 w-4 shrink-0" />{t.release_year}</span>
                 )}
                 {t.runtime_minutes && (
-                  <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" />{t.runtime_minutes} min</span>
+                  <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4 shrink-0" />{t.runtime_minutes} min</span>
                 )}
                 {t.language && (
-                  <span className="inline-flex items-center gap-1.5 uppercase"><Globe className="h-4 w-4" />{t.language}</span>
+                  <span className="inline-flex items-center gap-1.5 uppercase"><Globe className="h-4 w-4 shrink-0" />{t.language}</span>
                 )}
               </div>
               {Array.isArray(t.genres) && t.genres.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 sm:mt-4 flex flex-wrap gap-1.5 sm:gap-2">
                   {t.genres.map((g) => (
-                    <span key={g} className="rounded-full border border-border bg-surface/60 px-3 py-1 text-xs">{g}</span>
+                    <span key={g} className="rounded-full border border-border bg-surface/60 px-2.5 py-1 text-[11px] sm:text-xs">{g}</span>
                   ))}
                 </div>
               )}
+            </div>
+            {/* Overview + cast wrap below on mobile to use full width */}
+            <div className="col-span-2 lg:col-start-2 lg:col-end-3 min-w-0">
               {t.overview && (
-                <p className="mt-6 text-base md:text-lg text-foreground/85 leading-relaxed max-w-3xl">{t.overview}</p>
+                <p className="text-sm sm:text-base md:text-lg text-foreground/85 leading-relaxed max-w-3xl">{t.overview}</p>
               )}
               {Array.isArray(t.cast_names) && t.cast_names.length > 0 && (
-                <p className="mt-5 text-sm text-muted-foreground">
+                <p className="mt-4 text-xs sm:text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">Cast:</span> {t.cast_names.slice(0, 8).join(", ")}
                 </p>
               )}
