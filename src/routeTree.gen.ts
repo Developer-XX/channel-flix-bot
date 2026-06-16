@@ -25,7 +25,9 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAdminVerificationLimitsRouteImport } from './routes/_authenticated/admin.verification-limits'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
+import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
+import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
 import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
@@ -115,10 +117,22 @@ const AuthenticatedAdminTelegramRoute =
     path: '/telegram',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminSyncTraceRoute =
+  AuthenticatedAdminSyncTraceRouteImport.update({
+    id: '/sync-trace',
+    path: '/sync-trace',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminRequestsRoute =
   AuthenticatedAdminRequestsRouteImport.update({
     id: '/requests',
     path: '/requests',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminDiagnosticsRoute =
+  AuthenticatedAdminDiagnosticsRouteImport.update({
+    id: '/diagnostics',
+    path: '/diagnostics',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminBulkRoute = AuthenticatedAdminBulkRouteImport.update({
@@ -169,7 +183,9 @@ export interface FileRoutesByFullPath {
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
+  '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
+  '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
@@ -192,7 +208,9 @@ export interface FileRoutesByTo {
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
+  '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
+  '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
@@ -218,7 +236,9 @@ export interface FileRoutesById {
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
   '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
+  '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
+  '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
@@ -244,7 +264,9 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/title/$slug'
     | '/admin/bulk'
+    | '/admin/diagnostics'
     | '/admin/requests'
+    | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin/verification-limits'
@@ -267,7 +289,9 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/title/$slug'
     | '/admin/bulk'
+    | '/admin/diagnostics'
     | '/admin/requests'
+    | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin/verification-limits'
@@ -292,7 +316,9 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/title/$slug'
     | '/_authenticated/admin/bulk'
+    | '/_authenticated/admin/diagnostics'
     | '/_authenticated/admin/requests'
+    | '/_authenticated/admin/sync-trace'
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/verification-limits'
@@ -436,11 +462,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminTelegramRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/sync-trace': {
+      id: '/_authenticated/admin/sync-trace'
+      path: '/sync-trace'
+      fullPath: '/admin/sync-trace'
+      preLoaderRoute: typeof AuthenticatedAdminSyncTraceRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/requests': {
       id: '/_authenticated/admin/requests'
       path: '/requests'
       fullPath: '/admin/requests'
       preLoaderRoute: typeof AuthenticatedAdminRequestsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/diagnostics': {
+      id: '/_authenticated/admin/diagnostics'
+      path: '/diagnostics'
+      fullPath: '/admin/diagnostics'
+      preLoaderRoute: typeof AuthenticatedAdminDiagnosticsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/bulk': {
@@ -490,7 +530,9 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
+  AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
+  AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
   AuthenticatedAdminVerificationLimitsRoute: typeof AuthenticatedAdminVerificationLimitsRoute
@@ -499,7 +541,9 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
+  AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
+  AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
   AuthenticatedAdminVerificationLimitsRoute:
