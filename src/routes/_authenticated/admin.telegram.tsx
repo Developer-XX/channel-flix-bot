@@ -200,6 +200,13 @@ function TelegramAdmin() {
                 router.invalidate();
                 ingest.refetch();
               }}
+              onSaveAliasAndPromote={async (titleId, alias) => {
+                await addAlias({ data: { titleId, alias } });
+                const r = await rematch();
+                toast.success(`Saved alias · promoted ${r.promoted}`);
+                router.invalidate();
+                ingest.refetch();
+              }}
               onIgnore={async () => {
                 await ignore({ data: { ingestId: row.id } });
                 ingest.refetch();
@@ -217,13 +224,14 @@ function TelegramAdmin() {
 }
 
 function IngestCard({
-  row, expanded, onToggle, onUpdate, onPromote, onIgnore, search,
+  row, expanded, onToggle, onUpdate, onPromote, onSaveAliasAndPromote, onIgnore, search,
 }: {
   row: IngestRow;
   expanded: boolean;
   onToggle: () => void;
   onUpdate: (patch: Record<string, any>) => Promise<void>;
   onPromote: (titleId: string, overrides?: any) => Promise<void>;
+  onSaveAliasAndPromote: (titleId: string, alias: string) => Promise<void>;
   onIgnore: () => Promise<void>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
 }) {
