@@ -21,6 +21,11 @@ import {
   runBackfillNow,
   getBotState,
   searchMasterTitles,
+  listTelegramChannels,
+  verifyTelegramChannel,
+  saveTelegramChannel,
+  deleteTelegramChannel,
+  setBotAdminIds,
 } from "@/lib/telegram.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/telegram")({
