@@ -28,7 +28,15 @@ import {
   setBotAdminIds,
   addTitleAlias,
   rematchUnmatched,
+  getMatchingSettings,
+  updateMatchingSettings,
+  diagnoseIngest,
+  rematchOne,
+  bulkAssignTitle,
+  bulkAddAlias,
 } from "@/lib/telegram.functions";
+import { Switch } from "@/components/ui/switch";
+
 
 export const Route = createFileRoute("/_authenticated/admin/telegram")({
   component: TelegramAdmin,
