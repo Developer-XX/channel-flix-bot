@@ -127,7 +127,7 @@ async function runRematchJob(jobId: string, ids: string[], dryRun: boolean) {
         settings,
       );
       entry.titleId = match.matchedTitleId ?? null;
-      entry.score = typeof match.score === "number" ? match.score : null;
+      entry.score = typeof match.matchScore === "number" ? match.matchScore : null;
       if (entry.titleId) {
         const { data: t } = await supabaseAdmin
           .from("master_titles")
