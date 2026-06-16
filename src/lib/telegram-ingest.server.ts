@@ -1,0 +1,207 @@
+// Shared ingestion pipeline for Telegram messages.
+// Used by both the realtime webhook and the scheduled backfill job.
+//
+// Strict idempotency:
+//   1. Every Telegram update_id is recorded in `telegram_webhook_events`.
+//      A duplicate update_id short-circuits before any other write.
+//   2. The ingest row is upserted on (telegram_channel_id, telegram_message_id).
+//   3. A partial unique index on telegram_file_unique_id prevents the same
+//      file from being ingested twice even if it's reposted to another channel.
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseMedia, normalizeTitle, titleSimilarity } from "@/lib/telegram-parser";
+
+const MATCH_THRESHOLD = 0.55;
+
+export type TgMessage = {
+  message_id: number;
+  chat: { id: number; title?: string; username?: string };
+  caption?: string | null;
+  text?: string | null;
+  document?: any;
+  video?: any;
+  audio?: any;
+  animation?: any;
+  photo?: Array<{ file_id: string; file_unique_id: string; file_size?: number }>;
+};
+
+export type TgUpdate = {
+  update_id: number;
+  channel_post?: TgMessage;
+  edited_channel_post?: TgMessage;
+  message?: TgMessage;
+  edited_message?: TgMessage;
+};
+
+export type IngestOutcome =
+  | { ok: true; status: "duplicate"; reason: string }
+  | { ok: true; status: "ignored"; reason: string }
+  | { ok: true; status: "ingested"; ingestId: string; matched: boolean; matchScore: number | null };
+
+function extractFile(message: TgMessage) {
+  const doc = message.document ?? message.video ?? message.audio ?? message.animation ?? null;
+  if (doc) {
+    return {
+      file_id: doc.file_id ?? null,
+      file_unique_id: doc.file_unique_id ?? null,
+      file_name: doc.file_name ?? null,
+      mime_type: doc.mime_type ?? null,
+      file_size: typeof doc.file_size === "number" ? doc.file_size : null,
+      duration_seconds: typeof doc.duration === "number" ? doc.duration : null,
+    };
+  }
+  if (Array.isArray(message.photo) && message.photo.length) {
+    const largest = message.photo[message.photo.length - 1];
+    return {
+      file_id: largest.file_id ?? null,
+      file_unique_id: largest.file_unique_id ?? null,
+      file_name: null,
+      mime_type: "image/jpeg",
+      file_size: largest.file_size ?? null,
+      duration_seconds: null,
+    };
+  }
+  return {
+    file_id: null, file_unique_id: null, file_name: null,
+    mime_type: null, file_size: null, duration_seconds: null,
+  };
+}
+
+export async function ingestTelegramUpdate(
+  supabase: SupabaseClient<any, any, any>,
+  update: TgUpdate,
+  source: "webhook" | "backfill",
+): Promise<IngestOutcome> {
+  const message = update.channel_post ?? update.edited_channel_post ?? update.message ?? update.edited_message;
+  if (!message?.chat?.id || typeof update.update_id !== "number") {
+    return { ok: true, status: "ignored", reason: "no_message" };
+  }
+
+  // Step 1: strict idempotency on update_id.
+  const { error: evtErr } = await supabase
+    .from("telegram_webhook_events")
+    .insert({
+      update_id: update.update_id,
+      telegram_channel_id: message.chat.id,
+      telegram_message_id: message.message_id,
+      source,
+      status: "received",
+    });
+  if (evtErr) {
+    // 23505 = unique_violation -> already seen, drop silently.
+    if ((evtErr as any).code === "23505") {
+      return { ok: true, status: "duplicate", reason: "update_id_seen" };
+    }
+    throw evtErr;
+  }
+
+  const tgChannelId = message.chat.id;
+  const tgMessageId = message.message_id;
+  const caption = message.caption ?? message.text ?? null;
+  const file = extractFile(message);
+
+  if (!file.file_id) {
+    await supabase.from("telegram_webhook_events")
+      .update({ status: "ignored", error: "no_file" })
+      .eq("update_id", update.update_id);
+    return { ok: true, status: "ignored", reason: "no_file" };
+  }
+
+  // Optional channel registry
+  const { data: chanRow } = await supabase
+    .from("telegram_channels")
+    .select("id, is_active")
+    .eq("channel_id", tgChannelId)
+    .maybeSingle();
+  if (chanRow && chanRow.is_active === false) {
+    await supabase.from("telegram_webhook_events")
+      .update({ status: "ignored", error: "channel_inactive" })
+      .eq("update_id", update.update_id);
+    return { ok: true, status: "ignored", reason: "channel_inactive" };
+  }
+
+  const parsed = parseMedia(caption, file.file_name);
+
+  // Fuzzy match against published master_titles
+  let matchedTitleId: string | null = null;
+  let matchScore: number | null = null;
+  const normalized = normalizeTitle(parsed.title);
+  if (normalized) {
+    const head = normalized.split(" ").filter((w) => w.length >= 3)[0] ?? normalized.split(" ")[0] ?? "";
+    if (head) {
+      const { data: candidates } = await supabase
+        .from("master_titles")
+        .select("id, title, release_year, category")
+        .ilike("title", `%${head}%`)
+        .limit(25);
+      for (const c of candidates ?? []) {
+        const score = titleSimilarity(parsed.title, c.title);
+        const yearOk = !parsed.year || !c.release_year || Math.abs(parsed.year - c.release_year) <= 1;
+        const catOk = !parsed.category || c.category === parsed.category;
+        let adj = score;
+        if (!yearOk) adj *= 0.6;
+        if (!catOk) adj *= 0.85;
+        if (matchScore === null || adj > matchScore) {
+          matchScore = adj;
+          if (adj >= MATCH_THRESHOLD) matchedTitleId = c.id;
+        }
+      }
+    }
+  }
+
+  const status = matchedTitleId ? "matched" : "unmatched";
+
+  const { data: ingestRow, error: ingestErr } = await supabase
+    .from("telegram_ingest")
+    .upsert(
+      {
+        channel_id: chanRow?.id ?? null,
+        telegram_channel_id: tgChannelId,
+        telegram_message_id: tgMessageId,
+        telegram_file_id: file.file_id,
+        telegram_file_unique_id: file.file_unique_id,
+        file_name: file.file_name,
+        caption,
+        mime_type: file.mime_type,
+        file_size: file.file_size,
+        duration_seconds: file.duration_seconds,
+        parsed_title: parsed.title,
+        parsed_year: parsed.year,
+        parsed_season: parsed.season,
+        parsed_episode: parsed.episode,
+        parsed_quality: parsed.quality,
+        parsed_resolution: parsed.resolution,
+        parsed_codec: parsed.codec,
+        parsed_language: parsed.language,
+        parsed_category: parsed.category,
+        match_status: status,
+        matched_title_id: matchedTitleId,
+        match_score: matchScore,
+        update_id: update.update_id,
+        raw_update: update as any,
+      },
+      { onConflict: "telegram_channel_id,telegram_message_id" },
+    )
+    .select("id")
+    .single();
+
+  if (ingestErr) {
+    await supabase.from("telegram_webhook_events")
+      .update({ status: "error", error: ingestErr.message })
+      .eq("update_id", update.update_id);
+    throw ingestErr;
+  }
+
+  await supabase.from("telegram_webhook_events")
+    .update({ status: "processed" })
+    .eq("update_id", update.update_id);
+
+  if (chanRow?.id) {
+    await supabase
+      .from("telegram_channels")
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq("id", chanRow.id);
+  }
+
+  return { ok: true, status: "ingested", ingestId: ingestRow.id, matched: !!matchedTitleId, matchScore };
+}
