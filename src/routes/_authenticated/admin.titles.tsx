@@ -43,7 +43,8 @@ function TitlesAdmin() {
 
   const toggleFlag = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: "is_trending" | "is_featured"; value: boolean }) => {
-      const { error } = await supabase.from("master_titles").update({ [field]: value }).eq("id", id);
+      const update: Record<string, boolean> = { [field]: value };
+      const { error } = await supabase.from("master_titles").update(update as never).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-titles"] }),
