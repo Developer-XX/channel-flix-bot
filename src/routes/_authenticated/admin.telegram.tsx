@@ -34,6 +34,8 @@ import {
   rematchOne,
   bulkAssignTitle,
   bulkAddAlias,
+  forceRematchAndPublish,
+  rebuildWebsiteIndexes,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
