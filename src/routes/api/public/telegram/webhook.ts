@@ -50,7 +50,66 @@ async function handleCommand(
   switch (cmd) {
     case "/start":
     case "/help": {
+      // Account-link flow: /start link_<CODE> binds the chatter's Telegram
+      // user id to whichever website account generated the code.
+      const linkArg = args.trim();
+      if (cmd === "/start" && /^link_[A-Z0-9]{4,10}$/i.test(linkArg)) {
+        const code = linkArg.slice(5).toUpperCase();
+        const { data: row } = await supabaseAdmin
+          .from("telegram_user_links")
+          .select("user_id, link_code_expires_at")
+          .eq("link_code", code)
+          .maybeSingle();
+        if (!row) {
+          await sendMessage(chatId, "❌ This link code is invalid. Open the website, click Download, and try again.");
+          return { handled: true };
+        }
+        if (row.link_code_expires_at && new Date(row.link_code_expires_at) < new Date()) {
+          await sendMessage(chatId, "⌛ That code has expired. Please request a fresh one on the website.");
+          return { handled: true };
+        }
+        await supabaseAdmin.from("telegram_user_links").update({
+          telegram_user_id: fromId ?? null,
+          telegram_username: msg.from?.username ?? null,
+          telegram_first_name: msg.from?.first_name ?? null,
+          link_code: null,
+          link_code_expires_at: null,
+          linked_at: new Date().toISOString(),
+        }).eq("user_id", row.user_id);
+        await sendMessage(chatId, `✅ Account linked! You can now click <b>Download</b> on the website and I'll send the file here.`);
+        return { handled: true };
+      }
       await sendMessage(chatId, HELP_TEXT);
+      return { handled: true };
+    }
+    case "/whoami": {
+      const { data: link } = await supabaseAdmin
+        .from("telegram_user_links")
+        .select("user_id, linked_at")
+        .eq("telegram_user_id", fromId ?? 0)
+        .maybeSingle();
+      await sendMessage(
+        chatId,
+        link?.user_id
+          ? `🔗 Linked to website user <code>${link.user_id}</code>\nSince: ${link.linked_at ?? "?"}`
+          : "Not linked. Open the website, click Download, then come back here with the link code.",
+      );
+      return { handled: true };
+    }
+    case "/unlink": {
+      const { data: link } = await supabaseAdmin
+        .from("telegram_user_links")
+        .select("user_id")
+        .eq("telegram_user_id", fromId ?? 0)
+        .maybeSingle();
+      if (!link) {
+        await sendMessage(chatId, "You weren't linked to any account.");
+        return { handled: true };
+      }
+      await supabaseAdmin.from("telegram_user_links").update({
+        telegram_user_id: null, telegram_username: null, telegram_first_name: null, linked_at: null,
+      }).eq("user_id", link.user_id);
+      await sendMessage(chatId, "🔓 Unlinked. You won't receive downloads here until you re-link from the website.");
       return { handled: true };
     }
     case "/id": {
