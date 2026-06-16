@@ -1,6 +1,55 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+type AuditInsert = {
+  user_id: string | null;
+  email: string | null;
+  event: string;
+  code: string;
+  status: "ok" | "warn" | "fail";
+  path: string | null;
+  detail: string | null;
+  jwt_exp_in: number | null;
+  has_admin_role: boolean | null;
+};
+
+async function writeAudit(rows: AuditInsert[]) {
+  if (!rows.length) return;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await (supabaseAdmin as any).from("access_audit_log").insert(rows);
+  } catch {
+    // best-effort logging; never block the request
+  }
+}
+
+/** Classifies a Supabase error into an RLS / role error code. */
+export function classifySupabaseError(err: { message?: string; code?: string; details?: string; hint?: string } | null | undefined): { code: string; reason: string } {
+  if (!err) return { code: "OK", reason: "no error" };
+  const msg = (err.message ?? "").toLowerCase();
+  const pg = err.code ?? "";
+  if (pg === "42501" || msg.includes("permission denied")) {
+    return { code: "RLS_PERMISSION_DENIED", reason: `Postgres 42501 — GRANT missing or RLS policy USING clause rejected the row. ${err.hint ?? ""}`.trim() };
+  }
+  if (pg === "42P17" || msg.includes("infinite recursion")) {
+    return { code: "RLS_POLICY_RECURSION", reason: "Policy references the same table — use a SECURITY DEFINER helper like has_role()." };
+  }
+  if (msg.includes("jwt expired") || msg.includes("jwt is expired")) {
+    return { code: "JWT_EXPIRED", reason: "Bearer token expired before the request reached PostgREST." };
+  }
+  if (msg.includes("invalid jwt") || msg.includes("bad jwt")) {
+    return { code: "JWT_INVALID", reason: "Bearer token failed signature/format validation." };
+  }
+  if (msg.includes("row-level security") || msg.includes("rls")) {
+    return { code: "RLS_ROW_HIDDEN", reason: `RLS USING clause returned false for this row. ${err.details ?? ""}`.trim() };
+  }
+  if (msg.includes("expected 3 parts in jwt")) {
+    return { code: "API_KEY_NOT_JWT", reason: "Server used an sb_secret_* key on a Data API endpoint that expects a JWT-format key." };
+  }
+  return { code: "UNKNOWN_DB_ERROR", reason: err.message ?? "unknown" };
+}
+
+
 type Check = {
   code: string;
   status: "ok" | "warn" | "fail";
