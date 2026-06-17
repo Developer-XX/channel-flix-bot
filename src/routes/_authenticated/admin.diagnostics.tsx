@@ -676,3 +676,99 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Shortener (AdrinoLinks / NanoLinks) rolling health
+// ---------------------------------------------------------------------------
+
+function ShortenerHealthPanel() {
+  const get = useServerFn(getShortenerHealth);
+  const runCheck = useServerFn(runIntegrationsHealth);
+  const q = useQuery({
+    queryKey: ["shortener-health"],
+    queryFn: () => get({ data: { limit: 50 } }),
+    retry: false,
+    refetchInterval: 30_000,
+  });
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Gauge className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Shortener health (rolling)</h2>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          onClick={async () => {
+            await runCheck();
+            q.refetch();
+          }}
+          disabled={q.isFetching}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
+          <span className="hidden sm:inline">Run check now</span>
+        </Button>
+      </div>
+
+      {q.error && <p className="text-xs text-destructive">{(q.error as Error).message}</p>}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {(q.data ?? []).map((p) => {
+          const pct = Math.round(p.successRate * 100);
+          const tone =
+            p.status === "ok" ? "text-emerald-500" :
+            p.status === "warn" ? "text-amber-500" :
+            p.status === "fail" ? "text-red-500" : "text-muted-foreground";
+          return (
+            <div key={p.provider} className="rounded-md border border-border/60 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="font-mono text-sm font-semibold capitalize">{p.provider}</div>
+                <span className={`text-[10px] uppercase tracking-wide ${tone}`}>{p.status}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div>
+                  <div className="text-muted-foreground">Success</div>
+                  <div className={`font-mono text-sm font-semibold ${tone}`}>{p.samples ? `${pct}%` : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Avg latency</div>
+                  <div className="font-mono text-sm">{p.samples ? `${p.avgLatencyMs} ms` : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Samples</div>
+                  <div className="font-mono text-sm">{p.samples}</div>
+                </div>
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                Last check: {p.lastCheckedAt ? new Date(p.lastCheckedAt).toLocaleString() : "never"}
+              </div>
+              {p.lastError && (
+                <div className="text-[11px] text-red-500 break-words">
+                  Last error: <span className="font-mono">{p.lastError}</span>
+                </div>
+              )}
+              {p.recent.length > 0 && (
+                <div className="flex gap-0.5 mt-1">
+                  {p.recent.slice().reverse().map((r, i) => (
+                    <div
+                      key={i}
+                      title={`${new Date(r.checked_at).toLocaleTimeString()} · ${r.ok ? "ok" : r.error ?? "fail"} · ${r.latency_ms ?? 0}ms`}
+                      className={`h-3 flex-1 rounded-sm ${r.ok ? "bg-emerald-500/70" : "bg-red-500/70"}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {(!q.data || q.data.length === 0) && !q.isLoading && (
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            No shortener health samples yet. Click "Run check now" to seed.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
