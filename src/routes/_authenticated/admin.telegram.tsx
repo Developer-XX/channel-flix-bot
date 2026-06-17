@@ -269,14 +269,76 @@ function TelegramAdmin() {
               ingest.refetch();
               router.invalidate();
             }}
+            onDeleteSelected={async () => {
+              const ids = Array.from(selected);
+              if (!confirm(`Permanently delete ${ids.length} file(s) and any media they promoted?`)) return;
+              try {
+                const r = await delRows({ data: { ingestIds: ids } });
+                toast.success(`Deleted ${r.deletedIngest} ingest · ${r.deletedMedia} media`);
+                setSelected(new Set());
+                ingest.refetch();
+                router.invalidate();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Delete failed");
+              }
+            }}
           />
         )}
+
+        {/* Pagination + bulk toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              aria-label="Select all on this page"
+              checked={allOnPageSelected}
+              onChange={toggleSelectPage}
+            />
+            <span className="text-muted-foreground">
+              {totalRows} total · page {currentPage}/{totalPages}
+            </span>
+            <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+              <SelectTrigger className="h-8 w-[90px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}/page</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+            <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={async () => {
+                const phrase = prompt('Type "DELETE ALL FILES" to wipe every ingest row and media file.');
+                if (phrase !== "DELETE ALL FILES") {
+                  toast.message("Cancelled — phrase did not match.");
+                  return;
+                }
+                try {
+                  const r = await delAll({ data: { confirm: "DELETE ALL FILES" } });
+                  toast.success(`Wiped ${r.deletedIngest} ingest · ${r.deletedMedia} media`);
+                  setSelected(new Set());
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Delete-all failed");
+                }
+              }}
+            >
+              Delete ALL files
+            </Button>
+          </div>
+        </div>
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {ingest.error && <p className="text-sm text-destructive">{(ingest.error as Error).message}</p>}
 
         <div className="space-y-2">
-          {(ingest.data ?? []).map((row) => (
+          {pageRows.map((row) => (
             <IngestCard
               key={row.id}
               row={row}
