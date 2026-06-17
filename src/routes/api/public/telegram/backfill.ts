@@ -7,12 +7,11 @@ export const Route = createFileRoute("/api/public/telegram/backfill")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expectedKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-        const apiKey =
-          request.headers.get("apikey") ?? request.headers.get("x-api-key") ?? "";
-        if (!expectedKey || apiKey !== expectedKey) {
-          console.warn("[telegram-backfill] reject: invalid apikey");
-          return new Response("Unauthorized", { status: 401 });
+        const { checkCronAuth } = await import("@/lib/cron-auth.server");
+        const auth = checkCronAuth(request);
+        if (!auth.ok) {
+          console.warn("[telegram-backfill] reject: invalid cron secret");
+          return auth.response;
         }
         const { runTelegramBackfill } = await import("@/lib/telegram-backfill.server");
         const result = await runTelegramBackfill();
