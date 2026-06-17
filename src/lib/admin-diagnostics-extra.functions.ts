@@ -110,7 +110,7 @@ export const getChannelMatchBreakdown24h = createServerFn({ method: "GET" })
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     const [channelsRes, ingestRes, demotedRes] = await Promise.all([
-      supabaseAdmin.from("telegram_channels").select("id, title, username"),
+      supabaseAdmin.from("telegram_channels").select("id, name, username"),
       supabaseAdmin
         .from("telegram_ingest")
         .select("channel_id, match_status")
