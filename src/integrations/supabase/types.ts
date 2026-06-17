@@ -296,6 +296,13 @@ export type Database = {
             referencedRelation: "media_files"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "delivery_attempts_media_file_id_fkey"
+            columns: ["media_file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files_admin"
+            referencedColumns: ["id"]
+          },
         ]
       }
       download_logs: {
@@ -356,6 +363,13 @@ export type Database = {
             columns: ["file_id"]
             isOneToOne: false
             referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "download_logs_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files_admin"
             referencedColumns: ["id"]
           },
           {
@@ -449,6 +463,13 @@ export type Database = {
             columns: ["media_file_id"]
             isOneToOne: true
             referencedRelation: "media_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "idx_latest_releases_media_file_id_fkey"
+            columns: ["media_file_id"]
+            isOneToOne: true
+            referencedRelation: "media_files_admin"
             referencedColumns: ["id"]
           },
           {
@@ -1210,6 +1231,13 @@ export type Database = {
             referencedRelation: "media_files"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "telegram_ingest_promoted_media_file_id_fkey"
+            columns: ["promoted_media_file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files_admin"
+            referencedColumns: ["id"]
+          },
         ]
       }
       telegram_user_links: {
@@ -1439,6 +1467,13 @@ export type Database = {
             referencedRelation: "media_files"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "verification_tokens_media_file_id_fkey"
+            columns: ["media_file_id"]
+            isOneToOne: false
+            referencedRelation: "media_files_admin"
+            referencedColumns: ["id"]
+          },
         ]
       }
       web_vitals_events: {
@@ -1494,6 +1529,97 @@ export type Database = {
       }
     }
     Views: {
+      media_files_admin: {
+        Row: {
+          caption: string | null
+          channel_id: string | null
+          created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
+          duration_seconds: number | null
+          episode_id: string | null
+          file_name: string | null
+          file_size: number | null
+          id: string | null
+          is_active: boolean | null
+          language: string | null
+          mime_type: string | null
+          quality: string | null
+          resolution: string | null
+          telegram_file_id: string | null
+          telegram_message_id: number | null
+          title_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          caption?: string | null
+          channel_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
+          duration_seconds?: number | null
+          episode_id?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          mime_type?: string | null
+          quality?: string | null
+          resolution?: string | null
+          telegram_file_id?: string | null
+          telegram_message_id?: number | null
+          title_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          caption?: string | null
+          channel_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
+          duration_seconds?: number | null
+          episode_id?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          mime_type?: string | null
+          quality?: string | null
+          resolution?: string | null
+          telegram_file_id?: string | null
+          telegram_message_id?: number | null
+          title_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_files_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_files_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_files_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "master_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       web_vitals_recent_summary: {
         Row: {
           avg_value: number | null
