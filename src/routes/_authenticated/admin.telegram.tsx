@@ -85,11 +85,30 @@ function TelegramAdmin() {
       return next;
     });
   };
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const ingest = useQuery({
     queryKey: ["tg-ingest", statusFilter],
     queryFn: () => list({ data: { status: statusFilter } }),
   });
+  const totalRows = ingest.data?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = useMemo(
+    () => (ingest.data ?? []).slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [ingest.data, currentPage, pageSize],
+  );
+  const pageIds = useMemo(() => pageRows.map((r) => r.id), [pageRows]);
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleSelectPage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
   const hook = useQuery({ queryKey: ["tg-webhook-info"], queryFn: () => getHook() });
   const state = useQuery({ queryKey: ["tg-bot-state"], queryFn: () => botState() });
 
