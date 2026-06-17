@@ -62,11 +62,16 @@ function DiagnosticsPage() {
 
       <ShortenerHealthPanel />
 
+      <IngestionDedupPanel />
+
       <VerificationRedirectPanel />
 
       <DestructiveActionsPanel />
 
+      <SettingsAuditPanel />
+
       <AdminAuditPanel />
+
 
       {q.isLoading && <div className="text-sm text-muted-foreground">Running checks…</div>}
       {q.error && (
