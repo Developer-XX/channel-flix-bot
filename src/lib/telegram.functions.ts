@@ -320,7 +320,7 @@ export const restoreIngestRows = createServerFn({ method: "POST" })
     if (mediaIds.length) {
       await supabaseAdmin
         .from("media_files")
-        .update({ deleted_at: null, deleted_by: null, deleted_reason: null } as never)
+        .update({ deleted_at: null, deleted_by: null, deleted_reason: null, is_active: true } as never)
         .in("id", mediaIds);
     }
     if (restorableIds.length) {
