@@ -144,6 +144,13 @@ function TitlesAdmin() {
       </div>
 
       {adding && <AddTitleDialog onClose={() => setAdding(false)} onCreated={() => { qc.invalidateQueries({ queryKey: ["admin-titles"] }); setAdding(false); }} />}
+      {editingId && (
+        <EditTitleDialog
+          id={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ["admin-titles"] }); setEditingId(null); }}
+        />
+      )}
     </div>
   );
 }
