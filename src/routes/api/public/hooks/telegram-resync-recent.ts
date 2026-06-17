@@ -11,11 +11,9 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? "";
-        const provided = request.headers.get("apikey") ?? "";
-        if (!expected || provided !== expected) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const { checkCronAuth } = await import("@/lib/cron-auth.server");
+        const auth = checkCronAuth(request);
+        if (!auth.ok) return auth.response;
 
         const hoursStr = new URL(request.url).searchParams.get("hours");
         const hours = Math.max(1, Math.min(168, Number(hoursStr) || 24));
