@@ -68,7 +68,7 @@ async function handleCommand(
   const fromId: number | undefined = msg.from?.id;
 
   // Admin-only commands (operational visibility / broadcast).
-  if (cmd === "/status" || cmd === "/channels" || cmd === "/broadcast") {
+  if (cmd === "/status" || cmd === "/broadcast") {
     if (!(await isBotAdmin(supabaseAdmin, fromId))) {
       await sendMessage(
         chatId,
