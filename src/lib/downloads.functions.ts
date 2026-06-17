@@ -153,6 +153,22 @@ export const requestDownload = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { getVerificationState } = await import("@/lib/verification.server");
+    const { getRequestHeader } = await import("@tanstack/react-start/server");
+    const auditFailure = async (reason: string, metadata: Record<string, unknown> = {}) => {
+      try {
+        await supabaseAdmin.from("admin_audit_log").insert({
+          actor_user_id: context.userId,
+          actor_email: (context.claims as { email?: string } | null)?.email ?? null,
+          action: "download.failed",
+          status: "failed",
+          ip: getRequestHeader("x-forwarded-for") ?? getRequestHeader("cf-connecting-ip") ?? null,
+          user_agent: getRequestHeader("user-agent") ?? null,
+          metadata: { mediaFileId: data.mediaFileId, reason, ...metadata },
+        } as never);
+      } catch (e) {
+        console.warn("[download-audit] insert failed", (e as Error).message);
+      }
+    };
     const {
       makeIdempotencyKey,
       getBotUserId,
@@ -164,6 +180,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     // 0. Verification gate (24h)
     const ver = await getVerificationState(supabaseAdmin, context.userId);
     if (!ver.verified) {
+      await auditFailure("needs_verification", { expiresAt: ver.expiresAt });
       return {
         ok: false as const,
         reason: "needs_verification" as const,
@@ -178,7 +195,10 @@ export const requestDownload = createServerFn({ method: "POST" })
       .eq("id", data.mediaFileId)
       .maybeSingle();
     if (fileErr) throw fileErr;
-    if (!file) return { ok: false as const, reason: "file_not_found" as const };
+    if (!file) {
+      await auditFailure("file_not_found");
+      return { ok: false as const, reason: "file_not_found" as const };
+    }
     const missing: string[] = [];
     if (!file.telegram_message_id) missing.push("telegram_message_id");
     if (!file.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
@@ -186,6 +206,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       missing.push("telegram_channels.channel_id (channel row missing Telegram chat id)");
     }
     if (missing.length) {
+      await auditFailure("source_missing", { missing, file_name: (file as any).file_name });
       return {
         ok: false as const,
         reason: "source_missing" as const,
@@ -202,6 +223,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .maybeSingle();
     if (!link?.telegram_user_id) {
+      await auditFailure("not_linked");
       return { ok: false as const, reason: "not_linked" as const };
     }
 
@@ -259,10 +281,13 @@ export const requestDownload = createServerFn({ method: "POST" })
 
     if (result.ok) return { ok: true as const, delivered: true, messageId: result.messageId };
     if (result.kind === "blocked" || result.kind === "not_started") {
+      await auditFailure("bot_blocked", { kind: result.kind });
       return { ok: false as const, reason: "bot_blocked" as const };
     }
     if (result.kind === "not_found") {
+      await auditFailure("source_missing", { kind: "not_found" });
       return { ok: false as const, reason: "source_missing" as const };
     }
+    await auditFailure("delivery_failed", { kind: result.kind, error: result.error.slice(0, 300) });
     return { ok: false as const, reason: "delivery_failed" as const, error: result.error };
   });

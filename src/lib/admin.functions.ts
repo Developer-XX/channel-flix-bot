@@ -108,6 +108,100 @@ export const deleteAdminTitle = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const UpdateTitleSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string().min(1).max(220).optional(),
+  title: z.string().min(1).max(300).optional(),
+  original_title: z.string().nullable().optional(),
+  category: CategorySchema.optional(),
+  status: StatusSchema.optional(),
+  overview: z.string().nullable().optional(),
+  poster_url: z.string().nullable().optional(),
+  backdrop_url: z.string().nullable().optional(),
+  trailer_url: z.string().nullable().optional(),
+  release_year: z.number().int().nullable().optional(),
+  release_date: z.string().nullable().optional(),
+  runtime_minutes: z.number().int().nullable().optional(),
+  rating: z.number().nullable().optional(),
+  language: z.string().nullable().optional(),
+  genres: z.array(z.string()).nullable().optional(),
+  cast_names: z.array(z.string()).nullable().optional(),
+  tmdb_id: z.number().int().nullable().optional(),
+  imdb_id: z.string().nullable().optional(),
+  is_featured: z.boolean().optional(),
+  is_trending: z.boolean().optional(),
+});
+
+export const updateAdminTitle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => UpdateTitleSchema.parse(input))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { id, ...patch } = data;
+    const cleaned: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) if (v !== undefined) cleaned[k] = v;
+    if (Object.keys(cleaned).length === 0) return { ok: true, changed: 0 };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Verify slug uniqueness if changing
+    if (typeof cleaned.slug === "string") {
+      const { data: clash } = await supabaseAdmin
+        .from("master_titles")
+        .select("id")
+        .eq("slug", cleaned.slug as string)
+        .neq("id", id)
+        .maybeSingle();
+      if (clash) throw new Error(`Slug "${cleaned.slug}" is already used by another title.`);
+    }
+
+    // Read before snapshot for audit diff
+    const { data: before } = await supabaseAdmin
+      .from("master_titles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (!before) throw new Error("Title not found");
+
+    const { data: after, error } = await supabaseAdmin
+      .from("master_titles")
+      .update(cleaned as TablesUpdate<"master_titles">)
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    // Compute small diff for audit log
+    const diff: Record<string, { from: unknown; to: unknown }> = {};
+    for (const k of Object.keys(cleaned)) {
+      if ((before as any)[k] !== (after as any)[k]) {
+        diff[k] = { from: (before as any)[k], to: (after as any)[k] };
+      }
+    }
+    try {
+      const { getRequestHeader } = await import("@tanstack/react-start/server");
+      await supabaseAdmin.from("admin_audit_log").insert({
+        actor_user_id: context.userId,
+        actor_email: (context.claims as { email?: string } | null)?.email ?? null,
+        action: "title.updated",
+        status: "success",
+        ip: getRequestHeader("x-forwarded-for") ?? getRequestHeader("cf-connecting-ip") ?? null,
+        user_agent: getRequestHeader("user-agent") ?? null,
+        metadata: { id, slug: after.slug, title: after.title, diff },
+      } as never);
+    } catch (e) {
+      console.warn("[admin-audit] title.updated failed", (e as Error).message);
+    }
+
+    // Bump website indexes so the edit shows up
+    try {
+      const { bumpCacheVersion } = await import("@/lib/indexes.server");
+      await bumpCacheVersion(supabaseAdmin);
+    } catch {}
+
+    return { ok: true, changed: Object.keys(diff).length, after };
+  });
+
 export const createAdminTitle = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({
