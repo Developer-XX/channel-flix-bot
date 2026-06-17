@@ -1234,6 +1234,8 @@ export const getTitleDebug = createServerFn({ method: "GET" })
       title,
       settings,
       files: files ?? [],
+      filesAudit,
+
       aliases: aliases ?? [],
       candidates: scored,
       filtersSummary: {
