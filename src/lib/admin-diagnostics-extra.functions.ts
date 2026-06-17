@@ -150,7 +150,7 @@ export const getChannelMatchBreakdown24h = createServerFn({ method: "GET" })
       const meta = channels.find((c: any) => c.id === cid);
       return {
         channelId: cid,
-        label: meta ? (meta.title || meta.username || cid) : "(unknown)",
+        label: meta ? (meta.name || meta.username || cid) : "(unknown)",
         username: (meta as any)?.username ?? null,
         ...b,
       };
