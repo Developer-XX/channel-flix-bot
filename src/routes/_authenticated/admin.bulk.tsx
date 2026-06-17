@@ -101,6 +101,19 @@ function BulkRematchPage() {
       setRetrying(false);
     }
   }
+  async function onDeleteJobs(ids: string[], label: string) {
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} job${ids.length === 1 ? "" : "s"} (${label})? This cannot be undone.`)) return;
+    try {
+      const r = await deleteFn({ data: { jobIds: ids } });
+      toast.success(`Deleted ${r.deleted} job(s)${r.skipped ? ` · ${r.skipped} skipped (still running)` : ""}`);
+      if (ids.includes(jobId ?? "")) setJobId(null);
+      qc.invalidateQueries({ queryKey: ["bulk-job"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete");
+    }
+  }
+
 
   function onExportCsv() {
     if (!current) return;
