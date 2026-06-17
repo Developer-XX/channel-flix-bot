@@ -23,7 +23,10 @@ function BulkRematchPage() {
   const startFn = useServerFn(startBulkRematch);
   const statusFn = useServerFn(getBulkJobStatus);
   const retryFn = useServerFn(retryFailedFromJob);
+  const deleteFn = useServerFn(deleteBulkJobs);
+  const qc = useQueryClient();
   const [days, setDays] = useState(7);
+
   const [dryRun, setDryRun] = useState(false);
   const [cats, setCats] = useState<Set<Cat>>(new Set());
   const [jobId, setJobId] = useState<string | null>(null);
