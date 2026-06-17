@@ -179,8 +179,20 @@ export const requestDownload = createServerFn({ method: "POST" })
       .maybeSingle();
     if (fileErr) throw fileErr;
     if (!file) return { ok: false as const, reason: "file_not_found" as const };
-    if (!file.telegram_message_id || !(file as any).telegram_channels?.channel_id) {
-      return { ok: false as const, reason: "source_missing" as const };
+    const missing: string[] = [];
+    if (!file.telegram_message_id) missing.push("telegram_message_id");
+    if (!file.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
+    if (file.channel_id && !(file as any).telegram_channels?.channel_id) {
+      missing.push("telegram_channels.channel_id (channel row missing Telegram chat id)");
+    }
+    if (missing.length) {
+      return {
+        ok: false as const,
+        reason: "source_missing" as const,
+        detail: `Missing source field(s): ${missing.join(", ")}. File id: ${file.id}.`,
+        missing,
+        mediaFileId: file.id,
+      };
     }
 
     // 2. Resolve linked Telegram id
