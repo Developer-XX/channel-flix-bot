@@ -225,7 +225,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     const { result, history } = await deliverWithRetry({
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
-      messageId: file.telegram_message_id,
+      messageId: file.telegram_message_id!,
       caption: `📥 ${file.file_name ?? "Your file"}\nDelivered by StreamVault`,
     });
 
