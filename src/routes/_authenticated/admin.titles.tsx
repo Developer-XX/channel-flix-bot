@@ -628,6 +628,13 @@ function EditTitleDialog({ id, onClose, onSaved }: { id: string; onClose: () => 
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const Field = (props: { label: string; children: React.ReactNode; full?: boolean }) => (
+    <label className={`block ${props.full ? "sm:col-span-2" : ""}`}>
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{props.label}</span>
+      <div className="mt-1">{props.children}</div>
+    </label>
+  );
+
 
   // hydrate once when data arrives
   if (titleQ.data && !form) {
