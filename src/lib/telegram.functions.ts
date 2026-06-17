@@ -1,27 +1,107 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireAdminAccess } from "@/lib/admin-auth";
 
 const CATEGORY = z.enum(["movie", "series", "anime", "cartoon", "kdrama", "documentary"]);
 
+// Soft-delete retention. After this window, hard-delete runs lazily on list calls.
+const SOFT_DELETE_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+function reqMeta() {
+  return {
+    ip: getRequestHeader("x-forwarded-for") ?? getRequestHeader("cf-connecting-ip") ?? null,
+    ua: getRequestHeader("user-agent") ?? null,
+  };
+}
+
+async function writeAdminAudit(
+  ctx: { userId: string; claims: any },
+  action: string,
+  status: "success" | "failed" | "rejected" | "pending",
+  metadata: Record<string, unknown> = {},
+) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const meta = reqMeta();
+    await supabaseAdmin.from("admin_audit_log").insert({
+      actor_user_id: ctx.userId,
+      actor_email: (ctx.claims as { email?: string } | null)?.email ?? null,
+      action,
+      status,
+      ip: meta.ip,
+      user_agent: meta.ua,
+      metadata,
+    } as never);
+  } catch (e) {
+    console.warn("[admin-audit] insert failed", (e as Error).message);
+  }
+}
+
+// Lazy hard-delete of soft-deleted rows whose retention window has expired.
+async function purgeExpiredSoftDeletes() {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const cutoff = new Date(Date.now() - SOFT_DELETE_RETENTION_MS).toISOString();
+    await supabaseAdmin.from("media_files").delete().lt("deleted_at", cutoff).not("deleted_at", "is", null);
+    await supabaseAdmin.from("telegram_ingest").delete().lt("deleted_at", cutoff).not("deleted_at", "is", null);
+  } catch (e) {
+    console.warn("[purgeExpiredSoftDeletes] failed", (e as Error).message);
+  }
+}
+
+const IngestFiltersSchema = z.object({
+  status: z.enum(["pending", "matched", "unmatched", "ignored", "all"]).optional(),
+  trash: z.boolean().optional(),
+  q: z.string().max(200).optional(),
+  channelId: z.string().uuid().optional(),
+  quality: z.string().max(40).optional(),
+  language: z.string().max(100).optional(),
+  season: z.number().int().min(0).max(99).nullable().optional(),
+  episode: z.number().int().min(0).max(999).nullable().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+});
+
 export const listTelegramIngest = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { status?: "pending" | "matched" | "unmatched" | "ignored" | "all" }) => d)
+  .inputValidator((d: unknown) => IngestFiltersSchema.parse(d ?? {}))
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
+    await purgeExpiredSoftDeletes();
     let q = context.supabase
       .from("telegram_ingest")
       .select(
-        "id, telegram_channel_id, telegram_message_id, file_name, caption, mime_type, file_size, duration_seconds, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_codec, parsed_language, parsed_category, match_status, matched_title_id, match_score, promoted_media_file_id, last_error, created_at",
+        "id, channel_id, telegram_channel_id, telegram_message_id, file_name, caption, mime_type, file_size, duration_seconds, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_codec, parsed_language, parsed_category, match_status, matched_title_id, match_score, promoted_media_file_id, last_error, created_at, deleted_at",
       )
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(500);
+    if (data.trash) {
+      const cutoff = new Date(Date.now() - SOFT_DELETE_RETENTION_MS).toISOString();
+      q = q.not("deleted_at", "is", null).gte("deleted_at", cutoff);
+    } else {
+      q = q.is("deleted_at", null);
+    }
     if (data.status && data.status !== "all") q = q.eq("match_status", data.status);
+    if (data.channelId) q = q.eq("channel_id", data.channelId);
+    if (data.quality) q = q.ilike("parsed_quality", `%${data.quality}%`);
+    if (data.language) q = q.ilike("parsed_language", `%${data.language}%`);
+    if (data.season != null) q = q.eq("parsed_season", data.season);
+    if (data.episode != null) q = q.eq("parsed_episode", data.episode);
+    if (data.dateFrom) q = q.gte("created_at", data.dateFrom);
+    if (data.dateTo) q = q.lte("created_at", data.dateTo);
+    if (data.q && data.q.trim()) {
+      const term = data.q.trim().replace(/[%_]/g, "");
+      q = q.or(
+        `file_name.ilike.%${term}%,parsed_title.ilike.%${term}%,caption.ilike.%${term}%`,
+      );
+    }
     const { data: rows, error } = await q;
     if (error) throw error;
     return rows ?? [];
   });
+
 
 // Edit parsed metadata corrections before promotion.
 export const updateIngest = createServerFn({ method: "POST" })
