@@ -2,12 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2 } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
 import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
-import { runIntegrationsHealth } from "@/lib/integrations-health.functions";
+import { runIntegrationsHealth, getShortenerHealth } from "@/lib/integrations-health.functions";
 import { getVerificationDiagnostics } from "@/lib/verification-diagnostics.functions";
 import {
   requestDatabaseWipe,
@@ -57,6 +57,8 @@ function DiagnosticsPage() {
       <WebVitalsPanel data={vitalsQ.data} loading={vitalsQ.isLoading} error={vitalsQ.error as Error | null} />
 
       <IntegrationsHealthPanel />
+
+      <ShortenerHealthPanel />
 
       <VerificationRedirectPanel />
 
