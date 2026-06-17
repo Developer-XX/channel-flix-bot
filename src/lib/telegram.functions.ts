@@ -247,7 +247,7 @@ export const deleteIngestRows = createServerFn({ method: "POST" })
     if (mediaIds.length) {
       await supabaseAdmin
         .from("media_files")
-        .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: data.reason ?? "admin_bulk_delete" } as never)
+        .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: data.reason ?? "admin_bulk_delete", is_active: false } as never)
         .in("id", mediaIds);
     }
     const { error } = await supabaseAdmin
