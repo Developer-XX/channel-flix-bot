@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/admin/titles")({
 function TitlesAdmin() {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const list = useQuery({
     queryKey: ["admin-titles"],
