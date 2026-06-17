@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2, Search, Star, X } from "lucide-react";
+import { Plus, Trash2, Search, Star, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { tmdbSearch, tmdbDetails, tmdbFindByImdb } from "@/lib/tmdb.functions";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, type CategorySlug } from "@/lib/categories";
-import { createAdminTitle, deleteAdminTitle, listAdminTitles, updateAdminTitleFlag, updateAdminTitleStatus } from "@/lib/admin.functions";
+import { createAdminTitle, deleteAdminTitle, listAdminTitles, updateAdminTitleFlag, updateAdminTitleStatus, getAdminTitle, updateAdminTitle } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/titles")({
   component: TitlesAdmin,
@@ -16,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/admin/titles")({
 function TitlesAdmin() {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const list = useQuery({
     queryKey: ["admin-titles"],
@@ -119,13 +120,22 @@ function TitlesAdmin() {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => { if (confirm(`Delete ${t.title}?`)) deleteTitle.mutate(t.id); }}
-                    className="text-muted-foreground hover:text-destructive p-1"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingId(t.id)}
+                      className="text-muted-foreground hover:text-foreground p-1"
+                      aria-label="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`Delete ${t.title}?`)) deleteTitle.mutate(t.id); }}
+                      className="text-muted-foreground hover:text-destructive p-1"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -134,6 +144,13 @@ function TitlesAdmin() {
       </div>
 
       {adding && <AddTitleDialog onClose={() => setAdding(false)} onCreated={() => { qc.invalidateQueries({ queryKey: ["admin-titles"] }); setAdding(false); }} />}
+      {editingId && (
+        <EditTitleDialog
+          id={editingId}
+          onClose={() => setEditingId(null)}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ["admin-titles"] }); setEditingId(null); }}
+        />
+      )}
     </div>
   );
 }
@@ -603,5 +620,171 @@ function ManualEntryPane({ onCreated }: { onCreated: () => void }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+function EditTitleDialog({ id, onClose, onSaved }: { id: string; onClose: () => void; onSaved: () => void }) {
+  const titleQ = useQuery({ queryKey: ["admin-title", id], queryFn: () => getAdminTitle({ data: { id } }) });
+  const [form, setForm] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const Field = (props: { label: string; children: React.ReactNode; full?: boolean }) => (
+    <label className={`block ${props.full ? "sm:col-span-2" : ""}`}>
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{props.label}</span>
+      <div className="mt-1">{props.children}</div>
+    </label>
+  );
+
+
+  // hydrate once when data arrives
+  if (titleQ.data && !form) {
+    const t: any = titleQ.data;
+    setForm({
+      slug: t.slug ?? "",
+      title: t.title ?? "",
+      original_title: t.original_title ?? "",
+      category: t.category ?? "movie",
+      status: t.status ?? "draft",
+      release_year: t.release_year ?? "",
+      release_date: t.release_date ?? "",
+      runtime_minutes: t.runtime_minutes ?? "",
+      rating: t.rating ?? "",
+      language: t.language ?? "",
+      poster_url: t.poster_url ?? "",
+      backdrop_url: t.backdrop_url ?? "",
+      trailer_url: t.trailer_url ?? "",
+      genres: Array.isArray(t.genres) ? t.genres.join(", ") : "",
+      cast_names: Array.isArray(t.cast_names) ? t.cast_names.join(", ") : "",
+      overview: t.overview ?? "",
+      tmdb_id: t.tmdb_id ?? "",
+      imdb_id: t.imdb_id ?? "",
+    });
+  }
+
+  const inputCls = "w-full h-9 rounded-md bg-surface px-3 text-sm border border-border focus:border-ring outline-none";
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  const verifySummary = () => {
+    if (!form) return null;
+    const issues: string[] = [];
+    const ok: string[] = [];
+    if (!form.title.trim()) issues.push("Title is empty");
+    else ok.push("Title set");
+    if (!/^[a-z0-9-]+$/.test(form.slug)) issues.push("Slug must be lowercase letters, digits, dashes");
+    else ok.push("Slug looks valid");
+    if (!form.poster_url) issues.push("Missing poster");
+    else ok.push("Poster set");
+    if (!form.overview) issues.push("Missing overview");
+    else ok.push("Overview set");
+    if (!form.release_year && !form.release_date) issues.push("No release year/date");
+    if (!form.genres) issues.push("No genres");
+    return { ok, issues };
+  };
+
+  const save = async () => {
+    if (!form) return;
+    setSaving(true);
+    try {
+      const payload: any = {
+        id,
+        slug: form.slug,
+        title: form.title,
+        original_title: form.original_title || null,
+        category: form.category,
+        status: form.status,
+        overview: form.overview || null,
+        poster_url: form.poster_url || null,
+        backdrop_url: form.backdrop_url || null,
+        trailer_url: form.trailer_url || null,
+        release_year: form.release_year === "" ? null : Number(form.release_year),
+        release_date: form.release_date || null,
+        runtime_minutes: form.runtime_minutes === "" ? null : Number(form.runtime_minutes),
+        rating: form.rating === "" ? null : Number(form.rating),
+        language: form.language || null,
+        genres: form.genres ? form.genres.split(",").map((s: string) => s.trim()).filter(Boolean) : null,
+        cast_names: form.cast_names ? form.cast_names.split(",").map((s: string) => s.trim()).filter(Boolean) : null,
+        tmdb_id: form.tmdb_id === "" ? null : Number(form.tmdb_id),
+        imdb_id: form.imdb_id || null,
+      };
+      const r = await updateAdminTitle({ data: payload });
+      const v = verifySummary();
+      const summary = `Saved · ${r.changed} field(s) changed · ${v?.ok.length ?? 0} OK · ${v?.issues.length ?? 0} issue(s)`;
+      setStatus(summary);
+      if (v && v.issues.length === 0) {
+        toast.success(summary);
+        onSaved();
+      } else {
+        toast.message(summary);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Save failed");
+      setStatus(`Error: ${e?.message ?? "save failed"}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const v = form ? verifySummary() : null;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl rounded-2xl border border-border bg-card shadow-card max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="font-display text-xl font-bold">Edit title</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        </div>
+        {titleQ.isLoading || !form ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Loading…</div>
+        ) : (
+          <div className="flex-1 overflow-y-auto p-5 space-y-3">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Title"><input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} /></Field>
+              <Field label="Original title"><input className={inputCls} value={form.original_title} onChange={(e) => set("original_title", e.target.value)} /></Field>
+              <Field label="Slug"><input className={`${inputCls} font-mono`} value={form.slug} onChange={(e) => set("slug", e.target.value)} /></Field>
+              <Field label="Category">
+                <select className={inputCls} value={form.category} onChange={(e) => set("category", e.target.value)}>
+                  {CATEGORIES.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Status">
+                <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </Field>
+              <Field label="Language"><input className={inputCls} value={form.language} onChange={(e) => set("language", e.target.value)} /></Field>
+              <Field label="Release year"><input className={inputCls} type="number" value={form.release_year} onChange={(e) => set("release_year", e.target.value)} /></Field>
+              <Field label="Release date"><input className={inputCls} type="date" value={form.release_date ?? ""} onChange={(e) => set("release_date", e.target.value)} /></Field>
+              <Field label="Runtime (min)"><input className={inputCls} type="number" value={form.runtime_minutes} onChange={(e) => set("runtime_minutes", e.target.value)} /></Field>
+              <Field label="Rating"><input className={inputCls} type="number" step="0.1" value={form.rating} onChange={(e) => set("rating", e.target.value)} /></Field>
+              <Field label="TMDB ID"><input className={inputCls} type="number" value={form.tmdb_id} onChange={(e) => set("tmdb_id", e.target.value)} /></Field>
+              <Field label="IMDb ID"><input className={inputCls} value={form.imdb_id} onChange={(e) => set("imdb_id", e.target.value)} /></Field>
+            </div>
+            <Field label="Poster URL" full><input className={inputCls} value={form.poster_url} onChange={(e) => set("poster_url", e.target.value)} /></Field>
+            <Field label="Backdrop URL" full><input className={inputCls} value={form.backdrop_url} onChange={(e) => set("backdrop_url", e.target.value)} /></Field>
+            <Field label="Trailer URL" full><input className={inputCls} value={form.trailer_url} onChange={(e) => set("trailer_url", e.target.value)} /></Field>
+            <Field label="Genres (comma separated)" full><input className={inputCls} value={form.genres} onChange={(e) => set("genres", e.target.value)} /></Field>
+            <Field label="Cast (comma separated)" full><input className={inputCls} value={form.cast_names} onChange={(e) => set("cast_names", e.target.value)} /></Field>
+            <Field label="Overview" full><textarea className={`${inputCls} h-28 py-2`} value={form.overview} onChange={(e) => set("overview", e.target.value)} /></Field>
+
+            {v && (
+              <div className="rounded-md border border-border p-3 text-xs space-y-1 bg-surface/40">
+                <div className="font-semibold uppercase tracking-wider text-muted-foreground">Verification</div>
+                {v.ok.map((m) => <div key={m} className="text-emerald-500">✓ {m}</div>)}
+                {v.issues.map((m) => <div key={m} className="text-amber-500">⚠ {m}</div>)}
+                {status && <div className="pt-1 border-t border-border mt-1">{status}</div>}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
+          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={saving || !form} className="bg-gradient-primary text-primary-foreground border-0">
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

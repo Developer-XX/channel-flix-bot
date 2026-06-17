@@ -38,6 +38,8 @@ import {
   rebuildWebsiteIndexes,
   deleteIngestRows,
   deleteAllIngest,
+  restoreIngestRows,
+  resyncChannels,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
@@ -71,9 +73,22 @@ function TelegramAdmin() {
   const rebuildIdx = useServerFn(rebuildWebsiteIndexes);
   const delRows = useServerFn(deleteIngestRows);
   const delAll = useServerFn(deleteAllIngest);
+  const restore = useServerFn(restoreIngestRows);
+  const listChannels = useServerFn(listTelegramChannels);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
+  const [trash, setTrash] = useState(false);
+  const [filters, setFilters] = useState({
+    q: "",
+    channelId: "",
+    quality: "",
+    language: "",
+    season: "" as number | "",
+    episode: "" as number | "",
+    dateFrom: "",
+    dateTo: "",
+  });
   const STABLE_DEV_URL = "https://project--d54ff009-ac17-477f-85a3-112a949d0888-dev.lovable.app";
   const [baseUrl, setBaseUrl] = useState(STABLE_DEV_URL);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -88,9 +103,25 @@ function TelegramAdmin() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  const channelsQ = useQuery({ queryKey: ["tg-channels"], queryFn: () => listChannels() });
+
   const ingest = useQuery({
-    queryKey: ["tg-ingest", statusFilter],
-    queryFn: () => list({ data: { status: statusFilter } }),
+    queryKey: ["tg-ingest", statusFilter, trash, filters],
+    queryFn: () =>
+      list({
+        data: {
+          status: trash ? "all" : statusFilter,
+          trash,
+          q: filters.q || undefined,
+          channelId: filters.channelId || undefined,
+          quality: filters.quality || undefined,
+          language: filters.language || undefined,
+          season: filters.season === "" ? undefined : Number(filters.season),
+          episode: filters.episode === "" ? undefined : Number(filters.episode),
+          dateFrom: filters.dateFrom || undefined,
+          dateTo: filters.dateTo || undefined,
+        },
+      }),
   });
   const totalRows = ingest.data?.length ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -197,49 +228,140 @@ function TelegramAdmin() {
 
       <section className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant={!trash ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setTrash(false); setSelected(new Set()); setPage(1); }}
+          >Files</Button>
+          <Button
+            variant={trash ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setTrash(true); setSelected(new Set()); setPage(1); }}
+          >🗑 Trash (24h)</Button>
+          <span className="mx-1 h-5 w-px bg-border" />
           {(["all", "pending", "matched", "unmatched", "ignored"] as const).map((s) => (
             <Button
               key={s}
-              variant={statusFilter === s ? "default" : "outline"}
+              variant={statusFilter === s && !trash ? "default" : "outline"}
               size="sm"
-              onClick={() => { setStatusFilter(s); setSelected(new Set()); }}
+              disabled={trash}
+              onClick={() => { setStatusFilter(s); setSelected(new Set()); setPage(1); }}
             >
               {s}
             </Button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => ingest.refetch()}>Refresh</Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={async () => {
-              try {
-                const r = await rematch();
-                toast.success(`Reindex: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
-                ingest.refetch();
-                router.invalidate();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Reindex failed");
-              }
-            }}
-          >
-            Reindex / Refresh website
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={async () => {
-              try {
-                const r = await rebuildIdx();
-                toast.success(`Rebuilt indexes · ${r.latest ?? 0} latest · ${r.trending ?? 0} trending · ${r.search ?? 0} search`);
-                router.invalidate();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Rebuild failed");
-              }
-            }}
-          >
-            Rebuild website indexes
-          </Button>
+          {!trash && (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const r = await rematch();
+                    toast.success(`Reindex: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
+                    ingest.refetch();
+                    router.invalidate();
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Reindex failed");
+                  }
+                }}
+              >
+                Reindex / Refresh website
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const r = await rebuildIdx();
+                    toast.success(`Rebuilt indexes · ${r.latest ?? 0} latest · ${r.trending ?? 0} trending · ${r.search ?? 0} search`);
+                    router.invalidate();
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Rebuild failed");
+                  }
+                }}
+              >
+                Rebuild website indexes
+              </Button>
+            </>
+          )}
+          {trash && selected.size > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const r = await restore({ data: { ingestIds: Array.from(selected) } });
+                  toast.success(`Restored ${r.restored} · skipped ${r.skipped}`);
+                  setSelected(new Set());
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Restore failed");
+                }
+              }}
+            >
+              Restore selected
+            </Button>
+          )}
         </div>
+
+        {/* Filter bar */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 rounded-md border border-border p-3 bg-surface/40">
+          <Input
+            placeholder="Search file name / title / caption"
+            value={filters.q}
+            onChange={(e) => { setFilters((f) => ({ ...f, q: e.target.value })); setPage(1); }}
+            className="md:col-span-2"
+          />
+          <Select
+            value={filters.channelId || "__all"}
+            onValueChange={(v) => { setFilters((f) => ({ ...f, channelId: v === "__all" ? "" : v })); setPage(1); }}
+          >
+            <SelectTrigger><SelectValue placeholder="Channel" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">All channels</SelectItem>
+              {(channelsQ.data ?? []).map((c: any) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Quality (e.g. 1080p)"
+            value={filters.quality}
+            onChange={(e) => { setFilters((f) => ({ ...f, quality: e.target.value })); setPage(1); }}
+          />
+          <Input
+            placeholder="Language"
+            value={filters.language}
+            onChange={(e) => { setFilters((f) => ({ ...f, language: e.target.value })); setPage(1); }}
+          />
+          <Input
+            type="number" min={0} placeholder="Season"
+            value={filters.season}
+            onChange={(e) => { setFilters((f) => ({ ...f, season: e.target.value === "" ? "" : Number(e.target.value) })); setPage(1); }}
+          />
+          <Input
+            type="number" min={0} placeholder="Episode"
+            value={filters.episode}
+            onChange={(e) => { setFilters((f) => ({ ...f, episode: e.target.value === "" ? "" : Number(e.target.value) })); setPage(1); }}
+          />
+          <Input
+            type="date" value={filters.dateFrom}
+            onChange={(e) => { setFilters((f) => ({ ...f, dateFrom: e.target.value })); setPage(1); }}
+          />
+          <Input
+            type="date" value={filters.dateTo}
+            onChange={(e) => { setFilters((f) => ({ ...f, dateTo: e.target.value })); setPage(1); }}
+          />
+          <div className="md:col-span-4 flex justify-end">
+            <Button size="sm" variant="ghost" onClick={() => { setFilters({ q: "", channelId: "", quality: "", language: "", season: "", episode: "", dateFrom: "", dateTo: "" }); setPage(1); }}>
+              Reset filters
+            </Button>
+          </div>
+        </div>
+
 
         {selected.size > 0 && (
           <BulkActionBar
@@ -755,11 +877,17 @@ function ChannelWizard() {
 
   const channels = useQuery({ queryKey: ["tg-channels"], queryFn: () => list() });
   const botState = useQuery({ queryKey: ["tg-bot-state-wizard"], queryFn: () => state() });
+  const resync = useServerFn(resyncChannels);
 
   const [ref, setRef] = useState("");
   const [check, setCheck] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [adminIds, setAdminIds] = useState("");
+  const [pickedChannels, setPickedChannels] = useState<Set<string>>(new Set());
+  const [resyncing, setResyncing] = useState(false);
+  const togglePick = (id: string) => setPickedChannels((prev) => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
 
   return (
     <section className="rounded-lg border border-border p-4 space-y-4">
@@ -842,18 +970,46 @@ function ChannelWizard() {
       )}
 
       <div className="space-y-2">
-        <div className="text-xs uppercase text-muted-foreground">Connected channels</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs uppercase text-muted-foreground">Connected channels</div>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={resyncing || pickedChannels.size === 0}
+            onClick={async () => {
+              setResyncing(true);
+              try {
+                const r = await resync({ data: { channelIds: Array.from(pickedChannels) } });
+                toast.success(`Resynced ${pickedChannels.size} channel(s) · scanned ${r.scanned} · backfilled ${r.backfillProcessed} · metadata updated ${r.metadataUpdated}`);
+                setPickedChannels(new Set());
+                channels.refetch();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Resync failed");
+              } finally { setResyncing(false); }
+            }}
+          >
+            {resyncing ? "Resyncing…" : `Resync selected (${pickedChannels.size})`}
+          </Button>
+        </div>
         {channels.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {(channels.data ?? []).length === 0 && !channels.isLoading && (
           <div className="text-sm text-muted-foreground">No channels yet.</div>
         )}
         {(channels.data ?? []).map((c: any) => (
           <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
-            <div className="min-w-0">
-              <div className="font-medium truncate">
-                {c.is_active ? "🟢" : "⚪"} {c.name} {c.username ? <span className="text-muted-foreground">@{c.username}</span> : null}
+            <div className="flex items-center gap-2 min-w-0">
+              <input
+                type="checkbox"
+                checked={pickedChannels.has(c.id)}
+                onChange={() => togglePick(c.id)}
+                aria-label={`Select ${c.name}`}
+              />
+              <div className="min-w-0">
+                <div className="font-medium truncate">
+                  {c.is_active ? "🟢" : "⚪"} {c.name} {c.username ? <span className="text-muted-foreground">@{c.username}</span> : null}
+                </div>
+                <div className="text-xs text-muted-foreground font-mono">{c.channel_id}</div>
               </div>
-              <div className="text-xs text-muted-foreground font-mono">{c.channel_id}</div>
             </div>
             <div className="flex gap-2">
               <Button

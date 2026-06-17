@@ -81,7 +81,7 @@ export const runIntegrationsHealth = createServerFn({ method: "POST" })
     const [telegram, tmdb, adrino, nano] = await Promise.all([
       checkTelegram(),
       checkTmdb(),
-      checkShortener("AdrinoLinks shortener", "ADRINOLINKS_API_KEY", "adrinolinks.com"),
+      checkShortener("AdrinoLinks shortener", "ADRINOLINKS_API_KEY", "adrinolinks.in"),
       checkShortener("NanoLinks shortener", "NANOLINKS_API_KEY", "nanolinks.in"),
     ]);
     return { checks: [telegram, tmdb, adrino, nano], checkedAt: new Date().toISOString() };

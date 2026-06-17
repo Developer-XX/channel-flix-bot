@@ -76,6 +76,21 @@ export const listAdminTitles = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+export const getAdminTitle = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { data: row, error } = await context.supabase
+      .from("master_titles")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!row) throw new Error("Title not found");
+    return row;
+  });
+
 export const updateAdminTitleStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ id: z.string().uuid(), status: StatusSchema }).parse(input))
