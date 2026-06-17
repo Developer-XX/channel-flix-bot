@@ -2,22 +2,24 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2, Gauge } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2, Gauge, Download, Settings as SettingsIcon, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
 import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
-import { runIntegrationsHealth, getShortenerHealth } from "@/lib/integrations-health.functions";
+import { runIntegrationsHealth, getShortenerHealth, probeShortener, exportShortenerHealthCsv } from "@/lib/integrations-health.functions";
 import { getVerificationDiagnostics } from "@/lib/verification-diagnostics.functions";
 import {
   requestDatabaseWipe,
   confirmDatabaseWipe,
   listAdminAuditLog,
 } from "@/lib/destructive.functions";
+import { listSettingsAuditLog, getIngestionDedupStats } from "@/lib/admin-diagnostics-extra.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
 });
+
 
 const RLS_CODES: { code: string; meaning: string }[] = [
   { code: "RLS_PERMISSION_DENIED", meaning: "GRANT missing OR every USING policy returned false. Check both." },
