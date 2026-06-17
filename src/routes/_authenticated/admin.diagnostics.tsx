@@ -14,7 +14,7 @@ import {
   confirmDatabaseWipe,
   listAdminAuditLog,
 } from "@/lib/destructive.functions";
-import { listSettingsAuditLog, getIngestionDedupStats } from "@/lib/admin-diagnostics-extra.functions";
+import { listSettingsAuditLog, getIngestionDedupStats, getChannelMatchBreakdown24h } from "@/lib/admin-diagnostics-extra.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
@@ -63,6 +63,9 @@ function DiagnosticsPage() {
       <ShortenerHealthPanel />
 
       <IngestionDedupPanel />
+
+      <ChannelMatchBreakdownPanel />
+
 
       <VerificationRedirectPanel />
 
@@ -944,4 +947,79 @@ function IngestionDedupPanel() {
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Per-channel match breakdown (promoted / unmatched / demoted, last 24h)
+// ---------------------------------------------------------------------------
+
+function ChannelMatchBreakdownPanel() {
+  const get = useServerFn(getChannelMatchBreakdown24h);
+  const q = useQuery({
+    queryKey: ["channel-match-breakdown-24h"],
+    queryFn: () => get(),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const d = q.data;
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Activity className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Channel match breakdown · last 24h</h2>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => q.refetch()} disabled={q.isFetching}>
+          <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
+      </div>
+      {q.error && <p className="text-xs text-destructive break-words">{(q.error as Error).message}</p>}
+      {d && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <Stat label="Total ingest" value={d.totals.total} />
+            <Stat label="Promoted" value={d.totals.promoted} tone="ok" />
+            <Stat label="Matched (not yet promoted)" value={d.totals.matched} />
+            <Stat label="Unmatched" value={d.totals.unmatched} tone={d.totals.unmatched ? "warn" : "ok"} />
+            <Stat label="Demoted" value={d.totals.demoted} tone={d.totals.demoted ? "fail" : "ok"} />
+          </div>
+          {d.rows.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No ingest activity in the last 24h.</p>
+          ) : (
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="w-full text-[11px] min-w-[640px]">
+                <thead className="text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="p-1.5">Channel</th>
+                    <th className="p-1.5 text-right">Total</th>
+                    <th className="p-1.5 text-right text-emerald-500">Promoted</th>
+                    <th className="p-1.5 text-right">Matched</th>
+                    <th className="p-1.5 text-right text-amber-500">Unmatched</th>
+                    <th className="p-1.5 text-right text-red-500">Demoted</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.rows.map((r) => (
+                    <tr key={r.channelId ?? "_unknown"} className="border-t border-border/50">
+                      <td className="p-1.5">
+                        <div className="font-medium">{r.label}</div>
+                        {r.username && <div className="text-[10px] text-muted-foreground">@{r.username}</div>}
+                      </td>
+                      <td className="p-1.5 text-right font-mono">{r.total}</td>
+                      <td className="p-1.5 text-right font-mono text-emerald-500">{r.promoted}</td>
+                      <td className="p-1.5 text-right font-mono">{r.matched}</td>
+                      <td className="p-1.5 text-right font-mono text-amber-500">{r.unmatched}</td>
+                      <td className="p-1.5 text-right font-mono text-red-500">{r.demoted}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            Demoted = files previously linked to a title that lost score on the most recent resync (see <code>match_audit_log.decision='demoted'</code>).
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
 

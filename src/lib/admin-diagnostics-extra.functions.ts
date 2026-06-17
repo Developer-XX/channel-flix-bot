@@ -96,3 +96,75 @@ export const getIngestionDedupStats = createServerFn({ method: "GET" })
       recentRuns,
     };
   });
+
+// Per-Telegram-channel breakdown of promoted vs unmatched vs demoted files
+// over the last 24h. "Promoted" + "unmatched" come from telegram_ingest
+// (current state of rows ingested in the window); "demoted" comes from
+// match_audit_log entries with decision='demoted' joined back to the
+// ingest row to recover its channel.
+export const getChannelMatchBreakdown24h = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const [channelsRes, ingestRes, demotedRes] = await Promise.all([
+      supabaseAdmin.from("telegram_channels").select("id, name, username"),
+      supabaseAdmin
+        .from("telegram_ingest")
+        .select("channel_id, match_status")
+        .gte("created_at", since),
+      supabaseAdmin
+        .from("match_audit_log")
+        .select("telegram_ingest_id, telegram_ingest:telegram_ingest_id(channel_id)")
+        .eq("decision", "demoted")
+        .gte("attempt_at", since),
+    ]);
+
+    const channels = channelsRes.data ?? [];
+    const ingest = ingestRes.data ?? [];
+    const demoted = demotedRes.data ?? [];
+
+    type Bucket = { promoted: number; unmatched: number; matched: number; demoted: number; total: number };
+    const byChannel = new Map<string, Bucket>();
+    const ensure = (id: string | null) => {
+      const key = id ?? "_unknown";
+      if (!byChannel.has(key)) byChannel.set(key, { promoted: 0, unmatched: 0, matched: 0, demoted: 0, total: 0 });
+      return byChannel.get(key)!;
+    };
+    for (const r of ingest) {
+      const b = ensure((r as any).channel_id);
+      b.total++;
+      const s = (r as any).match_status as string | null;
+      if (s === "promoted") b.promoted++;
+      else if (s === "matched") b.matched++;
+      else b.unmatched++;
+    }
+    for (const r of demoted) {
+      const cid = (r as any).telegram_ingest?.channel_id ?? null;
+      ensure(cid).demoted++;
+    }
+
+    const rows = Array.from(byChannel.entries()).map(([cid, b]) => {
+      const meta = channels.find((c: any) => c.id === cid);
+      return {
+        channelId: cid,
+        label: meta ? (meta.name || meta.username || cid) : "(unknown)",
+        username: (meta as any)?.username ?? null,
+        ...b,
+      };
+    }).sort((a, b) => b.total - a.total);
+
+    const totals = rows.reduce(
+      (acc, r) => {
+        acc.promoted += r.promoted; acc.matched += r.matched;
+        acc.unmatched += r.unmatched; acc.demoted += r.demoted; acc.total += r.total;
+        return acc;
+      },
+      { promoted: 0, matched: 0, unmatched: 0, demoted: 0, total: 0 },
+    );
+
+    return { since, rows, totals };
+  });
+

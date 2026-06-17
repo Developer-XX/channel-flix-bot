@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2, Search, Star, X, Pencil } from "lucide-react";
+import { Plus, Trash2, Search, Star, X, Pencil, RotateCw } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { tmdbSearch, tmdbDetails, tmdbFindByImdb } from "@/lib/tmdb.functions";
 import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, type CategorySlug } from "@/lib/categories";
 import { createAdminTitle, deleteAdminTitle, listAdminTitles, updateAdminTitleFlag, updateAdminTitleStatus, getAdminTitle, updateAdminTitle } from "@/lib/admin.functions";
+import { resyncTitleFiles } from "@/lib/telegram.functions";
+
 
 export const Route = createFileRoute("/_authenticated/admin/titles")({
   component: TitlesAdmin,
@@ -121,6 +124,7 @@ function TitlesAdmin() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex items-center gap-1">
+                    <ResyncTitleButton titleId={t.id} titleName={t.title} />
                     <button
                       onClick={() => setEditingId(t.id)}
                       className="text-muted-foreground hover:text-foreground p-1"
@@ -137,6 +141,7 @@ function TitlesAdmin() {
                     </button>
                   </div>
                 </td>
+
               </tr>
             ))}
           </tbody>
@@ -786,5 +791,35 @@ function EditTitleDialog({ id, onClose, onSaved }: { id: string; onClose: () => 
         </div>
       </div>
     </div>
+  );
+}
+
+function ResyncTitleButton({ titleId, titleName }: { titleId: string; titleName: string }) {
+  const fn = useServerFn(resyncTitleFiles);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await fn({ data: { titleId } });
+          toast.success(
+            `${titleName}: ${r.promoted} matched · ${r.demoted} demoted · ${r.kept} kept · ${r.skipped} unmatched`,
+          );
+          qc.invalidateQueries({ queryKey: ["admin-titles"] });
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="text-muted-foreground hover:text-primary disabled:opacity-50 p-1"
+      aria-label="Resync this title"
+      title="Resync this title"
+    >
+      <RotateCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+    </button>
   );
 }

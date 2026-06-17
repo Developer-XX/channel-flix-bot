@@ -551,10 +551,13 @@ export async function revalidatePromotedForTitle(
   supabase: SupabaseClient<any, any, any>,
   title: { id: string; title: string; release_year: number | null; category: string | null },
   settings: Awaited<ReturnType<typeof loadMatchingSettings>>,
+  opts?: { actor?: string },
 ): Promise<{ revalidated: number; demoted: number; kept: number; demotedIngestIds: string[] }> {
+  const { writeMatchAudit } = await import("@/lib/match-audit.server");
+
   const { data: rows } = await supabase
     .from("telegram_ingest")
-    .select("id, parsed_title, parsed_year, parsed_category, promoted_media_file_id, deleted_at")
+    .select("id, parsed_title, parsed_year, parsed_category, parsed_season, parsed_episode, promoted_media_file_id, deleted_at")
     .eq("matched_title_id", title.id)
     .not("promoted_media_file_id", "is", null)
     .is("deleted_at", null);
@@ -578,6 +581,25 @@ export async function revalidatePromotedForTitle(
       continue;
     }
 
+    // Look up the prior promotion audit so we can record the old score
+    // alongside the new (demoting) score for clear change-tracking.
+    const { data: prevAudit } = await supabase
+      .from("match_audit_log")
+      .select("scores")
+      .eq("telegram_ingest_id", r.id)
+      .eq("master_title_id", title.id)
+      .in("decision", ["promoted", "manual", "alias"])
+      .order("attempt_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const oldScore = (prevAudit?.scores as any)?.total ?? null;
+
+    const failReasons: string[] = [];
+    if (!yearOk) failReasons.push("year_mismatch");
+    if (!categoryOk) failReasons.push(settings.require_category_match ? "category_hard_mismatch" : "category_soft_mismatch");
+    if (adjusted < settings.threshold) failReasons.push("below_threshold");
+    const reason = `demoted:${failReasons.join("+") || "below_threshold"} (old=${oldScore ?? "?"} -> new=${adjusted.toFixed(3)} < ${settings.threshold})`;
+
     // Demote: deactivate media_files row, unlink ingest row.
     if (r.promoted_media_file_id) {
       await supabase
@@ -595,10 +617,28 @@ export async function revalidatePromotedForTitle(
       })
       .eq("id", r.id);
 
+    await writeMatchAudit(supabase, {
+      ingestId: r.id,
+      titleId: title.id,
+      settings,
+      decision: "demoted",
+      reason,
+      actor: opts?.actor ?? "auto:revalidate",
+      oldScore,
+      newScore: adjusted,
+      threshold: settings.threshold,
+      parsedSnapshot: {
+        title: r.parsed_title, year: r.parsed_year, category: r.parsed_category,
+        season: r.parsed_season, episode: r.parsed_episode,
+      },
+      extra: { mediaFileId: r.promoted_media_file_id ?? null },
+    });
+
     demoted++;
     demotedIngestIds.push(r.id);
   }
 
   return { revalidated: rows?.length ?? 0, demoted, kept, demotedIngestIds };
 }
+
 

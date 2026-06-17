@@ -329,3 +329,33 @@ export const retryFailedFromJob = createServerFn({ method: "POST" })
     void runRematchJob(job.id, ids, !!data.dryRun);
     return { jobId: job.id, total: ids.length, retried: ids.length };
   });
+
+// Delete one or more bulk job rows. Refuses to delete a job that is
+// still `running` so a live progress poll can't yank its own row.
+export const deleteBulkJobs = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ jobIds: z.array(z.string().uuid()).min(1).max(50) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows } = await supabaseAdmin
+      .from("bulk_job_runs")
+      .select("id, status")
+      .in("id", data.jobIds);
+    const deletable = (rows ?? [])
+      .filter((r: any) => r.status !== "running")
+      .map((r: any) => r.id as string);
+    const skipped = (rows ?? []).length - deletable.length;
+    if (deletable.length === 0) {
+      return { deleted: 0, skipped, message: "All selected jobs are still running." };
+    }
+    const { error } = await supabaseAdmin
+      .from("bulk_job_runs")
+      .delete()
+      .in("id", deletable);
+    if (error) throw error;
+    return { deleted: deletable.length, skipped };
+  });
+
