@@ -1031,7 +1031,10 @@ export const resyncTitleFiles = createServerFn({ method: "POST" })
 
     // Re-validate already-promoted files: demote any that no longer meet
     // the threshold so stale matches stop showing on the title.
-    const revalidation = await revalidatePromotedForTitle(supabaseAdmin, title, settings);
+    const revalidation = await revalidatePromotedForTitle(supabaseAdmin, title, settings, {
+      actor: `admin:${context.claims?.email ?? context.userId}`,
+    });
+
 
     const head = (title.title || "").split(/\s+/).filter((w: string) => w.length >= 3)[0] ?? title.title?.[0] ?? "";
 
