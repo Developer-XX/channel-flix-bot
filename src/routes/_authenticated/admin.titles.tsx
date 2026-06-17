@@ -120,13 +120,22 @@ function TitlesAdmin() {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => { if (confirm(`Delete ${t.title}?`)) deleteTitle.mutate(t.id); }}
-                    className="text-muted-foreground hover:text-destructive p-1"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingId(t.id)}
+                      className="text-muted-foreground hover:text-foreground p-1"
+                      aria-label="Edit"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`Delete ${t.title}?`)) deleteTitle.mutate(t.id); }}
+                      className="text-muted-foreground hover:text-destructive p-1"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
