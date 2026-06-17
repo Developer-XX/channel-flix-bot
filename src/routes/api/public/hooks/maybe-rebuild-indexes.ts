@@ -8,7 +8,11 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/api/public/hooks/maybe-rebuild-indexes")({
   server: {
     handlers: {
-      POST: async () => {
+      POST: async ({ request }) => {
+        const { checkCronAuth } = await import("@/lib/cron-auth.server");
+        const auth = checkCronAuth(request);
+        if (!auth.ok) return auth.response;
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { rebuildIndexes } = await import("@/lib/indexes.server");
 
