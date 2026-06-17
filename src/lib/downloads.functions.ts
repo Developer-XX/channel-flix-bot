@@ -153,6 +153,22 @@ export const requestDownload = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { getVerificationState } = await import("@/lib/verification.server");
+    const { getRequestHeader } = await import("@tanstack/react-start/server");
+    const auditFailure = async (reason: string, metadata: Record<string, unknown> = {}) => {
+      try {
+        await supabaseAdmin.from("admin_audit_log").insert({
+          actor_user_id: context.userId,
+          actor_email: (context.claims as { email?: string } | null)?.email ?? null,
+          action: "download.failed",
+          status: "failed",
+          ip: getRequestHeader("x-forwarded-for") ?? getRequestHeader("cf-connecting-ip") ?? null,
+          user_agent: getRequestHeader("user-agent") ?? null,
+          metadata: { mediaFileId: data.mediaFileId, reason, ...metadata },
+        } as never);
+      } catch (e) {
+        console.warn("[download-audit] insert failed", (e as Error).message);
+      }
+    };
     const {
       makeIdempotencyKey,
       getBotUserId,
