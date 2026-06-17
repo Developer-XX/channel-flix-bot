@@ -118,12 +118,13 @@ describe("revalidatePromotedForTitle — score drop reclassifies file", () => {
     expect(state.ingest[0].promoted_media_file_id).toBeNull();
 
     // A demotion audit row was written with the old score preserved
-    const demotionAudit = state.audits.find((a) => a.decision === "demoted");
+    const demotionAudit = state.audits.find((a: any) => a.decision === "demoted") as any;
     expect(demotionAudit).toBeTruthy();
     expect(demotionAudit.scores.oldScore).toBe(0.91);
     expect(typeof demotionAudit.scores.newScore).toBe("number");
     expect(demotionAudit.scores.newScore).toBeLessThan(settings.threshold);
     expect(demotionAudit.threshold).toBe(settings.threshold);
+
   });
 
   it("keeps a file whose recomputed score still clears the threshold", async () => {
