@@ -228,49 +228,140 @@ function TelegramAdmin() {
 
       <section className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant={!trash ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setTrash(false); setSelected(new Set()); setPage(1); }}
+          >Files</Button>
+          <Button
+            variant={trash ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setTrash(true); setSelected(new Set()); setPage(1); }}
+          >🗑 Trash (24h)</Button>
+          <span className="mx-1 h-5 w-px bg-border" />
           {(["all", "pending", "matched", "unmatched", "ignored"] as const).map((s) => (
             <Button
               key={s}
-              variant={statusFilter === s ? "default" : "outline"}
+              variant={statusFilter === s && !trash ? "default" : "outline"}
               size="sm"
-              onClick={() => { setStatusFilter(s); setSelected(new Set()); }}
+              disabled={trash}
+              onClick={() => { setStatusFilter(s); setSelected(new Set()); setPage(1); }}
             >
               {s}
             </Button>
           ))}
           <Button variant="ghost" size="sm" onClick={() => ingest.refetch()}>Refresh</Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={async () => {
-              try {
-                const r = await rematch();
-                toast.success(`Reindex: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
-                ingest.refetch();
-                router.invalidate();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Reindex failed");
-              }
-            }}
-          >
-            Reindex / Refresh website
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={async () => {
-              try {
-                const r = await rebuildIdx();
-                toast.success(`Rebuilt indexes · ${r.latest ?? 0} latest · ${r.trending ?? 0} trending · ${r.search ?? 0} search`);
-                router.invalidate();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Rebuild failed");
-              }
-            }}
-          >
-            Rebuild website indexes
-          </Button>
+          {!trash && (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const r = await rematch();
+                    toast.success(`Reindex: promoted ${r.promoted}/${r.scanned}, still unmatched ${r.stillUnmatched}`);
+                    ingest.refetch();
+                    router.invalidate();
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Reindex failed");
+                  }
+                }}
+              >
+                Reindex / Refresh website
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    const r = await rebuildIdx();
+                    toast.success(`Rebuilt indexes · ${r.latest ?? 0} latest · ${r.trending ?? 0} trending · ${r.search ?? 0} search`);
+                    router.invalidate();
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Rebuild failed");
+                  }
+                }}
+              >
+                Rebuild website indexes
+              </Button>
+            </>
+          )}
+          {trash && selected.size > 0 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  const r = await restore({ data: { ingestIds: Array.from(selected) } });
+                  toast.success(`Restored ${r.restored} · skipped ${r.skipped}`);
+                  setSelected(new Set());
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Restore failed");
+                }
+              }}
+            >
+              Restore selected
+            </Button>
+          )}
         </div>
+
+        {/* Filter bar */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 rounded-md border border-border p-3 bg-surface/40">
+          <Input
+            placeholder="Search file name / title / caption"
+            value={filters.q}
+            onChange={(e) => { setFilters((f) => ({ ...f, q: e.target.value })); setPage(1); }}
+            className="md:col-span-2"
+          />
+          <Select
+            value={filters.channelId || "__all"}
+            onValueChange={(v) => { setFilters((f) => ({ ...f, channelId: v === "__all" ? "" : v })); setPage(1); }}
+          >
+            <SelectTrigger><SelectValue placeholder="Channel" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all">All channels</SelectItem>
+              {(channelsQ.data ?? []).map((c: any) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Quality (e.g. 1080p)"
+            value={filters.quality}
+            onChange={(e) => { setFilters((f) => ({ ...f, quality: e.target.value })); setPage(1); }}
+          />
+          <Input
+            placeholder="Language"
+            value={filters.language}
+            onChange={(e) => { setFilters((f) => ({ ...f, language: e.target.value })); setPage(1); }}
+          />
+          <Input
+            type="number" min={0} placeholder="Season"
+            value={filters.season}
+            onChange={(e) => { setFilters((f) => ({ ...f, season: e.target.value === "" ? "" : Number(e.target.value) })); setPage(1); }}
+          />
+          <Input
+            type="number" min={0} placeholder="Episode"
+            value={filters.episode}
+            onChange={(e) => { setFilters((f) => ({ ...f, episode: e.target.value === "" ? "" : Number(e.target.value) })); setPage(1); }}
+          />
+          <Input
+            type="date" value={filters.dateFrom}
+            onChange={(e) => { setFilters((f) => ({ ...f, dateFrom: e.target.value })); setPage(1); }}
+          />
+          <Input
+            type="date" value={filters.dateTo}
+            onChange={(e) => { setFilters((f) => ({ ...f, dateTo: e.target.value })); setPage(1); }}
+          />
+          <div className="md:col-span-4 flex justify-end">
+            <Button size="sm" variant="ghost" onClick={() => { setFilters({ q: "", channelId: "", quality: "", language: "", season: "", episode: "", dateFrom: "", dateTo: "" }); setPage(1); }}>
+              Reset filters
+            </Button>
+          </div>
+        </div>
+
 
         {selected.size > 0 && (
           <BulkActionBar
