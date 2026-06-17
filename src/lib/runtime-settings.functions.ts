@@ -15,8 +15,8 @@ export const SETTING_KEYS = [
   { key: "SHORTENER_TOKEN_TTL_SECONDS", group: "Verification",  isSecret: false, placeholder: "1800" },
 ] as const;
 
-const KEYS = new Set(SETTING_KEYS.map((s) => s.key));
-const SECRET_KEYS = new Set(SETTING_KEYS.filter((s) => s.isSecret).map((s) => s.key));
+const KEYS: Set<string> = new Set(SETTING_KEYS.map((s) => s.key));
+const SECRET_KEYS: Set<string> = new Set(SETTING_KEYS.filter((s) => s.isSecret).map((s) => s.key));
 
 export type SettingView = {
   key: string;

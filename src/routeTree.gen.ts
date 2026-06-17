@@ -32,6 +32,7 @@ import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authentica
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
+import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
@@ -157,6 +158,11 @@ const ApiPublicTelegramBackfillRoute =
     path: '/api/public/telegram/backfill',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicSTokenRoute = ApiPublicSTokenRouteImport.update({
+  id: '/api/public/s/$token',
+  path: '/api/public/s/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksTelegramResyncRecentRoute =
   ApiPublicHooksTelegramResyncRecentRouteImport.update({
     id: '/api/public/hooks/telegram-resync-recent',
@@ -192,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -217,6 +224,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -273,6 +282,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/s/$token'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/s/$token'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -325,6 +336,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/s/$token'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -343,6 +355,7 @@ export interface RootRouteChildren {
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
+  ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
   ApiPublicVTokenRoute: typeof ApiPublicVTokenRoute
@@ -511,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTelegramBackfillRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/s/$token': {
+      id: '/api/public/s/$token'
+      path: '/api/public/s/$token'
+      fullPath: '/api/public/s/$token'
+      preLoaderRoute: typeof ApiPublicSTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/telegram-resync-recent': {
       id: '/api/public/hooks/telegram-resync-recent'
       path: '/api/public/hooks/telegram-resync-recent'
@@ -582,6 +602,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksMaybeRebuildIndexesRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
+  ApiPublicSTokenRoute: ApiPublicSTokenRoute,
   ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
   ApiPublicVTokenRoute: ApiPublicVTokenRoute,
