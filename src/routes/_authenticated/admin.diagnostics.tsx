@@ -14,7 +14,7 @@ import {
   confirmDatabaseWipe,
   listAdminAuditLog,
 } from "@/lib/destructive.functions";
-import { listSettingsAuditLog, getIngestionDedupStats } from "@/lib/admin-diagnostics-extra.functions";
+import { listSettingsAuditLog, getIngestionDedupStats, getChannelMatchBreakdown24h } from "@/lib/admin-diagnostics-extra.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
