@@ -1122,11 +1122,61 @@ export const getTitleDebug = createServerFn({ method: "GET" })
       .select("id, file_name, episode_id, quality, resolution, language, is_active, created_at, episodes(season_id, episode_number, seasons(season_number))")
       .eq("title_id", title.id);
 
+    // For each linked media_file, find the ingest row that points at it so
+    // we can look up the most recent match_audit_log entry — answers
+    // "why is this file still here / why didn't it re-match?".
+    const fileIds = (files ?? []).map((f: any) => f.id);
+    const filesAudit: Record<string, { decision: string; reason: string; attemptAt: string; score: number | null; threshold: number | null; ingestId: string | null }> = {};
+    if (fileIds.length > 0) {
+      const { data: ingestRows } = await supabaseAdmin
+        .from("telegram_ingest")
+        .select("id, promoted_media_file_id")
+        .in("promoted_media_file_id", fileIds);
+      const ingestIds = (ingestRows ?? []).map((r: any) => r.id);
+      const ingestToFile = new Map((ingestRows ?? []).map((r: any) => [r.id, r.promoted_media_file_id]));
+      if (ingestIds.length > 0) {
+        const { data: audits } = await supabaseAdmin
+          .from("match_audit_log")
+          .select("telegram_ingest_id, decision, reason, attempt_at, scores, threshold")
+          .in("telegram_ingest_id", ingestIds)
+          .order("attempt_at", { ascending: false });
+        for (const a of audits ?? []) {
+          const fid = ingestToFile.get(a.telegram_ingest_id);
+          if (!fid || filesAudit[fid]) continue;
+          filesAudit[fid] = {
+            decision: a.decision,
+            reason: a.reason,
+            attemptAt: a.attempt_at,
+            score: (a.scores as any)?.total ?? null,
+            threshold: a.threshold,
+            ingestId: a.telegram_ingest_id,
+          };
+        }
+      }
+      // Files without any audit row: mark explicitly so UI can say
+      // "no audit yet — visible only from cache / version pin".
+      for (const f of files ?? []) {
+        if (!filesAudit[f.id]) {
+          filesAudit[f.id] = {
+            decision: "unknown",
+            reason: f.is_active
+              ? "no audit row — likely served from cached index until next revalidation"
+              : "inactive (soft-deleted) — hidden from website",
+            attemptAt: f.created_at,
+            score: null,
+            threshold: null,
+            ingestId: null,
+          };
+        }
+      }
+    }
+
     // Aliases for this title
     const { data: aliases } = await supabaseAdmin
       .from("title_aliases")
       .select("id, alias, normalized_alias, created_at")
       .eq("title_id", title.id);
+
 
     // Nearby ingest rows: take a head word and search
     const head = (title.title || "").split(/\s+/).filter((w: string) => w.length >= 3)[0] ?? title.title?.[0] ?? "";
