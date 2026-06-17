@@ -175,3 +175,45 @@ export const getShortenerHealth = createServerFn({ method: "GET" })
     }
     return out;
   });
+
+// Probe a single shortener provider on demand and record it.
+export const probeShortener = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ provider: z.enum(["adrinolinks", "nanolinks"]) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const cfg = data.provider === "adrinolinks"
+      ? { name: "AdrinoLinks shortener", env: "ADRINOLINKS_API_KEY", host: "adrinolinks.in" }
+      : { name: "NanoLinks shortener", env: "NANOLINKS_API_KEY", host: "nanolinks.in" };
+    const result = await checkShortener(data.provider, cfg.name, cfg.env, cfg.host);
+    return { ...result, checkedAt: new Date().toISOString() };
+  });
+
+// CSV export of shortener_health_log for offline analysis.
+export const exportShortenerHealthCsv = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ limit: z.number().int().min(1).max(10000).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
+      .from("shortener_health_log")
+      .select("checked_at, provider, ok, latency_ms, http_status, error, source")
+      .order("checked_at", { ascending: false })
+      .limit(data.limit ?? 5000);
+    if (error) throw error;
+    const header = "checked_at,provider,ok,latency_ms,http_status,error,source";
+    const esc = (v: unknown) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = (rows ?? []).map((r: any) =>
+      [r.checked_at, r.provider, r.ok, r.latency_ms, r.http_status, r.error, r.source].map(esc).join(","),
+    );
+    return { csv: [header, ...lines].join("\n"), rowCount: rows?.length ?? 0 };
+  });

@@ -2,22 +2,24 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2, Gauge } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, RefreshCw, Activity, ShieldAlert, Plug, Link2, Gauge, Download, Settings as SettingsIcon, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
 import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
-import { runIntegrationsHealth, getShortenerHealth } from "@/lib/integrations-health.functions";
+import { runIntegrationsHealth, getShortenerHealth, probeShortener, exportShortenerHealthCsv } from "@/lib/integrations-health.functions";
 import { getVerificationDiagnostics } from "@/lib/verification-diagnostics.functions";
 import {
   requestDatabaseWipe,
   confirmDatabaseWipe,
   listAdminAuditLog,
 } from "@/lib/destructive.functions";
+import { listSettingsAuditLog, getIngestionDedupStats } from "@/lib/admin-diagnostics-extra.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
 });
+
 
 const RLS_CODES: { code: string; meaning: string }[] = [
   { code: "RLS_PERMISSION_DENIED", meaning: "GRANT missing OR every USING policy returned false. Check both." },
@@ -60,11 +62,16 @@ function DiagnosticsPage() {
 
       <ShortenerHealthPanel />
 
+      <IngestionDedupPanel />
+
       <VerificationRedirectPanel />
 
       <DestructiveActionsPanel />
 
+      <SettingsAuditPanel />
+
       <AdminAuditPanel />
+
 
       {q.isLoading && <div className="text-sm text-muted-foreground">Running checks…</div>}
       {q.error && (
@@ -683,32 +690,53 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok
 
 function ShortenerHealthPanel() {
   const get = useServerFn(getShortenerHealth);
-  const runCheck = useServerFn(runIntegrationsHealth);
+  const probe = useServerFn(probeShortener);
+  const exportCsv = useServerFn(exportShortenerHealthCsv);
   const q = useQuery({
     queryKey: ["shortener-health"],
     queryFn: () => get({ data: { limit: 50 } }),
     retry: false,
     refetchInterval: 30_000,
   });
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function runProbe(provider: "adrinolinks" | "nanolinks") {
+    setBusy(provider);
+    try {
+      await probe({ data: { provider } });
+      await q.refetch();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function downloadCsv() {
+    setBusy("export");
+    try {
+      const { csv } = await exportCsv({ data: { limit: 5000 } });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `shortener_health_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <section className="rounded-md border border-border p-3 space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <Gauge className="h-4 w-4 text-primary" />
         <h2 className="font-semibold text-sm">Shortener health (rolling)</h2>
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto"
-          onClick={async () => {
-            await runCheck();
-            q.refetch();
-          }}
-          disabled={q.isFetching}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
-          <span className="hidden sm:inline">Run check now</span>
-        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button size="sm" variant="outline" onClick={downloadCsv} disabled={busy === "export"}>
+            <Download className="h-3.5 w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </Button>
+        </div>
       </div>
 
       {q.error && <p className="text-xs text-destructive">{(q.error as Error).message}</p>}
@@ -722,9 +750,20 @@ function ShortenerHealthPanel() {
             p.status === "fail" ? "text-red-500" : "text-muted-foreground";
           return (
             <div key={p.provider} className="rounded-md border border-border/60 p-3 space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div className="font-mono text-sm font-semibold capitalize">{p.provider}</div>
-                <span className={`text-[10px] uppercase tracking-wide ${tone}`}>{p.status}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] uppercase tracking-wide ${tone}`}>{p.status}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => runProbe(p.provider as "adrinolinks" | "nanolinks")}
+                    disabled={busy === p.provider}
+                  >
+                    <RefreshCw className={`h-3 w-3 sm:mr-1 ${busy === p.provider ? "animate-spin" : ""}`} />
+                    <span className="hidden sm:inline">Run check now</span>
+                  </Button>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-2 text-[11px]">
                 <div>
@@ -771,4 +810,138 @@ function ShortenerHealthPanel() {
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Settings audit log — /admin/settings changes
+// ---------------------------------------------------------------------------
+
+function SettingsAuditPanel() {
+  const list = useServerFn(listSettingsAuditLog);
+  const q = useQuery({
+    queryKey: ["settings-audit"],
+    queryFn: () => list({ data: { limit: 100 } }),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <SettingsIcon className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Settings change log</h2>
+        <span className="ml-auto text-[10px] text-muted-foreground">{q.data?.length ?? 0} changes</span>
+      </div>
+      {q.error && <p className="text-xs text-destructive break-words">{(q.error as Error).message}</p>}
+      {!q.isLoading && (q.data?.length ?? 0) === 0 && (
+        <p className="text-xs text-muted-foreground">No setting changes recorded yet.</p>
+      )}
+      <div className="overflow-x-auto -mx-3 sm:mx-0">
+        <table className="w-full text-[11px] min-w-[640px]">
+          <thead className="text-muted-foreground">
+            <tr className="text-left">
+              <th className="p-1.5">When</th>
+              <th className="p-1.5">Admin</th>
+              <th className="p-1.5">Key</th>
+              <th className="p-1.5">Type</th>
+              <th className="p-1.5">Has value</th>
+              <th className="p-1.5">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(q.data ?? []).map((r) => (
+              <tr key={r.id} className="border-t border-border/50">
+                <td className="p-1.5 whitespace-nowrap text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
+                <td className="p-1.5 break-all max-w-[180px]">{r.actorEmail ?? r.actorUserId?.slice(0, 8) ?? "—"}</td>
+                <td className="p-1.5 font-mono">{r.key ?? "—"}</td>
+                <td className="p-1.5">{r.isSecret ? <span className="text-amber-500">secret</span> : "plain"}</td>
+                <td className="p-1.5">{r.hasValue ? "yes" : <span className="text-muted-foreground">cleared</span>}</td>
+                <td className={`p-1.5 ${badgeClass(r.status)}`}>{r.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ingestion deduplication stats
+// ---------------------------------------------------------------------------
+
+function IngestionDedupPanel() {
+  const get = useServerFn(getIngestionDedupStats);
+  const q = useQuery({
+    queryKey: ["ingestion-dedup-stats"],
+    queryFn: () => get(),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const d = q.data;
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <Layers className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Ingestion deduplication</h2>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => q.refetch()} disabled={q.isFetching}>
+          <RefreshCw className={`h-3.5 w-3.5 sm:mr-1.5 ${q.isFetching ? "animate-spin" : ""}`} />
+          <span className="hidden sm:inline">Refresh</span>
+        </Button>
+      </div>
+      {q.error && <p className="text-xs text-destructive break-words">{(q.error as Error).message}</p>}
+      {d && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Ingest rows" value={d.ingest.totalRows} />
+            <Stat label="With idem. key" value={d.ingest.withIdempotencyKey} tone="ok" />
+            <Stat label="Missing key" value={d.ingest.missingIdempotencyKey} tone={d.ingest.missingIdempotencyKey ? "warn" : "ok"} />
+            <Stat label="Resync skipped (dedup)" value={d.resyncTotals.skippedByIdempotency} tone="ok" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Resync runs" value={d.resyncTotals.runs} />
+            <Stat label="Scanned" value={d.resyncTotals.scanned} />
+            <Stat label="Metadata patched" value={d.resyncTotals.metadataUpdated} />
+            <Stat label="Backfill processed" value={d.resyncTotals.backfillProcessed} />
+          </div>
+          {d.recentRuns.length > 0 && (
+            <div className="overflow-x-auto -mx-3 sm:mx-0">
+              <table className="w-full text-[11px] min-w-[640px]">
+                <thead className="text-muted-foreground">
+                  <tr className="text-left">
+                    <th className="p-1.5">When</th>
+                    <th className="p-1.5">Admin</th>
+                    <th className="p-1.5">Channels</th>
+                    <th className="p-1.5">Scanned</th>
+                    <th className="p-1.5">Patched</th>
+                    <th className="p-1.5">Backfill</th>
+                    <th className="p-1.5">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.recentRuns.map((r) => (
+                    <tr key={r.id} className="border-t border-border/50">
+                      <td className="p-1.5 whitespace-nowrap text-muted-foreground">{new Date(r.createdAt).toLocaleString()}</td>
+                      <td className="p-1.5 break-all max-w-[180px]">{r.actorEmail ?? "—"}</td>
+                      <td className="p-1.5">{r.channelCount}</td>
+                      <td className="p-1.5">{r.scanned}</td>
+                      <td className="p-1.5 text-emerald-500">{r.metadataUpdated}</td>
+                      <td className="p-1.5">{r.backfillProcessed}</td>
+                      <td className={`p-1.5 ${badgeClass(r.status)}`}>{r.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            "Resync skipped (dedup)" = rows scanned by recent resyncs that already had complete metadata, so the
+            idempotency_key constraint short-circuited any re-insert. New posts pulled in by backfill are counted separately.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
 
