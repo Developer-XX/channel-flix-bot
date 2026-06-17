@@ -164,21 +164,7 @@ async function handleCommand(
       );
       return { handled: true };
     }
-    case "/channels": {
-      const { data: chans } = await supabaseAdmin
-        .from("telegram_channels")
-        .select("name, username, channel_id, is_active")
-        .order("created_at", { ascending: true });
-      if (!chans?.length) {
-        await sendMessage(chatId, "No channels configured yet. Use the admin panel → Channel wizard.");
-        return { handled: true };
-      }
-      const lines = chans.map((c: any) =>
-        `${c.is_active ? "🟢" : "⚪"} ${c.name ?? c.username ?? c.channel_id} (<code>${c.channel_id}</code>)`,
-      );
-      await sendMessage(chatId, `<b>Channels</b>\n${lines.join("\n")}`);
-      return { handled: true };
-    }
+    // /channels removed — manage channels from the admin panel.
     case "/broadcast": {
       // Admin check already enforced at the top of handleCommand.
       if (!args) {
