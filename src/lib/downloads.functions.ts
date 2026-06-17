@@ -281,10 +281,13 @@ export const requestDownload = createServerFn({ method: "POST" })
 
     if (result.ok) return { ok: true as const, delivered: true, messageId: result.messageId };
     if (result.kind === "blocked" || result.kind === "not_started") {
+      await auditFailure("bot_blocked", { kind: result.kind });
       return { ok: false as const, reason: "bot_blocked" as const };
     }
     if (result.kind === "not_found") {
+      await auditFailure("source_missing", { kind: "not_found" });
       return { ok: false as const, reason: "source_missing" as const };
     }
+    await auditFailure("delivery_failed", { kind: result.kind, error: result.error.slice(0, 300) });
     return { ok: false as const, reason: "delivery_failed" as const, error: result.error };
   });
