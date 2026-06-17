@@ -970,18 +970,46 @@ function ChannelWizard() {
       )}
 
       <div className="space-y-2">
-        <div className="text-xs uppercase text-muted-foreground">Connected channels</div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs uppercase text-muted-foreground">Connected channels</div>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={resyncing || pickedChannels.size === 0}
+            onClick={async () => {
+              setResyncing(true);
+              try {
+                const r = await resync({ data: { channelIds: Array.from(pickedChannels) } });
+                toast.success(`Resynced ${pickedChannels.size} channel(s) · scanned ${r.scanned} · backfilled ${r.backfillProcessed} · metadata updated ${r.metadataUpdated}`);
+                setPickedChannels(new Set());
+                channels.refetch();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Resync failed");
+              } finally { setResyncing(false); }
+            }}
+          >
+            {resyncing ? "Resyncing…" : `Resync selected (${pickedChannels.size})`}
+          </Button>
+        </div>
         {channels.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {(channels.data ?? []).length === 0 && !channels.isLoading && (
           <div className="text-sm text-muted-foreground">No channels yet.</div>
         )}
         {(channels.data ?? []).map((c: any) => (
           <div key={c.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
-            <div className="min-w-0">
-              <div className="font-medium truncate">
-                {c.is_active ? "🟢" : "⚪"} {c.name} {c.username ? <span className="text-muted-foreground">@{c.username}</span> : null}
+            <div className="flex items-center gap-2 min-w-0">
+              <input
+                type="checkbox"
+                checked={pickedChannels.has(c.id)}
+                onChange={() => togglePick(c.id)}
+                aria-label={`Select ${c.name}`}
+              />
+              <div className="min-w-0">
+                <div className="font-medium truncate">
+                  {c.is_active ? "🟢" : "⚪"} {c.name} {c.username ? <span className="text-muted-foreground">@{c.username}</span> : null}
+                </div>
+                <div className="text-xs text-muted-foreground font-mono">{c.channel_id}</div>
               </div>
-              <div className="text-xs text-muted-foreground font-mono">{c.channel_id}</div>
             </div>
             <div className="flex gap-2">
               <Button
