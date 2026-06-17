@@ -223,9 +223,83 @@ export const ignoreIngest = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Admin-only: hard delete selected ingest rows (and any media_files promoted
-// from them). Used by the "Select + Delete" action in the admin panel.
+// Admin-only: SOFT-delete selected ingest rows (and any media_files promoted
+// from them). Rows remain recoverable for 24 hours via restoreIngestRows.
 export const deleteIngestRows = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      ingestIds: z.array(z.string().uuid()).min(1).max(500),
+      reason: z.string().max(200).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const now = new Date().toISOString();
+    const { data: rows } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("id, promoted_media_file_id, file_name, parsed_title")
+      .in("id", data.ingestIds);
+    const mediaIds = (rows ?? [])
+      .map((r: any) => r.promoted_media_file_id)
+      .filter(Boolean) as string[];
+    if (mediaIds.length) {
+      await supabaseAdmin
+        .from("media_files")
+        .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: data.reason ?? "admin_bulk_delete" } as never)
+        .in("id", mediaIds);
+    }
+    const { error } = await supabaseAdmin
+      .from("telegram_ingest")
+      .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: data.reason ?? "admin_bulk_delete" } as never)
+      .in("id", data.ingestIds);
+    if (error) throw error;
+    await writeAdminAudit(context, "telegram.delete_selected", "success", {
+      count: data.ingestIds.length,
+      mediaCount: mediaIds.length,
+      reason: data.reason ?? null,
+      ids: data.ingestIds.slice(0, 50),
+      sampleNames: (rows ?? []).slice(0, 10).map((r: any) => r.file_name ?? r.parsed_title),
+    });
+    return { ok: true, deletedIngest: data.ingestIds.length, deletedMedia: mediaIds.length, recoverable_until: new Date(Date.now() + SOFT_DELETE_RETENTION_MS).toISOString() };
+  });
+
+// Admin-only: SOFT-wipe ALL ingest rows + media_files. Same confirmation phrase.
+// Reversible within 24h via the Trash tab.
+export const deleteAllIngest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ confirm: z.literal("DELETE ALL FILES") }).parse(d),
+  )
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const now = new Date().toISOString();
+    const [{ count: mf }, { count: ig }] = await Promise.all([
+      supabaseAdmin.from("media_files").select("id", { count: "exact", head: true }).is("deleted_at", null),
+      supabaseAdmin.from("telegram_ingest").select("id", { count: "exact", head: true }).is("deleted_at", null),
+    ]);
+    await supabaseAdmin
+      .from("media_files")
+      .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: "admin_delete_all" } as never)
+      .is("deleted_at", null);
+    await supabaseAdmin
+      .from("telegram_ingest")
+      .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: "admin_delete_all" } as never)
+      .is("deleted_at", null);
+    await writeAdminAudit(context, "telegram.delete_all", "success", {
+      mediaCount: mf ?? 0,
+      ingestCount: ig ?? 0,
+      confirmation: "DELETE ALL FILES",
+      recoverable_until: new Date(Date.now() + SOFT_DELETE_RETENTION_MS).toISOString(),
+    });
+    return { ok: true, deletedMedia: mf ?? 0, deletedIngest: ig ?? 0, recoverable_until: new Date(Date.now() + SOFT_DELETE_RETENTION_MS).toISOString() };
+  });
+
+// Restore soft-deleted ingest rows (and their promoted media files) within the
+// 24h retention window.
+export const restoreIngestRows = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z.object({ ingestIds: z.array(z.string().uuid()).min(1).max(500) }).parse(d),
@@ -235,40 +309,98 @@ export const deleteIngestRows = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("telegram_ingest")
-      .select("id, promoted_media_file_id")
+      .select("id, promoted_media_file_id, deleted_at")
       .in("id", data.ingestIds);
-    const mediaIds = (rows ?? [])
-      .map((r: any) => r.promoted_media_file_id)
-      .filter(Boolean) as string[];
+    const cutoff = Date.now() - SOFT_DELETE_RETENTION_MS;
+    const restorable = (rows ?? []).filter(
+      (r: any) => r.deleted_at && new Date(r.deleted_at).getTime() >= cutoff,
+    );
+    const restorableIds = restorable.map((r: any) => r.id);
+    const mediaIds = restorable.map((r: any) => r.promoted_media_file_id).filter(Boolean) as string[];
     if (mediaIds.length) {
-      await supabaseAdmin.from("media_files").delete().in("id", mediaIds);
+      await supabaseAdmin
+        .from("media_files")
+        .update({ deleted_at: null, deleted_by: null, deleted_reason: null } as never)
+        .in("id", mediaIds);
     }
-    const { error } = await supabaseAdmin
-      .from("telegram_ingest")
-      .delete()
-      .in("id", data.ingestIds);
-    if (error) throw error;
-    return { ok: true, deletedIngest: data.ingestIds.length, deletedMedia: mediaIds.length };
+    if (restorableIds.length) {
+      await supabaseAdmin
+        .from("telegram_ingest")
+        .update({ deleted_at: null, deleted_by: null, deleted_reason: null } as never)
+        .in("id", restorableIds);
+    }
+    await writeAdminAudit(context, "telegram.restore", "success", {
+      restored: restorableIds.length,
+      skipped: data.ingestIds.length - restorableIds.length,
+    });
+    return { ok: true, restored: restorableIds.length, skipped: data.ingestIds.length - restorableIds.length };
   });
 
-// Admin-only: wipe ALL ingest rows + media_files. Confirmation required from
-// the UI ("type DELETE ALL FILES"). Does not touch master_titles or channels.
-export const deleteAllIngest = createServerFn({ method: "POST" })
+// Resync (re-scan) selected channels and re-populate any missing parsed
+// metadata on existing ingest rows without duplicating them (unique by
+// telegram_channel_id+telegram_message_id). Also runs the global backfill loop.
+export const resyncChannels = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ confirm: z.literal("DELETE ALL FILES") }).parse(d),
+    z.object({ channelIds: z.array(z.string().uuid()).min(1).max(50) }).parse(d),
   )
-  .handler(async ({ context }) => {
+  .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [{ count: mf }, { count: ig }] = await Promise.all([
-      supabaseAdmin.from("media_files").select("id", { count: "exact", head: true }),
-      supabaseAdmin.from("telegram_ingest").select("id", { count: "exact", head: true }),
-    ]);
-    await supabaseAdmin.from("media_files").delete().not("id", "is", null);
-    await supabaseAdmin.from("telegram_ingest").delete().not("id", "is", null);
-    return { ok: true, deletedMedia: mf ?? 0, deletedIngest: ig ?? 0 };
+    const { parseMedia } = await import("@/lib/telegram-parser");
+    const { runTelegramBackfill } = await import("@/lib/telegram-backfill.server");
+
+    // 1) Re-parse any existing rows with missing metadata for these channels.
+    const { data: rows } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("id, caption, file_name, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_codec, parsed_language, parsed_category")
+      .in("channel_id", data.channelIds)
+      .is("deleted_at", null)
+      .limit(2000);
+    let updated = 0;
+    for (const r of rows ?? []) {
+      const parsed = parseMedia(r.caption, r.file_name);
+      const patch: Record<string, unknown> = {};
+      const setIfEmpty = (key: string, current: unknown, next: unknown) => {
+        if ((current === null || current === undefined || current === "") && next != null && next !== "") {
+          patch[key] = next;
+        }
+      };
+      setIfEmpty("parsed_title", r.parsed_title, parsed.title);
+      setIfEmpty("parsed_year", r.parsed_year, parsed.year);
+      setIfEmpty("parsed_season", r.parsed_season, parsed.season);
+      setIfEmpty("parsed_episode", r.parsed_episode, parsed.episode);
+      setIfEmpty("parsed_resolution", r.parsed_resolution, parsed.resolution);
+      setIfEmpty("parsed_quality", r.parsed_quality, parsed.quality);
+      setIfEmpty("parsed_codec", r.parsed_codec, parsed.codec);
+      setIfEmpty("parsed_language", r.parsed_language, parsed.language);
+      setIfEmpty("parsed_category", r.parsed_category, parsed.category);
+      if (Object.keys(patch).length) {
+        await supabaseAdmin.from("telegram_ingest").update(patch as never).eq("id", r.id);
+        updated++;
+      }
+    }
+
+    // 2) Run the global backfill loop to pull new posts (uniqueness enforced
+    // by the (telegram_channel_id, telegram_message_id) constraint).
+    const bf = await runTelegramBackfill();
+
+    await writeAdminAudit(context, "telegram.resync_channels", "success", {
+      channelIds: data.channelIds,
+      scanned: rows?.length ?? 0,
+      metadataUpdated: updated,
+      backfillProcessed: bf.processed,
+    });
+
+    return {
+      ok: true,
+      scanned: rows?.length ?? 0,
+      metadataUpdated: updated,
+      backfillProcessed: bf.processed,
+      newLastUpdateId: bf.newLastUpdateId,
+    };
   });
+
 
 export const searchMasterTitles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
