@@ -985,7 +985,7 @@ function MatchingSettingsPanel() {
 }
 
 function BulkActionBar({
-  count, ingestIds, search, onClear, onAssign, onAddAlias, onPromoteSelected,
+  count, ingestIds, search, onClear, onAssign, onAddAlias, onPromoteSelected, onDeleteSelected,
 }: {
   count: number;
   ingestIds: string[];
@@ -994,6 +994,7 @@ function BulkActionBar({
   onAssign: (titleId: string) => Promise<void>;
   onAddAlias: (titleId: string) => Promise<void>;
   onPromoteSelected: () => Promise<void>;
+  onDeleteSelected: () => Promise<void>;
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Array<{ id: string; title: string; release_year: number | null; category: string }>>([]);
@@ -1002,8 +1003,9 @@ function BulkActionBar({
     <div className="sticky top-2 z-10 rounded-lg border border-primary bg-primary/5 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-sm font-medium">{count} selected ({ingestIds.length} ids)</div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button size="sm" variant="secondary" onClick={onPromoteSelected}>Rematch & promote selected</Button>
+          <Button size="sm" variant="destructive" onClick={onDeleteSelected}>Delete selected</Button>
           <Button size="sm" variant="ghost" onClick={onClear}>Clear</Button>
         </div>
       </div>
