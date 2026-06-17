@@ -38,6 +38,8 @@ import {
   rebuildWebsiteIndexes,
   deleteIngestRows,
   deleteAllIngest,
+  restoreIngestRows,
+  resyncChannels,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
