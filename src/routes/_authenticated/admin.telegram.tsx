@@ -69,6 +69,8 @@ function TelegramAdmin() {
   const bulkAlias = useServerFn(bulkAddAlias);
   const forcePublish = useServerFn(forceRematchAndPublish);
   const rebuildIdx = useServerFn(rebuildWebsiteIndexes);
+  const delRows = useServerFn(deleteIngestRows);
+  const delAll = useServerFn(deleteAllIngest);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
