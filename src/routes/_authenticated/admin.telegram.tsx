@@ -73,9 +73,22 @@ function TelegramAdmin() {
   const rebuildIdx = useServerFn(rebuildWebsiteIndexes);
   const delRows = useServerFn(deleteIngestRows);
   const delAll = useServerFn(deleteAllIngest);
+  const restore = useServerFn(restoreIngestRows);
+  const listChannels = useServerFn(listTelegramChannels);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
+  const [trash, setTrash] = useState(false);
+  const [filters, setFilters] = useState({
+    q: "",
+    channelId: "",
+    quality: "",
+    language: "",
+    season: "" as number | "",
+    episode: "" as number | "",
+    dateFrom: "",
+    dateTo: "",
+  });
   const STABLE_DEV_URL = "https://project--d54ff009-ac17-477f-85a3-112a949d0888-dev.lovable.app";
   const [baseUrl, setBaseUrl] = useState(STABLE_DEV_URL);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -90,9 +103,25 @@ function TelegramAdmin() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  const channelsQ = useQuery({ queryKey: ["tg-channels"], queryFn: () => listChannels() });
+
   const ingest = useQuery({
-    queryKey: ["tg-ingest", statusFilter],
-    queryFn: () => list({ data: { status: statusFilter } }),
+    queryKey: ["tg-ingest", statusFilter, trash, filters],
+    queryFn: () =>
+      list({
+        data: {
+          status: trash ? "all" : statusFilter,
+          trash,
+          q: filters.q || undefined,
+          channelId: filters.channelId || undefined,
+          quality: filters.quality || undefined,
+          language: filters.language || undefined,
+          season: filters.season === "" ? undefined : Number(filters.season),
+          episode: filters.episode === "" ? undefined : Number(filters.episode),
+          dateFrom: filters.dateFrom || undefined,
+          dateTo: filters.dateTo || undefined,
+        },
+      }),
   });
   const totalRows = ingest.data?.length ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
