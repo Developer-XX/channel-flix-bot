@@ -688,6 +688,9 @@ export type Database = {
           caption: string | null
           channel_id: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           duration_seconds: number | null
           episode_id: string | null
           file_name: string
@@ -707,6 +710,9 @@ export type Database = {
           caption?: string | null
           channel_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           duration_seconds?: number | null
           episode_id?: string | null
           file_name: string
@@ -726,6 +732,9 @@ export type Database = {
           caption?: string | null
           channel_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           duration_seconds?: number | null
           episode_id?: string | null
           file_name?: string
@@ -1012,6 +1021,9 @@ export type Database = {
           caption: string | null
           channel_id: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           duration_seconds: number | null
           file_name: string | null
           file_size: number | null
@@ -1045,6 +1057,9 @@ export type Database = {
           caption?: string | null
           channel_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           duration_seconds?: number | null
           file_name?: string | null
           file_size?: number | null
@@ -1078,6 +1093,9 @@ export type Database = {
           caption?: string | null
           channel_id?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           duration_seconds?: number | null
           file_name?: string | null
           file_size?: number | null
