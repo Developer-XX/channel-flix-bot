@@ -124,6 +124,7 @@ function TitlesAdmin() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex items-center gap-1">
+                    <ResyncTitleButton titleId={t.id} titleName={t.title} />
                     <button
                       onClick={() => setEditingId(t.id)}
                       className="text-muted-foreground hover:text-foreground p-1"
@@ -140,6 +141,7 @@ function TitlesAdmin() {
                     </button>
                   </div>
                 </td>
+
               </tr>
             ))}
           </tbody>
