@@ -793,3 +793,33 @@ function EditTitleDialog({ id, onClose, onSaved }: { id: string; onClose: () => 
     </div>
   );
 }
+
+function ResyncTitleButton({ titleId, titleName }: { titleId: string; titleName: string }) {
+  const fn = useServerFn(resyncTitleFiles);
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await fn({ data: { titleId } });
+          toast.success(
+            `${titleName}: ${r.promoted} matched · ${r.demoted} demoted · ${r.kept} kept · ${r.skipped} unmatched`,
+          );
+          qc.invalidateQueries({ queryKey: ["admin-titles"] });
+        } catch (e) {
+          toast.error((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className="text-muted-foreground hover:text-primary disabled:opacity-50 p-1"
+      aria-label="Resync this title"
+      title="Resync this title"
+    >
+      <RotateCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+    </button>
+  );
+}
