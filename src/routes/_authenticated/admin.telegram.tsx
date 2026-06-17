@@ -36,6 +36,8 @@ import {
   bulkAddAlias,
   forceRematchAndPublish,
   rebuildWebsiteIndexes,
+  deleteIngestRows,
+  deleteAllIngest,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
@@ -67,6 +69,8 @@ function TelegramAdmin() {
   const bulkAlias = useServerFn(bulkAddAlias);
   const forcePublish = useServerFn(forceRematchAndPublish);
   const rebuildIdx = useServerFn(rebuildWebsiteIndexes);
+  const delRows = useServerFn(deleteIngestRows);
+  const delAll = useServerFn(deleteAllIngest);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
@@ -81,11 +85,30 @@ function TelegramAdmin() {
       return next;
     });
   };
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const ingest = useQuery({
     queryKey: ["tg-ingest", statusFilter],
     queryFn: () => list({ data: { status: statusFilter } }),
   });
+  const totalRows = ingest.data?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageRows = useMemo(
+    () => (ingest.data ?? []).slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [ingest.data, currentPage, pageSize],
+  );
+  const pageIds = useMemo(() => pageRows.map((r) => r.id), [pageRows]);
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const toggleSelectPage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
   const hook = useQuery({ queryKey: ["tg-webhook-info"], queryFn: () => getHook() });
   const state = useQuery({ queryKey: ["tg-bot-state"], queryFn: () => botState() });
 
@@ -246,14 +269,76 @@ function TelegramAdmin() {
               ingest.refetch();
               router.invalidate();
             }}
+            onDeleteSelected={async () => {
+              const ids = Array.from(selected);
+              if (!confirm(`Permanently delete ${ids.length} file(s) and any media they promoted?`)) return;
+              try {
+                const r = await delRows({ data: { ingestIds: ids } });
+                toast.success(`Deleted ${r.deletedIngest} ingest · ${r.deletedMedia} media`);
+                setSelected(new Set());
+                ingest.refetch();
+                router.invalidate();
+              } catch (e: any) {
+                toast.error(e?.message ?? "Delete failed");
+              }
+            }}
           />
         )}
+
+        {/* Pagination + bulk toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              aria-label="Select all on this page"
+              checked={allOnPageSelected}
+              onChange={toggleSelectPage}
+            />
+            <span className="text-muted-foreground">
+              {totalRows} total · page {currentPage}/{totalPages}
+            </span>
+            <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+              <SelectTrigger className="h-8 w-[90px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[10, 25, 50, 100].map((n) => (
+                  <SelectItem key={n} value={String(n)}>{n}/page</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+            <Button size="sm" variant="outline" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={async () => {
+                const phrase = prompt('Type "DELETE ALL FILES" to wipe every ingest row and media file.');
+                if (phrase !== "DELETE ALL FILES") {
+                  toast.message("Cancelled — phrase did not match.");
+                  return;
+                }
+                try {
+                  const r = await delAll({ data: { confirm: "DELETE ALL FILES" } });
+                  toast.success(`Wiped ${r.deletedIngest} ingest · ${r.deletedMedia} media`);
+                  setSelected(new Set());
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Delete-all failed");
+                }
+              }}
+            >
+              Delete ALL files
+            </Button>
+          </div>
+        </div>
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {ingest.error && <p className="text-sm text-destructive">{(ingest.error as Error).message}</p>}
 
         <div className="space-y-2">
-          {(ingest.data ?? []).map((row) => (
+          {pageRows.map((row) => (
             <IngestCard
               key={row.id}
               row={row}
@@ -900,7 +985,7 @@ function MatchingSettingsPanel() {
 }
 
 function BulkActionBar({
-  count, ingestIds, search, onClear, onAssign, onAddAlias, onPromoteSelected,
+  count, ingestIds, search, onClear, onAssign, onAddAlias, onPromoteSelected, onDeleteSelected,
 }: {
   count: number;
   ingestIds: string[];
@@ -909,6 +994,7 @@ function BulkActionBar({
   onAssign: (titleId: string) => Promise<void>;
   onAddAlias: (titleId: string) => Promise<void>;
   onPromoteSelected: () => Promise<void>;
+  onDeleteSelected: () => Promise<void>;
 }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Array<{ id: string; title: string; release_year: number | null; category: string }>>([]);
@@ -917,8 +1003,9 @@ function BulkActionBar({
     <div className="sticky top-2 z-10 rounded-lg border border-primary bg-primary/5 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-sm font-medium">{count} selected ({ingestIds.length} ids)</div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button size="sm" variant="secondary" onClick={onPromoteSelected}>Rematch & promote selected</Button>
+          <Button size="sm" variant="destructive" onClick={onDeleteSelected}>Delete selected</Button>
           <Button size="sm" variant="ghost" onClick={onClear}>Clear</Button>
         </div>
       </div>

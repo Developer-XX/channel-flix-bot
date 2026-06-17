@@ -183,7 +183,16 @@ export function DownloadButton({
         setLinkOpen(true);
         return;
       }
-      failWith(`Couldn't deliver: ${r.reason}`, cid, (r as any).error);
+      const rr = r as any;
+      const friendly =
+        rr.reason === "source_missing"
+          ? "This file isn't linked to a Telegram source yet."
+          : rr.reason === "file_not_found"
+            ? "File not found in the library."
+            : rr.reason === "delivery_failed"
+              ? "Telegram refused the delivery."
+              : `Couldn't deliver: ${rr.reason}`;
+      failWith(friendly, cid, rr.detail ?? rr.error ?? `reason=${rr.reason}`);
     } catch (e: any) {
       failWith(e?.message ?? "Download failed", cid);
     } finally {

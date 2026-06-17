@@ -143,6 +143,53 @@ export const ignoreIngest = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Admin-only: hard delete selected ingest rows (and any media_files promoted
+// from them). Used by the "Select + Delete" action in the admin panel.
+export const deleteIngestRows = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ ingestIds: z.array(z.string().uuid()).min(1).max(500) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("id, promoted_media_file_id")
+      .in("id", data.ingestIds);
+    const mediaIds = (rows ?? [])
+      .map((r: any) => r.promoted_media_file_id)
+      .filter(Boolean) as string[];
+    if (mediaIds.length) {
+      await supabaseAdmin.from("media_files").delete().in("id", mediaIds);
+    }
+    const { error } = await supabaseAdmin
+      .from("telegram_ingest")
+      .delete()
+      .in("id", data.ingestIds);
+    if (error) throw error;
+    return { ok: true, deletedIngest: data.ingestIds.length, deletedMedia: mediaIds.length };
+  });
+
+// Admin-only: wipe ALL ingest rows + media_files. Confirmation required from
+// the UI ("type DELETE ALL FILES"). Does not touch master_titles or channels.
+export const deleteAllIngest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ confirm: z.literal("DELETE ALL FILES") }).parse(d),
+  )
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [{ count: mf }, { count: ig }] = await Promise.all([
+      supabaseAdmin.from("media_files").select("id", { count: "exact", head: true }),
+      supabaseAdmin.from("telegram_ingest").select("id", { count: "exact", head: true }),
+    ]);
+    await supabaseAdmin.from("media_files").delete().not("id", "is", null);
+    await supabaseAdmin.from("telegram_ingest").delete().not("id", "is", null);
+    return { ok: true, deletedMedia: mf ?? 0, deletedIngest: ig ?? 0 };
+  });
+
 export const searchMasterTitles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { q: string }) => z.object({ q: z.string().max(200) }).parse(d))
