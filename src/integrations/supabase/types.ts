@@ -98,6 +98,33 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          description: string | null
+          is_secret: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: string | null
+        }
+        Insert: {
+          description?: string | null
+          is_secret?: boolean
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string | null
+        }
+        Update: {
+          description?: string | null
+          is_secret?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string | null
+        }
+        Relationships: []
+      }
       auth_rate_limits: {
         Row: {
           action: string
@@ -875,6 +902,39 @@ export type Database = {
           },
         ]
       }
+      shortener_health_log: {
+        Row: {
+          checked_at: string
+          error: string | null
+          http_status: number | null
+          id: number
+          latency_ms: number | null
+          ok: boolean
+          provider: string
+          source: string | null
+        }
+        Insert: {
+          checked_at?: string
+          error?: string | null
+          http_status?: number | null
+          id?: number
+          latency_ms?: number | null
+          ok: boolean
+          provider: string
+          source?: string | null
+        }
+        Update: {
+          checked_at?: string
+          error?: string | null
+          http_status?: number | null
+          id?: number
+          latency_ms?: number | null
+          ok?: boolean
+          provider?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       sync_trace_log: {
         Row: {
           channel_id: number | null
@@ -1028,6 +1088,7 @@ export type Database = {
           file_name: string | null
           file_size: number | null
           id: string
+          idempotency_key: string | null
           last_error: string | null
           match_score: number | null
           match_status: Database["public"]["Enums"]["ingest_status"]
@@ -1064,6 +1125,7 @@ export type Database = {
           file_name?: string | null
           file_size?: number | null
           id?: string
+          idempotency_key?: string | null
           last_error?: string | null
           match_score?: number | null
           match_status?: Database["public"]["Enums"]["ingest_status"]
@@ -1100,6 +1162,7 @@ export type Database = {
           file_name?: string | null
           file_size?: number | null
           id?: string
+          idempotency_key?: string | null
           last_error?: string | null
           match_score?: number | null
           match_status?: Database["public"]["Enums"]["ingest_status"]
