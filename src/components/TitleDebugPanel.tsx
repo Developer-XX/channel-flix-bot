@@ -72,18 +72,43 @@ export function TitleDebugPanel({ slug }: { slug: string }) {
                   {debugQ.data.files.length === 0 && (
                     <p className="text-xs text-amber-600">No media_files rows — nothing will appear in Downloads.</p>
                   )}
-                  <ul className="text-xs space-y-0.5">
-                    {debugQ.data.files.slice(0, 20).map((f: any) => (
-                      <li key={f.id} className="font-mono">
-                        {f.episodes?.seasons?.season_number != null
-                          ? `S${String(f.episodes.seasons.season_number).padStart(2, "0")}`
-                          : "—"}
-                        {f.episodes?.episode_number != null ? `E${String(f.episodes.episode_number).padStart(2, "0")}` : ""}{" "}
-                        · {f.file_name} {f.is_active ? "" : "[inactive]"}
-                      </li>
-                    ))}
+                  <ul className="text-xs space-y-1">
+                    {debugQ.data.files.slice(0, 20).map((f: any) => {
+                      const a = (debugQ.data as any).filesAudit?.[f.id];
+                      const decisionTone =
+                        a?.decision === "demoted"
+                          ? "text-red-500"
+                          : a?.decision === "promoted" || a?.decision === "manual" || a?.decision === "alias"
+                            ? "text-emerald-500"
+                            : "text-amber-500";
+                      return (
+                        <li key={f.id} className="border border-border/40 rounded px-2 py-1.5 bg-background/30">
+                          <div className="font-mono">
+                            {f.episodes?.seasons?.season_number != null
+                              ? `S${String(f.episodes.seasons.season_number).padStart(2, "0")}`
+                              : "—"}
+                            {f.episodes?.episode_number != null ? `E${String(f.episodes.episode_number).padStart(2, "0")}` : ""}{" "}
+                            · {f.file_name} {f.is_active ? "" : <span className="text-red-500">[inactive]</span>}
+                          </div>
+                          {a && (
+                            <div className="mt-0.5 text-[10px] flex flex-wrap gap-x-3 gap-y-0.5">
+                              <span className={`uppercase font-semibold ${decisionTone}`}>{a.decision}</span>
+                              {a.score != null && (
+                                <span className="text-muted-foreground">
+                                  score <b className="text-foreground">{Number(a.score).toFixed(3)}</b>
+                                  {a.threshold != null && <> · thr {Number(a.threshold).toFixed(2)}</>}
+                                </span>
+                              )}
+                              <span className="text-muted-foreground">{new Date(a.attemptAt).toLocaleString()}</span>
+                              <span className="text-muted-foreground italic break-all">{a.reason}</span>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
+
 
                 <div>
                   <div className="text-xs uppercase text-muted-foreground mt-3 mb-1">
