@@ -28,7 +28,6 @@ I watch your Telegram channels and import posted media files into the catalog.
 /start, /help — this message
 /id — show your chat id (useful when adding /broadcast admins)
 /status — bot health and last ingest count
-/channels — list connected channels
 /broadcast &lt;text&gt; — (admins only) send a message to every active channel`;
 
 // Returns true if the Telegram user (by fromId) is a bot admin: either linked
