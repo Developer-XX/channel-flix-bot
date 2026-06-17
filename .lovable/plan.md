@@ -1,62 +1,51 @@
-# Plan: Admin Telegram & Titles enhancements
+# Admin & Shortener Enhancements Plan
 
-Five related changes across the admin panel, Telegram pipeline, and titles management.
+## 1. Dedicated shortener redirect endpoint
+**New route:** `src/routes/api/public/s/$token.ts`
+- Resolves a verification token → target URL.
+- Returns **JSON** (not Chrome-redirect HTML) when called with `?debug=1` or `Accept: application/json`:
+  ```json
+  { "ok": false, "reason": "token_expired", "missing_field": "source_url", "target_url": null }
+  ```
+- Otherwise issues a proper `302` to the resolved URL.
+- Reason codes: `token_missing`, `token_invalid`, `token_expired`, `token_consumed`, `source_missing`, `shortener_failed`, `ok`.
+- Logs every call to `admin_audit_log` with `event_type='shortener.redirect'`.
 
-## 1. Admin audit logging for downloads & deletes
-- Reuse existing `admin_audit_log` table.
-- Log download failures from `requestDownload` (`src/lib/downloads.functions.ts`): action `download.failed` with `{ file_id, missing_fields, user_id, ip, ua }`. Use a service-role insert so non-admin user failures are still captured.
-- Log Telegram deletes from `src/lib/telegram.functions.ts`:
-  - `telegram.delete_selected` with `{ ids, count, admin_user_id }`
-  - `telegram.delete_all` with `{ count_before, confirmation }`
-- Surface a "Recent admin actions" panel on `admin.diagnostics.tsx` filtered to telegram/download actions.
+## 2. AdrinoLinks diagnostics panel
+**Edit:** `src/routes/_authenticated/admin.diagnostics.tsx`, `src/lib/integrations-health.functions.ts`
+- New `shortener_health_log` table (migration): `provider`, `checked_at`, `ok`, `latency_ms`, `error`, `http_status`.
+- `getShortenerHealth()` server fn aggregates last 50 checks → returns `{ status, lastCheckedAt, lastError, successRate, avgLatencyMs }`.
+- UI card on `/admin/diagnostics`: status badge, last check time, last error, success rate %, "Run check now" button.
 
-## 2. Admin resync/reingest for selected channels
-- New server fn `resyncChannels({ channelIds })` in `src/lib/telegram.functions.ts` (admin-only).
-  - For each channel: call existing backfill helper in `telegram-backfill.server.ts` to re-scan recent posts.
-  - Re-populate missing metadata fields on existing `telegram_ingest` rows (e.g., `quality`, `language`, `season`, `episode`, `parsed_title`) using the parser in `telegram-parser.ts`. Update only NULL/empty fields — never overwrite admin-curated data; uniqueness keyed on `(channel_id, telegram_message_id)` prevents duplicate rows.
-  - Return `{ scanned, updated, inserted }` counts.
-- UI: add "Resync selected channels" button on `admin.telegram.tsx` channels list.
+## 3. Trash countdown timer
+**Edit:** `src/routes/_authenticated/admin.telegram.tsx`
+- In Trash tab, add `Expires in` column rendering `formatDistanceToNow(deleted_at + 24h)` with a 1s `useEffect` interval.
+- Red badge when < 1 h remaining. "Restore" button stays as-is.
 
-## 3. Search & filters for the admin Telegram files table
-- Extend `listIngest` server fn with filters: `q` (name search), `channelId`, `quality`, `language`, `season`, `episode`, `dateFrom`, `dateTo`.
-- Update `admin.telegram.tsx`:
-  - Filter bar above the table (Input + Selects + date range).
-  - Debounced query refresh and pagination reset on filter change.
-  - Reset button to clear all filters.
+## 4. Idempotent resync
+**Edit:** `src/lib/telegram.functions.ts`, `src/lib/telegram-backfill.server.ts`
+- Add `idempotency_key TEXT UNIQUE` to `telegram_ingest` (migration) — value = `sha256(channel_id|telegram_message_id|file_unique_id)`.
+- `resyncChannels` and ingest pipeline use `upsert(..., { onConflict: 'idempotency_key', ignoreDuplicates: false })` so partial failures + reruns never duplicate rows; existing rows get metadata patched in place.
+- Backfill writes a per-run `run_id` to `telegram_bot_state` to track partial progress.
 
-## 4. Soft-delete / undo window for ingested files (24h)
-- Migration: add `deleted_at timestamptz` + `deleted_by uuid` + `deleted_reason text` to `telegram_ingest`; partial index `WHERE deleted_at IS NULL`. Same columns on `media_files`.
-- Change `deleteIngestRows` and `deleteAllIngest` to UPDATE `deleted_at = now()` instead of physical delete. Cascade to `media_files` (soft).
-- Default list query excludes soft-deleted rows. Add "Trash" tab in `admin.telegram.tsx` to view items deleted in the last 24h with **Restore** button.
-- New server fns: `restoreIngestRows(ids)`, `purgeExpiredSoftDeletes()` (hard-delete rows older than 24h). The purge runs lazily on each admin list call (cheap WHERE-clause delete) — no cron needed.
+## 5. Admin-editable runtime settings
+**New table** (migration): `app_settings (key TEXT PRIMARY KEY, value TEXT, is_secret BOOL, updated_at, updated_by)`, admin-only RLS.
+**New page:** `src/routes/_authenticated/admin.settings.tsx`
+Editable keys, grouped:
+- **Domain:** `PUBLIC_BASE_URL`
+- **TMDB:** `TMDB_API_KEY` (masked)
+- **Shorteners:** `ADRINOLINKS_API_KEY`, `NANOLINKS_API_KEY` (masked)
+- **Verification timing:** `VERIFICATION_WINDOW_MINUTES`, `VERIFICATION_MAX_PER_HOUR`, `SHORTENER_TOKEN_TTL_SECONDS` (new)
 
-## 5. Edit title details + verification
-- New server fn `updateTitle({ id, fields })` in `src/lib/admin.functions.ts` (admin-only). Allowed fields: `title`, `original_title`, `overview`, `release_date`, `poster_path`, `backdrop_path`, `runtime`, `genres`, `language`, `slug`, `kind`.
-- Auto-regenerate slug on title change (collision check via existing slug helper).
-- Edit UI: add an "Edit" button on each row in `admin.titles.tsx` opening a Dialog with a form (react-hook-form + zod). On save: invalidate queries, toast.
-- Verification pass after edit:
-  - Validate slug uniqueness server-side.
-  - Update related `idx_search` row in same transaction so search reflects the change.
-  - Log to `admin_audit_log` (`title.updated` with before/after diff).
+**Read priority:** `app_settings` row → `process.env` fallback. Implemented via `src/lib/runtime-settings.server.ts` with 60s in-memory cache + `bumpSettingsVersion()` on save to invalidate.
+
+**Security:** secret values never sent to client — `getSettings()` returns `{ key, isSecret, hasValue, value: isSecret ? null : value }`. Write goes through `updateSetting()` (admin-only, audited).
 
 ## Technical notes
-
-- All new server fns use `requireSupabaseAuth` + `has_role(admin)` check; failures throw 403.
-- Audit-log inserts use `supabaseAdmin` (loaded inside handler) so RLS doesn't drop entries.
-- Migration order: add soft-delete columns → backfill `deleted_at = NULL` (default) → swap delete fns. No data loss.
-- Existing `pending_destructive_actions` confirmation flow for `delete_all` is preserved; only the executor switches to soft-delete.
+- All admin mutations log to `admin_audit_log`.
+- Migration order: `app_settings` → `shortener_health_log` → `telegram_ingest.idempotency_key` (backfill from existing rows in same migration).
+- No edits to auto-generated Supabase files. No changes to `.env` (settings live in DB).
 
 ## Files
-
-**Created**
-- `supabase/migrations/<ts>_soft_delete_and_audit.sql`
-
-**Updated**
-- `src/lib/downloads.functions.ts` — log failures
-- `src/lib/telegram.functions.ts` — soft-delete, resync, filters, audit
-- `src/lib/admin.functions.ts` — `updateTitle`
-- `src/routes/_authenticated/admin.telegram.tsx` — filters, trash tab, resync button
-- `src/routes/_authenticated/admin.titles.tsx` — edit dialog
-- `src/routes/_authenticated/admin.diagnostics.tsx` — recent admin actions panel
-
-Proceed?
+**New:** migration, `src/routes/api/public/s/$token.ts`, `src/lib/runtime-settings.server.ts`, `src/lib/runtime-settings.functions.ts`, `src/routes/_authenticated/admin.settings.tsx`
+**Edited:** `admin.diagnostics.tsx`, `admin.telegram.tsx`, `integrations-health.functions.ts`, `telegram.functions.ts`, `telegram-backfill.server.ts`, `site-url.server.ts` (read PUBLIC_BASE_URL from settings)

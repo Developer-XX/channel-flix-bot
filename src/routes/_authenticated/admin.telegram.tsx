@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -608,6 +608,7 @@ function IngestCard({
             {row.file_size ? ` · ${(row.file_size / 1024 / 1024).toFixed(1)} MB` : ""}
             {row.promoted_media_file_id ? " · promoted" : ""}
           </p>
+          {(row as any).deleted_at && <TrashCountdown deletedAt={(row as any).deleted_at} />}
         </button>
         <Button size="sm" variant="ghost" onClick={onToggle}>{expanded ? "Close" : "Review"}</Button>
         </div>
@@ -1187,6 +1188,31 @@ function BulkActionBar({
         <Button size="sm" variant="outline" disabled={!pick} onClick={() => pick && onAddAlias(pick)}>Add as alias (+ rematch)</Button>
       </div>
     </div>
+  );
+}
+
+// Trash undo-window countdown. Shows time remaining before hard-delete
+// (deleted_at + 24h). Updates every second.
+function TrashCountdown({ deletedAt }: { deletedAt: string }) {
+  const expiresAt = new Date(deletedAt).getTime() + 24 * 60 * 60 * 1000;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const remaining = expiresAt - now;
+  if (remaining <= 0) {
+    return <span className="mt-1 inline-block text-[11px] text-red-500">⏱ expired — purging soon</span>;
+  }
+  const h = Math.floor(remaining / 3_600_000);
+  const m = Math.floor((remaining % 3_600_000) / 60_000);
+  const s = Math.floor((remaining % 60_000) / 1000);
+  const urgent = remaining < 60 * 60 * 1000;
+  const label = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return (
+    <span className={`mt-1 inline-block text-[11px] ${urgent ? "text-red-500 font-medium" : "text-amber-500"}`}>
+      ⏱ restore window: {label} left
+    </span>
   );
 }
 

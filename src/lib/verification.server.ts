@@ -6,7 +6,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
-import { getPublicBaseUrl } from "./site-url.server";
+import { getPublicBaseUrl, getPublicBaseUrlAsync } from "./site-url.server";
+import { getSetting, getSettingNumber } from "./runtime-settings.server";
 
 export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -47,11 +48,9 @@ export async function getVerificationState(
 
 // Read shortener API keys ONLY from server env. Never logged, never returned
 // to the client. We expose a stable, non-reversible fingerprint for audit.
-function readKey(provider: Provider): string | null {
-  const raw =
-    provider === "nanolinks"
-      ? process.env.NANOLINKS_API_KEY
-      : process.env.ADRINOLINKS_API_KEY;
+async function readKey(provider: Provider): Promise<string | null> {
+  const settingKey = provider === "nanolinks" ? "NANOLINKS_API_KEY" : "ADRINOLINKS_API_KEY";
+  const raw = await getSetting(settingKey);
   if (!raw || raw.length < 8) return null;
   return raw;
 }
@@ -68,7 +67,7 @@ async function shorten(
   provider: Provider,
   longUrl: string,
 ): Promise<string> {
-  const key = readKey(provider);
+  const key = await readKey(provider);
   const startedAt = Date.now();
   if (!key) {
     // Audit no-key path (passthrough)
@@ -152,7 +151,8 @@ export async function startVerificationForUser(args: {
     .is("consumed_at", null);
 
   const token = mintToken();
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30min TTL
+  const ttlSeconds = await getSettingNumber("SHORTENER_TOKEN_TTL_SECONDS", 30 * 60);
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
   await supabase.from("verification_tokens").insert({
     token,
     user_id: userId,
@@ -162,7 +162,8 @@ export async function startVerificationForUser(args: {
     expires_at: expiresAt,
   });
 
-  const longUrl = `${siteOrigin()}/api/public/v/${token}`;
+  const baseUrl = await getPublicBaseUrlAsync();
+  const longUrl = `${baseUrl}/api/public/v/${token}`;
   const redirectUrl = await shorten(supabase, userId, provider, longUrl);
   return { provider, redirectUrl, token, expiresAt };
 }

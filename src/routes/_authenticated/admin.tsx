@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope } from "lucide-react";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,7 @@ function AdminLayout() {
           <NavItem to="/admin/verification-limits" icon={<ShieldAlert className="h-4 w-4" />} label="Verification limits" />
           <NavItem to="/admin/sync-trace" icon={<Activity className="h-4 w-4" />} label="Sync trace" />
           <NavItem to="/admin/diagnostics" icon={<Stethoscope className="h-4 w-4" />} label="Diagnostics" />
+          <NavItem to="/admin/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-foreground inline-flex items-center gap-1"><ArrowLeft className="h-3 w-3" /> Back to site</Link>
@@ -117,6 +118,7 @@ function AdminLayout() {
             <MobileNavItem to="/admin/verification-limits" label="Limits" />
             <MobileNavItem to="/admin/sync-trace" label="Sync trace" />
             <MobileNavItem to="/admin/diagnostics" label="Diagnostics" />
+            <MobileNavItem to="/admin/settings" label="Settings" />
           </nav>
         </div>
         <Outlet />
