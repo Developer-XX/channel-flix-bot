@@ -1019,7 +1019,7 @@ export const resyncTitleFiles = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { runMatcher, loadMatchingSettings, autoPromoteToMediaFile, bestTitleScore } =
+    const { runMatcher, loadMatchingSettings, autoPromoteToMediaFile, bestTitleScore, revalidatePromotedForTitle } =
       await import("@/lib/telegram-ingest.server");
     const { bumpCacheVersion } = await import("@/lib/indexes.server");
 
@@ -1028,6 +1028,11 @@ export const resyncTitleFiles = createServerFn({ method: "POST" })
     if (!title) throw new Error("Title not found");
 
     const settings = await loadMatchingSettings(supabaseAdmin);
+
+    // Re-validate already-promoted files: demote any that no longer meet
+    // the threshold so stale matches stop showing on the title.
+    const revalidation = await revalidatePromotedForTitle(supabaseAdmin, title, settings);
+
     const head = (title.title || "").split(/\s+/).filter((w: string) => w.length >= 3)[0] ?? title.title?.[0] ?? "";
 
     const { data: nearby } = await supabaseAdmin
@@ -1072,10 +1077,19 @@ export const resyncTitleFiles = createServerFn({ method: "POST" })
         promoted++;
       } catch (e) { errors.push((e as Error).message); }
     }
-    if (promoted > 0) await bumpCacheVersion(supabaseAdmin);
+    if (promoted > 0 || revalidation.demoted > 0) await bumpCacheVersion(supabaseAdmin);
     // Silence unused matcher import; keep symmetry with forceRematchAndPublish
     void runMatcher;
-    return { ok: true, scanned: nearby?.length ?? 0, promoted, skipped, errors: errors.slice(0, 5) };
+    return {
+      ok: true,
+      scanned: nearby?.length ?? 0,
+      promoted,
+      skipped,
+      demoted: revalidation.demoted,
+      revalidated: revalidation.revalidated,
+      kept: revalidation.kept,
+      errors: errors.slice(0, 5),
+    };
   });
 
 
