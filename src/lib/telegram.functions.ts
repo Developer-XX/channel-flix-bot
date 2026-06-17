@@ -1145,7 +1145,7 @@ export const getTitleDebug = createServerFn({ method: "GET" })
           if (!fid || filesAudit[fid]) continue;
           filesAudit[fid] = {
             decision: a.decision,
-            reason: a.reason,
+            reason: a.reason ?? "",
             attemptAt: a.attempt_at,
             score: (a.scores as any)?.total ?? null,
             threshold: a.threshold,
