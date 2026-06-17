@@ -36,6 +36,8 @@ import {
   bulkAddAlias,
   forceRematchAndPublish,
   rebuildWebsiteIndexes,
+  deleteIngestRows,
+  deleteAllIngest,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
