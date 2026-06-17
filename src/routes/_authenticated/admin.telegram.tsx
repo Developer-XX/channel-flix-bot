@@ -1191,4 +1191,29 @@ function BulkActionBar({
   );
 }
 
+// Trash undo-window countdown. Shows time remaining before hard-delete
+// (deleted_at + 24h). Updates every second.
+function TrashCountdown({ deletedAt }: { deletedAt: string }) {
+  const expiresAt = new Date(deletedAt).getTime() + 24 * 60 * 60 * 1000;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const remaining = expiresAt - now;
+  if (remaining <= 0) {
+    return <span className="mt-1 inline-block text-[11px] text-red-500">⏱ expired — purging soon</span>;
+  }
+  const h = Math.floor(remaining / 3_600_000);
+  const m = Math.floor((remaining % 3_600_000) / 60_000);
+  const s = Math.floor((remaining % 60_000) / 1000);
+  const urgent = remaining < 60 * 60 * 1000;
+  const label = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return (
+    <span className={`mt-1 inline-block text-[11px] ${urgent ? "text-red-500 font-medium" : "text-amber-500"}`}>
+      ⏱ restore window: {label} left
+    </span>
+  );
+}
+
 
