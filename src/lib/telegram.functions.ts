@@ -282,7 +282,7 @@ export const deleteAllIngest = createServerFn({ method: "POST" })
     ]);
     await supabaseAdmin
       .from("media_files")
-      .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: "admin_delete_all" } as never)
+      .update({ deleted_at: now, deleted_by: context.userId, deleted_reason: "admin_delete_all", is_active: false } as never)
       .is("deleted_at", null);
     await supabaseAdmin
       .from("telegram_ingest")
