@@ -166,7 +166,10 @@ function ResyncButton({ titleId, slug }: { titleId?: string; slug: string }) {
         setBusy(true);
         try {
           const r = await fn({ data: { titleId } });
-          toast.success(`Resync done · ${r.promoted} promoted, ${r.skipped} skipped`);
+          toast.success(
+            `Resync · ${r.promoted} matched · ${r.demoted} demoted · ${r.kept} kept · ${r.skipped} unmatched`,
+          );
+
           qc.invalidateQueries({ queryKey: ["title-files-grouped"] });
           qc.invalidateQueries({ queryKey: ["title-files"] });
           qc.invalidateQueries({ queryKey: ["title-debug", slug] });
