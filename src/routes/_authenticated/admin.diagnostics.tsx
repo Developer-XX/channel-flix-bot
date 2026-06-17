@@ -64,6 +64,9 @@ function DiagnosticsPage() {
 
       <IngestionDedupPanel />
 
+      <ChannelMatchBreakdownPanel />
+
+
       <VerificationRedirectPanel />
 
       <DestructiveActionsPanel />
