@@ -251,6 +251,17 @@ function BulkRematchPage() {
               <Button variant="outline" size="sm" onClick={() => setJobId(null)}>
                 View history
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onDeleteJobs([current.id], `job ${String(current.id).slice(0, 8)}`)}
+                disabled={current.status === "running"}
+                title={current.status === "running" ? "Wait for the job to finish" : "Delete this job"}
+                className="text-red-500 hover:text-red-500"
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+              </Button>
+
             </div>
           </div>
           <Progress value={pct} />
