@@ -318,27 +318,54 @@ function BulkRematchPage() {
 
       {!jobId && recent.length > 0 && (
         <div className="rounded-xl border border-border p-4">
-          <h2 className="font-semibold mb-2">Recent jobs</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="font-semibold">Recent jobs</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-500 hover:text-red-500"
+              onClick={() =>
+                onDeleteJobs(
+                  recent.filter((r: any) => r.status !== "running").map((r: any) => r.id),
+                  "all finished jobs",
+                )
+              }
+              disabled={recent.every((r: any) => r.status === "running")}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete all finished
+            </Button>
+          </div>
           <div className="space-y-2">
             {recent.map((r: any) => (
-              <button
+              <div
                 key={r.id}
-                onClick={() => setJobId(r.id)}
-                className="w-full text-left rounded-lg border border-border bg-surface/40 p-3 hover:bg-surface/70 text-sm"
+                className="w-full rounded-lg border border-border bg-surface/40 p-3 text-sm flex items-start gap-3 hover:bg-surface/70"
               >
-                <div className="flex justify-between">
-                  <span className="font-mono">{r.id.slice(0, 8)}</span>
-                  <span className="text-xs text-muted-foreground">{r.status}</span>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {r.processed}/{r.total} processed · {r.promoted} promoted · {r.failed} failed ·{" "}
-                  {new Date(r.started_at).toLocaleString()}
-                </div>
-              </button>
+                <button onClick={() => setJobId(r.id)} className="flex-1 text-left">
+                  <div className="flex justify-between">
+                    <span className="font-mono">{r.id.slice(0, 8)}</span>
+                    <span className="text-xs text-muted-foreground">{r.status}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.processed}/{r.total} processed · {r.promoted} promoted · {r.failed} failed ·{" "}
+                    {new Date(r.started_at).toLocaleString()}
+                  </div>
+                </button>
+                <button
+                  onClick={() => onDeleteJobs([r.id], `job ${r.id.slice(0, 8)}`)}
+                  disabled={r.status === "running"}
+                  className="text-muted-foreground hover:text-red-500 disabled:opacity-30 p-1"
+                  aria-label="Delete job"
+                  title={r.status === "running" ? "Wait for the job to finish" : "Delete this job"}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             ))}
           </div>
         </div>
       )}
+
     </div>
   );
 }
