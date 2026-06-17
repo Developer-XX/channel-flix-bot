@@ -535,3 +535,70 @@ export async function autoPromoteToMediaFile(
 
   return file.id;
 }
+
+/**
+ * Re-score every ingest row currently promoted to `titleId` and demote any
+ * row that no longer meets the matching threshold (e.g. because matching
+ * settings tightened, the title's metadata changed, or the parsed metadata
+ * was corrected). Demotion:
+ *   - sets media_files.is_active = false (soft, recoverable)
+ *   - clears telegram_ingest.promoted_media_file_id / matched_title_id
+ *   - flips match_status to 'unmatched'
+ *
+ * Returns counts so callers can surface a clear summary.
+ */
+export async function revalidatePromotedForTitle(
+  supabase: SupabaseClient<any, any, any>,
+  title: { id: string; title: string; release_year: number | null; category: string | null },
+  settings: Awaited<ReturnType<typeof loadMatchingSettings>>,
+): Promise<{ revalidated: number; demoted: number; kept: number; demotedIngestIds: string[] }> {
+  const { data: rows } = await supabase
+    .from("telegram_ingest")
+    .select("id, parsed_title, parsed_year, parsed_category, promoted_media_file_id, deleted_at")
+    .eq("matched_title_id", title.id)
+    .not("promoted_media_file_id", "is", null)
+    .is("deleted_at", null);
+
+  let demoted = 0;
+  let kept = 0;
+  const demotedIngestIds: string[] = [];
+
+  for (const r of rows ?? []) {
+    const { score } = bestTitleScore(r.parsed_title ?? "", title.title, settings);
+    const yearOk = !r.parsed_year || !title.release_year ||
+      Math.abs(r.parsed_year - title.release_year) <= settings.year_window;
+    const categoryOk = !r.parsed_category || !title.category || r.parsed_category === title.category;
+    let adjusted = score;
+    if (!yearOk) adjusted *= 0.6;
+    if (settings.require_category_match && !categoryOk) adjusted = 0;
+    else if (!categoryOk) adjusted *= 0.85;
+
+    if (adjusted >= settings.threshold) {
+      kept++;
+      continue;
+    }
+
+    // Demote: deactivate media_files row, unlink ingest row.
+    if (r.promoted_media_file_id) {
+      await supabase
+        .from("media_files")
+        .update({ is_active: false })
+        .eq("id", r.promoted_media_file_id);
+    }
+    await supabase
+      .from("telegram_ingest")
+      .update({
+        match_status: "unmatched",
+        matched_title_id: null,
+        promoted_media_file_id: null,
+        last_error: `Demoted on resync: score ${adjusted.toFixed(3)} < threshold ${settings.threshold}`,
+      })
+      .eq("id", r.id);
+
+    demoted++;
+    demotedIngestIds.push(r.id);
+  }
+
+  return { revalidated: rows?.length ?? 0, demoted, kept, demotedIngestIds };
+}
+

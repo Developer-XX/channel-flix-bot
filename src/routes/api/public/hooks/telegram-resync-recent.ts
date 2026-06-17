@@ -23,6 +23,7 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
           loadMatchingSettings,
           autoPromoteToMediaFile,
           bestTitleScore,
+          revalidatePromotedForTitle,
         } = await import("@/lib/telegram-ingest.server");
         const { bumpCacheVersion } = await import("@/lib/indexes.server");
         const { recordTrace, newRunId } = await import("@/lib/sync-trace.server");
@@ -57,11 +58,38 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
         let scannedTitles = 0;
         let promoted = 0;
         let skipped = 0;
+        let demoted = 0;
         const errors: string[] = [];
         const traces: import("@/lib/sync-trace.server").TraceRow[] = [];
 
         for (const t of titles ?? []) {
           scannedTitles++;
+
+          // Re-validate already-promoted matches first: demote any that no
+          // longer meet the threshold so they stop showing on the title.
+          try {
+            const rev = await revalidatePromotedForTitle(supabaseAdmin, t, settings);
+            demoted += rev.demoted;
+            if (rev.demoted > 0) {
+              traces.push({
+                run_id: runId,
+                source: "resync-recent",
+                title_id: t.id,
+                title_slug: (t as { slug?: string }).slug ?? null,
+                channel_id: null,
+                message_id: null,
+                ingest_id: null,
+                season_number: null,
+                episode_number: null,
+                decision: "skipped",
+                reason_code: "DEMOTED_BELOW_THRESHOLD",
+                details: { demoted: rev.demoted, kept: rev.kept, revalidated: rev.revalidated, ingestIds: rev.demotedIngestIds },
+              });
+            }
+          } catch (e) {
+            errors.push(`revalidate(${t.id}): ${(e as Error).message}`);
+          }
+
           const head = (t.title || "").split(/\s+/).filter((w: string) => w.length >= 3)[0] ?? t.title?.[0] ?? "";
           if (!head) continue;
           const { data: rows } = await supabaseAdmin
@@ -136,15 +164,15 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
         }
 
         if (traces.length) await recordTrace(traces);
-        if (promoted > 0) await bumpCacheVersion(supabaseAdmin);
+        if (promoted > 0 || demoted > 0) await bumpCacheVersion(supabaseAdmin);
 
         await recordTrace({
           run_id: runId, source: "resync-recent", decision: "matched",
           reason_code: "RUN_FINISHED",
-          details: { scannedTitles, promoted, skipped, errorCount: errors.length },
+          details: { scannedTitles, promoted, skipped, demoted, errorCount: errors.length },
         });
 
-        const summary = { ok: true, runId, hours, scannedTitles, promoted, skipped, errors: errors.slice(0, 10) };
+        const summary = { ok: true, runId, hours, scannedTitles, promoted, skipped, demoted, errors: errors.slice(0, 10) };
         console.log("[resync-recent]", JSON.stringify(summary));
         return Response.json(summary);
       },
