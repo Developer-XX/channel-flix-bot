@@ -1,4 +1,5 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Star, Clock, Calendar, Globe, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +13,8 @@ import { TitleDebugPanel } from "@/components/TitleDebugPanel";
 import { HowToDownload } from "@/components/HowToDownload";
 import { OnboardingTutorial } from "@/components/OnboardingTutorial";
 import { AdSlot } from "@/components/AdSlot";
+import { useIsAuthed } from "@/hooks/use-session-flag";
+import { usePublicBrowsing } from "@/hooks/use-public-browsing";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
