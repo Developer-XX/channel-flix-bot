@@ -97,6 +97,8 @@ function AdminLayout() {
           <NavItem to="/admin/verification-limits" icon={<ShieldAlert className="h-4 w-4" />} label="Verification limits" />
           <NavItem to="/admin/sync-trace" icon={<Activity className="h-4 w-4" />} label="Sync trace" />
           <NavItem to="/admin/diagnostics" icon={<Stethoscope className="h-4 w-4" />} label="Diagnostics" />
+          <NavItem to="/admin/health" icon={<Activity className="h-4 w-4" />} label="Health check" />
+          <NavItem to="/admin/error-log" icon={<AlertTriangle className="h-4 w-4" />} label="Error log" />
           <NavItem to="/admin/tutorial" icon={<PlayCircle className="h-4 w-4" />} label="Tutorial video" />
           <NavItem to="/admin/premium" icon={<Crown className="h-4 w-4" />} label="Premium" />
           <NavItem to="/admin/support" icon={<MessageCircle className="h-4 w-4" />} label="Support chat" />
@@ -123,6 +125,8 @@ function AdminLayout() {
             <MobileNavItem to="/admin/verification-limits" label="Limits" />
             <MobileNavItem to="/admin/sync-trace" label="Sync trace" />
             <MobileNavItem to="/admin/diagnostics" label="Diagnostics" />
+            <MobileNavItem to="/admin/health" label="Health" />
+            <MobileNavItem to="/admin/error-log" label="Errors" />
             <MobileNavItem to="/admin/tutorial" label="Tutorial" />
             <MobileNavItem to="/admin/premium" label="Premium" />
             <MobileNavItem to="/admin/support" label="Support" />
