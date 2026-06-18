@@ -882,6 +882,49 @@ function IngestCard({
                 {diag.parsed.parsed_season != null ? ` · S${String(diag.parsed.parsed_season).padStart(2,"0")}${diag.parsed.parsed_episode != null ? `E${String(diag.parsed.parsed_episode).padStart(2,"0")}` : ""}` : ""}
                 {diag.parsed.parsed_category ? ` · ${diag.parsed.parsed_category}` : ""}
               </div>
+
+              {/* Caption-priority breakdown: shows what each raw source parses to
+                  independently so admins can confirm caption wins, or which
+                  source fed each field as a fallback. */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 rounded-md border border-border/60 p-2 bg-surface/30">
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+                    Caption parse
+                    {diag.titleSource === "caption" && <Badge variant="default" className="h-4 px-1 text-[10px]">title source</Badge>}
+                  </div>
+                  <div className="text-xs font-mono break-all text-muted-foreground line-clamp-2" title={diag.captionRaw}>
+                    {diag.captionRaw ? `"${diag.captionRaw}"` : "— no caption —"}
+                  </div>
+                  {diag.captionParsed ? (
+                    <div className="text-xs mt-1">
+                      → <code>"{diag.captionParsed.title}"</code>
+                      {diag.captionParsed.year ? ` · ${diag.captionParsed.year}` : ""}
+                      {diag.captionParsed.season != null ? ` · S${String(diag.captionParsed.season).padStart(2,"0")}${diag.captionParsed.episode != null ? `E${String(diag.captionParsed.episode).padStart(2,"0")}` : ""}` : ""}
+                      {diag.captionParsed.resolution ? ` · ${diag.captionParsed.resolution}` : ""}
+                      {diag.captionParsed.language ? ` · ${diag.captionParsed.language}` : ""}
+                    </div>
+                  ) : <div className="text-xs text-muted-foreground mt-1">— skipped —</div>}
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+                    Filename parse
+                    {diag.titleSource === "filename" && <Badge variant="default" className="h-4 px-1 text-[10px]">title source (fallback)</Badge>}
+                  </div>
+                  <div className="text-xs font-mono break-all text-muted-foreground line-clamp-2" title={diag.filenameRaw}>
+                    {diag.filenameRaw ? `"${diag.filenameRaw}"` : "— no filename —"}
+                  </div>
+                  {diag.filenameParsed ? (
+                    <div className="text-xs mt-1">
+                      → <code>"{diag.filenameParsed.title}"</code>
+                      {diag.filenameParsed.year ? ` · ${diag.filenameParsed.year}` : ""}
+                      {diag.filenameParsed.season != null ? ` · S${String(diag.filenameParsed.season).padStart(2,"0")}${diag.filenameParsed.episode != null ? `E${String(diag.filenameParsed.episode).padStart(2,"0")}` : ""}` : ""}
+                      {diag.filenameParsed.resolution ? ` · ${diag.filenameParsed.resolution}` : ""}
+                      {diag.filenameParsed.language ? ` · ${diag.filenameParsed.language}` : ""}
+                    </div>
+                  ) : <div className="text-xs text-muted-foreground mt-1">— skipped —</div>}
+                </div>
+              </div>
+
               <div>
                 <div className="text-xs uppercase text-muted-foreground mt-2">Alias hits ({diag.aliasHits.length})</div>
                 {diag.aliasHits.length === 0 && <div className="text-xs text-muted-foreground">— no aliases matched —</div>}
