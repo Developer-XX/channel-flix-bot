@@ -50,6 +50,7 @@ import { Route as AuthenticatedAdminAdsRouteImport } from './routes/_authenticat
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
+import { Route as ApiPublicSectionKeyRouteImport } from './routes/api/public/section/$key'
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
@@ -277,6 +278,11 @@ const ApiPublicTelegramBackfillRoute =
     path: '/api/public/telegram/backfill',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicSectionKeyRoute = ApiPublicSectionKeyRouteImport.update({
+  id: '/api/public/section/$key',
+  path: '/api/public/section/$key',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSTokenRoute = ApiPublicSTokenRouteImport.update({
   id: '/api/public/s/$token',
   path: '/api/public/s/$token',
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
+  '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -388,6 +395,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
+  '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -436,6 +444,7 @@ export interface FileRoutesById {
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
+  '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
@@ -484,6 +493,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
+    | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -529,6 +539,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
+    | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -576,6 +587,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
+    | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
@@ -600,6 +612,7 @@ export interface RootRouteChildren {
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
+  ApiPublicSectionKeyRoute: typeof ApiPublicSectionKeyRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
   ApiPublicVTokenRoute: typeof ApiPublicVTokenRoute
@@ -894,6 +907,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTelegramBackfillRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/section/$key': {
+      id: '/api/public/section/$key'
+      path: '/api/public/section/$key'
+      fullPath: '/api/public/section/$key'
+      preLoaderRoute: typeof ApiPublicSectionKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/s/$token': {
       id: '/api/public/s/$token'
       path: '/api/public/s/$token'
@@ -1013,6 +1033,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
   ApiPublicSTokenRoute: ApiPublicSTokenRoute,
+  ApiPublicSectionKeyRoute: ApiPublicSectionKeyRoute,
   ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
   ApiPublicVTokenRoute: ApiPublicVTokenRoute,
