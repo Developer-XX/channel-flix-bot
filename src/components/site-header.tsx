@@ -71,7 +71,7 @@ export function SiteHeader() {
 
         <form
           onSubmit={submit}
-          className="hidden xl:flex items-center min-w-0 justify-self-end"
+          className="hidden xl:flex items-center min-w-0 ml-auto"
         >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -84,7 +84,7 @@ export function SiteHeader() {
           </div>
         </form>
 
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 justify-self-end xl:hidden">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto xl:hidden">
           {/* Search icon — opens search page on small + medium screens */}
           <button
             type="button"
@@ -137,7 +137,7 @@ export function SiteHeader() {
         </div>
 
         {/* Desktop (xl+) account cluster */}
-        <div className="hidden xl:flex items-center gap-1.5 shrink-0 justify-self-end col-start-3 row-start-1">
+        <div className="hidden xl:flex items-center gap-1.5 shrink-0">
           {isAdmin && (
             <Link to="/admin" aria-label="Admin panel">
               <Button variant="outline" size="sm">
