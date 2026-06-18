@@ -10,6 +10,9 @@ import { TitleRow } from "@/components/title-row";
 import type { TitleCardData } from "@/components/title-card";
 import { CATEGORIES } from "@/lib/categories";
 import { getHomepageLayout, DEFAULT_SECTION_ORDER } from "@/lib/homepage.functions";
+import { AdSlot } from "@/components/AdSlot";
+
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -153,17 +156,22 @@ function HomePage() {
         )}
 
         {!empty && (
-          <div className="mx-auto max-w-7xl py-8">
-            {order.map((key) => {
+          <div className="mx-auto max-w-7xl py-4 sm:py-8">
+            <AdSlot placement="homepage_banner" className="px-4 md:px-6 mb-4" />
+            {order.map((key, idx) => {
               const s = sections[key];
               return (
-                <TitleRow
-                  key={key}
-                  title={s.title}
-                  items={s.q.data}
-                  loading={s.q.isLoading}
-                  emptyHint={s.hint}
-                />
+                <div key={key}>
+                  <TitleRow
+                    title={s.title}
+                    items={s.q.data}
+                    loading={s.q.isLoading}
+                    emptyHint={s.hint}
+                  />
+                  {idx === Math.floor(order.length / 2) - 1 && (
+                    <AdSlot placement="between_rows" className="px-4 md:px-6 my-4" />
+                  )}
+                </div>
               );
             })}
           </div>
