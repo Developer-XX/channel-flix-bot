@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,18 @@ export function DownloadButton({
   const [code, setCode] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string | null>(null);
   const [errorState, setErrorState] = useState<{ message: string; detail?: string; cid: string } | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [cooldownUntil]);
+
+  const cooldownLeftSec =
+    cooldownUntil && cooldownUntil > now ? Math.ceil((cooldownUntil - now) / 1000) : 0;
+  const isCoolingDown = cooldownLeftSec > 0;
 
   function newCorrelationId(): string {
     try {
@@ -165,8 +177,10 @@ export function DownloadButton({
 
       const r = await reqDownload({ data: { mediaFileId: activeFileId } });
       if (r.ok) {
+        const cd = Number((r as any).cooldownSec ?? 0);
+        if (cd > 0) setCooldownUntil(Date.now() + cd * 1000);
         if ((r as any).reused) {
-          toast.message(`Already sent — check your Telegram (request collapsed within ${(r as any).cooldownSec ?? 8}s cooldown).`);
+          toast.message(`Already sent — check your Telegram (within ${cd || 8}s cooldown).`);
         } else {
           toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
         }
@@ -232,14 +246,19 @@ export function DownloadButton({
           size={size}
           variant={variant}
           onClick={handleClick}
-          disabled={loading}
+          disabled={loading || isCoolingDown}
           className="shrink-0"
           data-testid="download-btn"
           data-media-file-id={mediaFileId}
         >
           {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-          Download
+          {isCoolingDown ? `Wait ${cooldownLeftSec}s` : "Download"}
         </Button>
+        {isCoolingDown && (
+          <p className="text-[11px] text-muted-foreground">
+            Sent to Telegram — re-clicks within {cooldownLeftSec}s reuse the same delivery.
+          </p>
+        )}
         {errorState && (
           <div
             role="alert"

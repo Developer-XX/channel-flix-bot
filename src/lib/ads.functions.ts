@@ -89,33 +89,64 @@ export const adminListAds = createServerFn({ method: "GET" })
     return (data ?? []) as Ad[];
   });
 
+const adUpsertSchema = z
+  .object({
+    id: z.string().uuid().optional().nullable(),
+    name: z.string().min(1, "Name is required").max(120),
+    placement: z.enum(AD_PLACEMENTS),
+
+    kind: z.enum(["image", "video", "html"]).default("image"),
+    image_url: z.string().url("Image URL must be a valid URL").max(1000).optional().nullable(),
+    video_url: z.string().url("Video URL must be a valid URL").max(1000).optional().nullable(),
+    html: z.string().max(8000).optional().nullable(),
+    link_url: z.string().url("Link URL must be a valid URL").max(1000).optional().nullable(),
+    sort_order: z.number().int().min(0).max(9999).default(0),
+    is_active: z.boolean().default(true),
+    starts_at: z.string().datetime().optional().nullable(),
+    ends_at: z.string().datetime().optional().nullable(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.kind === "image" && !d.image_url) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["image_url"], message: "Image URL is required when kind = image" });
+    }
+    if (d.kind === "video" && !d.video_url) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["video_url"], message: "Video URL is required when kind = video (mp4 recommended)" });
+    }
+    if (d.kind === "html" && !d.html?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["html"], message: "HTML snippet is required when kind = html" });
+    }
+    if (INTERSTITIAL_PLACEMENTS.includes(d.placement) && d.kind !== "video") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["kind"],
+        message: `Interstitial placements require kind = video (${INTERSTITIAL_PLACEMENTS.join(", ")})`,
+      });
+    }
+    if (d.starts_at && d.ends_at && new Date(d.ends_at) <= new Date(d.starts_at)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["ends_at"], message: "Ends-at must be after starts-at" });
+    }
+  });
+
+function formatZodError(err: z.ZodError): string {
+  return err.issues
+    .map((i) => `${i.path.length ? i.path.join(".") + ": " : ""}${i.message}`)
+    .join(" · ");
+}
+
 export const adminUpsertAd = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
-    z
-      .object({
-        id: z.string().uuid().optional().nullable(),
-        name: z.string().min(1).max(120),
-        placement: z.enum(AD_PLACEMENTS),
-        kind: z.enum(["image", "video", "html"]).default("image"),
-        image_url: z.string().url().max(1000).optional().nullable(),
-        video_url: z.string().url().max(1000).optional().nullable(),
-        html: z.string().max(8000).optional().nullable(),
-        link_url: z.string().url().max(1000).optional().nullable(),
-        sort_order: z.number().int().min(0).max(9999).default(0),
-        is_active: z.boolean().default(true),
-        starts_at: z.string().datetime().optional().nullable(),
-        ends_at: z.string().datetime().optional().nullable(),
-      })
-      .parse(d),
-  )
+  .inputValidator((d: unknown) => {
+    const r = adUpsertSchema.safeParse(d);
+    if (!r.success) throw new Error(`AD_VALIDATION: ${formatZodError(r.error)}`);
+    return r.data;
+  })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const row: any = { ...data, created_by: context.userId };
     if (!row.id) delete row.id;
     const { error } = await supabaseAdmin.from("ads").upsert(row, { onConflict: "id" });
-    if (error) throw error;
+    if (error) throw new Error(`AD_SAVE_FAILED: ${error.message}`);
     return { ok: true };
   });
 

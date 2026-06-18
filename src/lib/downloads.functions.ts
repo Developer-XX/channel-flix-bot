@@ -308,6 +308,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     });
 
     // 6. Schedule auto-delete of the delivered message (if enabled).
+    let autoDeleteAt: string | null = null;
     if (result.ok) {
       try {
         const value = Math.max(0, await getSettingNumber("DOWNLOAD_AUTO_DELETE_VALUE", 30));
@@ -315,6 +316,7 @@ export const requestDownload = createServerFn({ method: "POST" })
         if (value > 0) {
           const mult = unit === "seconds" ? 1000 : unit === "hours" ? 3600_000 : 60_000;
           const deleteAt = new Date(Date.now() + value * mult).toISOString();
+          autoDeleteAt = deleteAt;
           await supabaseAdmin.from("scheduled_message_deletes").insert({
             chat_id: link.telegram_user_id,
             message_id: result.messageId,
@@ -326,7 +328,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       } catch (e) {
         console.warn("[download] schedule delete failed:", (e as Error).message);
       }
-      return { ok: true as const, delivered: true, messageId: result.messageId };
+      return { ok: true as const, delivered: true, messageId: result.messageId, cooldownSec, autoDeleteAt };
     }
     if (result.kind === "blocked" || result.kind === "not_started") {
       await auditFailure("bot_blocked", { kind: result.kind });

@@ -59,6 +59,33 @@ export const getAdminHealth = createServerFn({ method: "GET" })
       present: Boolean(process.env[name]),
     }));
 
+    // Auto-delete cron stats (process-message-deletes).
+    const nowIso = new Date().toISOString();
+    const [dueCount, lastDone, recentFailures, recentDeleted] = await Promise.all([
+      supabaseAdmin
+        .from("scheduled_message_deletes")
+        .select("id", { count: "exact", head: true })
+        .is("done_at", null)
+        .lte("delete_at", nowIso),
+      supabaseAdmin
+        .from("scheduled_message_deletes")
+        .select("done_at")
+        .not("done_at", "is", null)
+        .order("done_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("scheduled_message_deletes")
+        .select("id", { count: "exact", head: true })
+        .gte("attempts", 5)
+        .gte("updated_at", since24),
+      supabaseAdmin
+        .from("scheduled_message_deletes")
+        .select("id", { count: "exact", head: true })
+        .gte("done_at", since24),
+    ]);
+    const lastDoneAt = (lastDone.data as { done_at?: string } | null)?.done_at ?? null;
+
     return {
       ok: dbOk,
       buildId: BUILD_ID,
@@ -73,6 +100,13 @@ export const getAdminHealth = createServerFn({ method: "GET" })
       errorCounts: {
         last24h: errors24h ?? 0,
         last1h: errors1h ?? 0,
+      },
+      autoDeleteCron: {
+        dueCount: dueCount.count ?? 0,
+        lastRunAt: lastDoneAt,
+        lastRunAgoSec: lastDoneAt ? Math.max(0, Math.round((Date.now() - new Date(lastDoneAt).getTime()) / 1000)) : null,
+        deleted24h: recentDeleted.count ?? 0,
+        failedExhausted24h: recentFailures.count ?? 0,
       },
       secrets: secretsStatus,
       timestamp: new Date().toISOString(),
