@@ -40,6 +40,8 @@ import {
   deleteAllIngest,
   restoreIngestRows,
   resyncChannels,
+  reparseIngest,
+  reparseChannelFromCaptions,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
