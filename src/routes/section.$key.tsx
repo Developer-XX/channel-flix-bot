@@ -78,10 +78,22 @@ export const Route = createFileRoute("/section/$key")({
 function SectionPage() {
   const { key } = Route.useParams();
   const section = SECTIONS[key]!;
+  const isAuthed = useIsAuthed();
+  const publicBrowsing = usePublicBrowsing();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthed && !publicBrowsing) {
+      void logBlockedBrowsing("section", key, `/section/${key}`);
+      navigate({ to: "/auth", search: { redirect: `/section/${key}` }, replace: true });
+    }
+  }, [isAuthed, publicBrowsing, navigate, key]);
+
   const q = useQuery({
     queryKey: ["section", key],
     queryFn: section.build,
   });
+
 
   return (
     <div className="min-h-screen flex flex-col">
