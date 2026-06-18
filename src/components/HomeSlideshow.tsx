@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { HomepageSlide } from "@/lib/homepage.functions";
+import { useIsAuthed } from "@/hooks/use-session-flag";
 
 interface Props {
   slides: HomepageSlide[];
@@ -8,6 +9,7 @@ interface Props {
 export function HomeSlideshow({ slides }: Props) {
   const [i, setI] = useState(0);
   const active = slides[i];
+  const isAuthed = useIsAuthed();
 
   useEffect(() => {
     if (slides.length < 2) return;
@@ -64,7 +66,10 @@ export function HomeSlideshow({ slides }: Props) {
   return (
     <section className="relative w-full aspect-[16/9] sm:aspect-[21/9] max-h-[70vh] overflow-hidden">
       {active.link_url ? (
-        <a href={active.link_url} className="block w-full h-full">
+        <a
+          href={isAuthed ? active.link_url : `/auth?redirect=${encodeURIComponent(active.link_url)}`}
+          className="block w-full h-full"
+        >
           {inner}
         </a>
       ) : (
