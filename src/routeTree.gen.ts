@@ -47,6 +47,7 @@ import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAdminAnnouncementsRouteImport } from './routes/_authenticated/admin.announcements'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
 import { Route as AuthenticatedAdminAdsRouteImport } from './routes/_authenticated/admin.ads'
+import { Route as AuthenticatedAccountDownloadsRouteImport } from './routes/_authenticated/account.downloads'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillIngestRouteImport } from './routes/api/public/telegram/backfill-ingest'
@@ -264,6 +265,12 @@ const AuthenticatedAdminAdsRoute = AuthenticatedAdminAdsRouteImport.update({
   path: '/ads',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAccountDownloadsRoute =
+  AuthenticatedAccountDownloadsRouteImport.update({
+    id: '/downloads',
+    path: '/downloads',
+    getParentRoute: () => AuthenticatedAccountRoute,
+  } as any)
 const ApiPublicVTokenRoute = ApiPublicVTokenRouteImport.update({
   id: '/api/public/v/$token',
   path: '/api/public/v/$token',
@@ -336,7 +343,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trust': typeof TrustRoute
-  '/account': typeof AuthenticatedAccountRoute
+  '/account': typeof AuthenticatedAccountRouteWithChildren
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/premium': typeof AuthenticatedPremiumRoute
   '/support': typeof AuthenticatedSupportRoute
@@ -344,6 +351,7 @@ export interface FileRoutesByFullPath {
   '/debug/auth': typeof DebugAuthRoute
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
@@ -386,13 +394,14 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trust': typeof TrustRoute
-  '/account': typeof AuthenticatedAccountRoute
+  '/account': typeof AuthenticatedAccountRouteWithChildren
   '/premium': typeof AuthenticatedPremiumRoute
   '/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
@@ -437,7 +446,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trust': typeof TrustRoute
-  '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/account': typeof AuthenticatedAccountRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/premium': typeof AuthenticatedPremiumRoute
   '/_authenticated/support': typeof AuthenticatedSupportRoute
@@ -445,6 +454,7 @@ export interface FileRoutesById {
   '/debug/auth': typeof DebugAuthRoute
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/_authenticated/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/_authenticated/admin/ads': typeof AuthenticatedAdminAdsRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
@@ -497,6 +507,7 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/section/$key'
     | '/title/$slug'
+    | '/account/downloads'
     | '/admin/ads'
     | '/admin/analytics'
     | '/admin/announcements'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/section/$key'
     | '/title/$slug'
+    | '/account/downloads'
     | '/admin/ads'
     | '/admin/analytics'
     | '/admin/announcements'
@@ -597,6 +609,7 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/section/$key'
     | '/title/$slug'
+    | '/_authenticated/account/downloads'
     | '/_authenticated/admin/ads'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/announcements'
@@ -928,6 +941,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAdsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/account/downloads': {
+      id: '/_authenticated/account/downloads'
+      path: '/downloads'
+      fullPath: '/account/downloads'
+      preLoaderRoute: typeof AuthenticatedAccountDownloadsRouteImport
+      parentRoute: typeof AuthenticatedAccountRoute
+    }
     '/api/public/v/$token': {
       id: '/api/public/v/$token'
       path: '/api/public/v/$token'
@@ -1008,6 +1028,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedAccountRouteChildren {
+  AuthenticatedAccountDownloadsRoute: typeof AuthenticatedAccountDownloadsRoute
+}
+
+const AuthenticatedAccountRouteChildren: AuthenticatedAccountRouteChildren = {
+  AuthenticatedAccountDownloadsRoute: AuthenticatedAccountDownloadsRoute,
+}
+
+const AuthenticatedAccountRouteWithChildren =
+  AuthenticatedAccountRoute._addFileChildren(AuthenticatedAccountRouteChildren)
+
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAdsRoute: typeof AuthenticatedAdminAdsRoute
   AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
@@ -1059,14 +1090,14 @@ const AuthenticatedAdminRouteWithChildren =
   AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRouteWithChildren
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedPremiumRoute: typeof AuthenticatedPremiumRoute
   AuthenticatedSupportRoute: typeof AuthenticatedSupportRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedAccountRoute: AuthenticatedAccountRouteWithChildren,
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedPremiumRoute: AuthenticatedPremiumRoute,
   AuthenticatedSupportRoute: AuthenticatedSupportRoute,
