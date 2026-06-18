@@ -11,8 +11,18 @@ export const AD_PLACEMENTS = [
   "between_rows",
   "title_page",
   "before_download",
+  // Full-screen blocking video interstitials (Google-style).
+  "interstitial_login",          // shown right after sign-in / sign-up
+  "interstitial_periodic",       // shown every N minutes of active session
+  "interstitial_before_download",// shown before a download is started
 ] as const;
 export type AdPlacement = (typeof AD_PLACEMENTS)[number];
+
+export const INTERSTITIAL_PLACEMENTS: AdPlacement[] = [
+  "interstitial_login",
+  "interstitial_periodic",
+  "interstitial_before_download",
+];
 
 export type Ad = {
   id: string;
@@ -120,14 +130,15 @@ export const adminDeleteAd = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Record an ad impression / click. Uses the public (anon) Data API path so
-// it works for signed-out visitors too. RLS allows INSERT for anon.
+// Record an ad impression / click / dismiss / complete. Uses the public (anon)
+// Data API path so it works for signed-out visitors too. RLS allows INSERT for
+// anon with this scoped event_type allow-list.
 export const recordAdEvent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z.object({
       ad_id: z.string().uuid(),
       placement: z.enum(AD_PLACEMENTS),
-      event_type: z.enum(["impression", "click"]),
+      event_type: z.enum(["impression", "click", "dismiss", "complete", "view"]),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -142,6 +153,44 @@ export const recordAdEvent = createServerFn({ method: "POST" })
       /* swallow — analytics must never break rendering */
     }
     return { ok: true };
+  });
+
+// Public read-only interstitial configuration consumed by the client.
+export type InterstitialConfig = {
+  enabled: boolean;
+  cancelSeconds: number;        // delay before the cancel button appears
+  periodicMinutes: number;      // how often to show the periodic interstitial (0 disables)
+  beforeDownloadCooldownMinutes: number; // min gap between before-download interstitials
+  showOnLogin: boolean;
+};
+
+function parseIntSetting(v: string | null, fallback: number, min = 0, max = 100000): number {
+  if (!v) return fallback;
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+function parseBoolSetting(v: string | null, fallback: boolean): boolean {
+  if (v == null) return fallback;
+  return !/^(0|false|no|off)$/i.test(v.trim());
+}
+
+export const getInterstitialConfig = createServerFn({ method: "GET" })
+  .handler(async (): Promise<InterstitialConfig> => {
+    const adsEnabled = parseBoolSetting(await readSetting("ADS_ENABLED"), true);
+    const enabled = adsEnabled && parseBoolSetting(await readSetting("AD_INTERSTITIAL_ENABLED"), true);
+    return {
+      enabled,
+      cancelSeconds: parseIntSetting(await readSetting("AD_INTERSTITIAL_CANCEL_SECONDS"), 12, 3, 60),
+      periodicMinutes: parseIntSetting(await readSetting("AD_INTERSTITIAL_PERIODIC_MINUTES"), 120, 0, 24 * 60),
+      beforeDownloadCooldownMinutes: parseIntSetting(
+        await readSetting("AD_INTERSTITIAL_BEFORE_DOWNLOAD_COOLDOWN_MINUTES"),
+        120,
+        0,
+        24 * 60,
+      ),
+      showOnLogin: parseBoolSetting(await readSetting("AD_INTERSTITIAL_ON_LOGIN"), true),
+    };
   });
 
 export type AdStat = {

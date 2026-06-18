@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BuildSyncProvider } from "@/components/BuildSyncProvider";
 import { ServerFnErrorScreen, isServerFnError } from "@/components/ServerFnErrorScreen";
+import { InterstitialController } from "@/components/InterstitialController";
 
 function NotFoundComponent() {
   return (
@@ -173,6 +174,7 @@ function RootComponent() {
       <Outlet />
       <Toaster richColors />
       <BuildSyncProvider />
+      <InterstitialController />
     </QueryClientProvider>
   );
 }

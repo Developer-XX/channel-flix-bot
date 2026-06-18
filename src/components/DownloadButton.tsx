@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
 import { startVerification } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
+import { triggerInterstitial } from "@/components/InterstitialController";
 
 interface Props {
   mediaFileId: string;
@@ -109,6 +110,15 @@ export function DownloadButton({
       if (!session.session) {
         toast.error("Please sign in to download.");
         return;
+      }
+
+      // Full-screen video interstitial before the download flow starts.
+      // Cooldown + premium gating are enforced inside the controller; this
+      // call is a no-op (resolves false) when an ad shouldn't be shown.
+      try {
+        await triggerInterstitial("interstitial_before_download");
+      } catch {
+        /* never block downloads on ad failures */
       }
 
       const isEpisode = !!titleId && (season != null || episode != null);
