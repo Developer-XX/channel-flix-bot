@@ -3,10 +3,10 @@
 
 export type ProviderName = string;
 
-function userOffsetMs(userId: string, slotMs: number): number {
+function userPhase(userId: string): number {
   let h = 0;
   for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0;
-  return h % slotMs;
+  return h;
 }
 
 /**
@@ -38,11 +38,12 @@ export function pickProviderForBucket(args: {
   }
   if (candidates.length === 1) return candidates[0];
 
-  const offset = userOffsetMs(userId, Math.max(1, slotMs));
-  const slot = Math.floor((now + offset) / Math.max(1, slotMs));
-  const candidate = candidates[slot % candidates.length];
+  const slotIdx = Math.floor(now / Math.max(1, slotMs));
+  const phase = userPhase(userId);
+  const idx = (slotIdx + phase) % candidates.length;
+  const candidate = candidates[idx];
   if (candidate === lastProvider && candidates.length > 1) {
-    return candidates[(slot + 1) % candidates.length];
+    return candidates[(idx + 1) % candidates.length];
   }
   return candidate;
 }
