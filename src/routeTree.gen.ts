@@ -49,6 +49,7 @@ import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminAdsRouteImport } from './routes/_authenticated/admin.ads'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
+import { Route as ApiPublicTelegramBackfillIngestRouteImport } from './routes/api/public/telegram/backfill-ingest'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
 import { Route as ApiPublicSectionKeyRouteImport } from './routes/api/public/section/$key'
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
@@ -273,6 +274,12 @@ const ApiPublicTelegramWebhookRoute =
     path: '/api/public/telegram/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicTelegramBackfillIngestRoute =
+  ApiPublicTelegramBackfillIngestRouteImport.update({
+    id: '/api/public/telegram/backfill-ingest',
+    path: '/api/public/telegram/backfill-ingest',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicTelegramBackfillRoute =
   ApiPublicTelegramBackfillRouteImport.update({
     id: '/api/public/telegram/backfill',
@@ -359,6 +366,7 @@ export interface FileRoutesByFullPath {
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
+  '/api/public/telegram/backfill-ingest': typeof ApiPublicTelegramBackfillIngestRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
 }
@@ -406,6 +414,7 @@ export interface FileRoutesByTo {
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
+  '/api/public/telegram/backfill-ingest': typeof ApiPublicTelegramBackfillIngestRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
 }
@@ -456,6 +465,7 @@ export interface FileRoutesById {
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
+  '/api/public/telegram/backfill-ingest': typeof ApiPublicTelegramBackfillIngestRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
   '/api/public/v/$token': typeof ApiPublicVTokenRoute
 }
@@ -506,6 +516,7 @@ export interface FileRouteTypes {
     | '/api/public/s/$token'
     | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
+    | '/api/public/telegram/backfill-ingest'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
   fileRoutesByTo: FileRoutesByTo
@@ -553,6 +564,7 @@ export interface FileRouteTypes {
     | '/api/public/s/$token'
     | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
+    | '/api/public/telegram/backfill-ingest'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
   id:
@@ -602,6 +614,7 @@ export interface FileRouteTypes {
     | '/api/public/s/$token'
     | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
+    | '/api/public/telegram/backfill-ingest'
     | '/api/public/telegram/webhook'
     | '/api/public/v/$token'
   fileRoutesById: FileRoutesById
@@ -628,6 +641,7 @@ export interface RootRouteChildren {
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
   ApiPublicSectionKeyRoute: typeof ApiPublicSectionKeyRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
+  ApiPublicTelegramBackfillIngestRoute: typeof ApiPublicTelegramBackfillIngestRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
   ApiPublicVTokenRoute: typeof ApiPublicVTokenRoute
 }
@@ -914,6 +928,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicTelegramWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/telegram/backfill-ingest': {
+      id: '/api/public/telegram/backfill-ingest'
+      path: '/api/public/telegram/backfill-ingest'
+      fullPath: '/api/public/telegram/backfill-ingest'
+      preLoaderRoute: typeof ApiPublicTelegramBackfillIngestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/telegram/backfill': {
       id: '/api/public/telegram/backfill'
       path: '/api/public/telegram/backfill'
@@ -1058,6 +1079,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSTokenRoute: ApiPublicSTokenRoute,
   ApiPublicSectionKeyRoute: ApiPublicSectionKeyRoute,
   ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
+  ApiPublicTelegramBackfillIngestRoute: ApiPublicTelegramBackfillIngestRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
   ApiPublicVTokenRoute: ApiPublicVTokenRoute,
 }
