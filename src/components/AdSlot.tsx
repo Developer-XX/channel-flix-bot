@@ -9,6 +9,7 @@ import {
   type AdPlacement,
 } from "@/lib/ads.functions";
 import { getMyPremiumStatus } from "@/lib/premium.functions";
+import { pickAd as pickAdPure } from "@/lib/ad-rotation";
 
 function useIsPremium(): boolean {
   const fn = useServerFn(getMyPremiumStatus);
@@ -32,31 +33,8 @@ function useIsPremium(): boolean {
   return !!q.data?.isPremium;
 }
 
-/**
- * Deterministic, weighted rotation:
- *   - lower sort_order wins more often (weight = max - sort + 1)
- *   - selection rotates each minute so analytics stay meaningful
- *     across SSR/CSR renders without churn-on-every-paint.
- */
 function pickAd(ads: Ad[], placement: AdPlacement): Ad | null {
-  if (!ads.length) return null;
-  const maxSort = ads.reduce((m, a) => Math.max(m, a.sort_order ?? 0), 0);
-  const weighted = ads.map((a) => ({
-    ad: a,
-    w: Math.max(1, maxSort - (a.sort_order ?? 0) + 1),
-  }));
-  const total = weighted.reduce((s, x) => s + x.w, 0);
-  // Bucket per minute + placement so the same visitor sees the same ad briefly.
-  const bucket = Math.floor(Date.now() / 60_000);
-  let seed = 0;
-  const key = `${bucket}:${placement}`;
-  for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
-  let r = (seed % total) + 1;
-  for (const x of weighted) {
-    r -= x.w;
-    if (r <= 0) return x.ad;
-  }
-  return weighted[0].ad;
+  return pickAdPure(ads, placement, Date.now());
 }
 
 export function AdSlot({
