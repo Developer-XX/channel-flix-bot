@@ -1,79 +1,110 @@
-## Phase 1 scope (Telegram only)
+# Phase 3 — Reliability, Visibility & Self-Serve
 
-Three deliverables. Ads validation, analytics events, cron widget, and the download timer UI are deferred to Phase 2.
+Five features grouped into one phase. Each lands as a small vertical slice (migration → server fn → UI) so we can ship and verify incrementally.
 
----
+## 1. User download history page (`/account/downloads`)
 
-### 1. Channel auto-sync — new posts (works today, Bot API)
+New authenticated route. Lists the signed-in user's downloads from `download_logs` joined with `media_files` / `master_titles`.
 
-Goal: admin adds a channel ID in the panel, promotes the bot to channel admin, and from that moment every new post is ingested automatically. No "send file to bot" step.
+For each row:
+- Title + episode label, requested time
+- Resend count (sum of `delivery_attempts` for that user+file)
+- Cooldown status: `Ready` / `Wait Ns` using the same `DOWNLOAD_RESEND_COOLDOWN_SECONDS` logic the button uses
+- Last delivery outcome (sent / reused / failed) + Telegram message link when present
+- "Resend to Telegram" inline button (reuses `requestDownload`, honors cooldown countdown)
 
-Changes:
-- In `src/routes/api/public/telegram/webhook.ts`, accept `channel_post` and `edited_channel_post` updates (not just DMs to the bot).
-- Verify the `chat.id` is in `telegram_channels` and active. If not, ignore.
-- Reuse the existing `telegram_ingest` pipeline (parser + matcher) — same idempotency key (`channel_id:message_id`).
-- Update the `setWebhook` registration call so `allowed_updates` includes `channel_post` and `edited_channel_post`.
-- Admin panel: when a channel is added, show a checklist ("Bot added as admin? ✓ Channel ID verified? ✓") and a "Test ingest" button that asks the bot to confirm it can read the channel via `getChat`.
+Server fn: `getMyDownloadHistory({ limit, cursor })` with `requireSupabaseAuth`, RLS-scoped.
 
-This covers all **future** posts to the channel automatically.
+Adds a link in the user account menu.
 
----
+## 2. Admin audit log (unified feed)
 
-### 2. Channel backfill — existing history (MTProto, out-of-Worker)
+Reuses existing `admin_audit_log` table. New event types written from existing code paths:
+- `channel_sync.upsert` / `channel_sync.delete` / `channel_sync.backfill_started` / `channel_sync.backfill_completed`
+- `token_verification.success` / `token_verification.failure` (from verification flow)
+- `cron.auto_delete.run` (count, failures) / `cron.resend.run`
+- `download.resend_manual` (admin-initiated resends)
 
-Bot API hard limitation: a bot cannot read messages posted before it joined, and cannot page channel history. Only a user account via MTProto can.
+New route `/admin/audit` with:
+- Filterable list (event type, actor, date range, search by target)
+- Pagination, JSON detail drawer
+- Server fn `getAdminAuditLog(filters)` with admin-role check
 
-Since MTProto cannot run in workerd, the realistic options are:
+Existing places that should log (small inserts inside their handlers, no behavior change):
+- `src/lib/telegram-api.server.ts` channel CRUD
+- `src/routes/api/public/telegram/backfill-ingest.ts`
+- Verification provider call site
+- `process-message-deletes` cron route
+- `requestDownload` resend branch (cooldown reuse and fresh sends)
 
-**Option A — External backfill worker (recommended).** Ship a small Node script (`scripts/telegram-backfill/`) that the admin runs once per channel from their own machine or a one-off container. It:
-  1. Uses `gramjs` with the admin's `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` / phone login (interactive first run, stores `STRING_SESSION` for reuse).
-  2. Iterates `channel.getHistory` in batches.
-  3. POSTs each historical message to a new `/api/public/telegram/backfill-ingest` route (HMAC-signed with a `BACKFILL_SECRET`) which runs it through the same ingest pipeline.
-  4. Reports progress + a resumable cursor stored in `telegram_channels.backfill_cursor`.
+## 3. Idempotent queued retry for downloads
 
-Admin UI adds: per-channel "Backfill" panel showing cursor, last-run timestamp, count ingested, and copy-pastable command (`bun run backfill --channel <id>`).
+Goal: a flurry of clicks never produces duplicate Telegram sends, and transient Telegram failures eventually succeed without user re-clicking.
 
-**Option B — Manual forward (fallback).** Admin forwards old messages to the bot in batches; existing DM-ingest path handles them. Documented as fallback for small channels.
+New table `download_send_queue`:
+- `idempotency_key` (PK) — same scheme as today: `sha256(user|file|cooldown_window)`
+- `user_id`, `file_id`, `chat_id`, `payload jsonb`
+- `status` enum: `queued | sending | sent | failed | deduped`
+- `attempts int`, `last_error text`, `next_attempt_at timestamptz`
+- `message_id bigint` (on success), timestamps
 
-I'll build A as the primary path and keep B working.
+Flow:
+1. `requestDownload` upserts into the queue with `ON CONFLICT (idempotency_key) DO NOTHING`. If an existing row is `sent`, return its `message_id` with `reused:true` (current cooldown UX preserved). If `queued/sending`, return `queued:true` with ETA.
+2. Inline attempt #1 happens immediately (current code path), result written to queue row.
+3. On Telegram failure that's retryable (5xx, network, 429 after `retry_after`), mark `queued` with backoff `next_attempt_at = now() + min(60s * 2^attempts, 15min)`.
+4. New pg_cron job `process-download-send-queue` every minute calls `/api/public/hooks/process-download-queue`, which locks due rows with `FOR UPDATE SKIP LOCKED`, sends, updates status. Cap 5 attempts → `failed` + admin alert.
 
-Secrets needed (I'll prompt via `add_secret` when we get there): `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `BACKFILL_SECRET`. Phone/session stays on the admin's machine — never uploaded.
+The existing `delivery_attempts` table keeps its per-attempt log; the queue is the durable intent + dedupe key.
 
----
+## 4. Shortener performance report + rotation controls
 
-### 3. Reliable delivery with cooldown-window idempotency + retries
+Uses existing `shortener_health_log` plus new `shortener_configs` table:
+- `provider` (PK: `adrinolinks`, `nanolinks`, …)
+- `enabled bool`, `priority int`, `weight int`, `notes text`
+- `updated_by`, timestamps
 
-Current `src/lib/delivery.server.ts` uses a unique key per click. Change to: idempotency key = `sha256(user_id|file_id|floor(now / DOWNLOAD_RESEND_COOLDOWN_SECONDS))`.
+New admin route `/admin/shorteners`:
+- Per-provider cards: success rate (7d / 30d), avg time-to-verify (ms), total attempts, last failure
+- Toggle enable, set priority (drag or number input), edit weight
+- "Test" button → sends a one-off probe link, records result
 
-Behavior:
-- **Within cooldown window**: same key → return the prior `delivery_attempts` row's `message_id` (no re-send). Bot's previous message still exists in the user's chat.
-- **After cooldown elapses**: new key → fresh send. New `scheduled_message_deletes` row.
-- **Telegram API failures**: retry with exponential backoff (250ms, 1s, 3s) on 5xx and `429` (respecting `retry_after`). 4xx other than 429 → fail fast, log structured error, surface actionable message to user.
-- **Partial failure recovery**: if `sendDocument` succeeded but DB write failed, the next click within the cooldown window detects the orphan via a `delivery_attempts` lookup keyed on idempotency key + status = `in_flight` and reconciles.
+`src/lib/shortener-rotation.ts` reads from `shortener_configs` (falling back to current hardcoded order) so admin changes take effect without a deploy.
 
-New columns on `delivery_attempts`: `idempotency_key text unique`, `attempt_count int default 0`, `last_error text`, `status text` (`in_flight` | `delivered` | `failed`).
+Server fns: `getShortenerReport()`, `updateShortenerConfig(provider, patch)`, `probeShortener(provider)`.
 
----
+## 5. Cron failure alerts (UI banner + Telegram DM)
 
-### Files I'll touch / create
+Builds on `cron-metrics.functions.ts` / `getAdminHealth`.
 
-Created:
-- `src/routes/api/public/telegram/backfill-ingest.ts` (HMAC-verified ingest endpoint)
-- `scripts/telegram-backfill/` (Node MTProto script + README)
-- `supabase/migrations/<ts>_delivery_idempotency_and_backfill_cursor.sql`
+New table `admin_alerts`:
+- `kind` (`cron_lag`, `cron_failure`, `download_queue_stuck`, `shortener_down`)
+- `severity` (`warn|error`), `subject`, `details jsonb`
+- `first_seen_at`, `last_seen_at`, `acknowledged_at`, `acknowledged_by`
 
-Edited:
-- `src/routes/api/public/telegram/webhook.ts` (accept channel_post)
-- `src/lib/telegram-ingest.server.ts` (channel_post normalization)
-- `src/lib/delivery.server.ts` (cooldown-window keying + retry loop + reconciliation)
-- `src/lib/telegram-api.server.ts` (retry helper, parse `retry_after`)
-- `src/routes/_authenticated/admin.telegram.tsx` (per-channel backfill panel, test-ingest button)
-- `src/lib/telegram.functions.ts` (test-ingest server fn, backfill status query)
+Generation: each cron handler, at the end of its run, calls `recordCronRun(job_name, ok, summary)` which:
+- Writes to `admin_audit_log` (item 2)
+- Updates a `cron_job_status` row (last_run_at, last_ok_at, last_error, consecutive_failures)
+- Opens an `admin_alerts` row when consecutive failures ≥ 2 OR the job hasn't run in 2× its expected interval (configurable per job)
 
-### Deferred to Phase 2 (next turn after this lands)
-- Ad placement validation + admin error messaging
-- Download resend / auto-delete analytics events + dashboard panel
-- Cron widget for `process-message-deletes`
-- DownloadButton cooldown countdown UI
+Surfaces:
+- Persistent banner in admin shell when any unacknowledged `error`-severity alert exists; click → `/admin/health` (now also lists per-job last-run + last-error + due lag)
+- New `/admin/alerts` page with ack / dismiss
+- Telegram DM to all users in `user_roles` with role `admin` who have a linked `telegram_user_links` row, on the transition `consecutive_failures: 1 → 2` (no spam loop; throttled to 1 message / kind / hour). DM uses the existing bot token.
 
-Approve and I'll start with the migration, then the webhook + delivery changes, then the backfill script + admin UI.
+## Technical notes
+
+- All migrations follow the GRANT-then-RLS pattern; user-facing tables (`download_send_queue`, `admin_alerts` reads) use `auth.uid()` policies; admin-only tables use `has_role(auth.uid(), 'admin')`.
+- New server fns under `src/lib/*.functions.ts`; cron handlers under `src/routes/api/public/hooks/`.
+- pg_cron jobs added once (download queue every 1 min). Existing auto-delete cron just gains the `recordCronRun` call.
+- No changes to public published UX besides the user-facing download history link.
+
+## Build order
+
+1. Migration: `download_send_queue`, `shortener_configs`, `cron_job_status`, `admin_alerts` (single migration).
+2. Item 3 (queue) — highest reliability win, unblocks item 5 alerts on the queue.
+3. Item 2 (audit log) — instrumentation hooks used by items 3 & 5.
+4. Item 5 (alerts + Telegram DM).
+5. Item 1 (user download history).
+6. Item 4 (shortener report + rotation).
+
+I'll ship in that order and check in after items 1-3 land so you can sanity-check before the rest.
