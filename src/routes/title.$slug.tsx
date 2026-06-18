@@ -38,6 +38,16 @@ export const Route = createFileRoute("/title/$slug")({
 
 function TitlePage() {
   const { slug } = Route.useParams();
+  const isAuthed = useIsAuthed();
+  const publicBrowsing = usePublicBrowsing();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthed && !publicBrowsing) {
+      navigate({ to: "/auth", search: { redirect: `/title/${slug}` }, replace: true });
+    }
+  }, [isAuthed, publicBrowsing, navigate, slug]);
+
 
   const titleQ = useQuery({
     queryKey: ["title", slug],
