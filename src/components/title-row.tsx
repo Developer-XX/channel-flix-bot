@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+
 import { ArrowRight } from "lucide-react";
 import { TitleCard, TitleCardSkeleton, type TitleCardData } from "./title-card";
 
@@ -19,12 +19,12 @@ export function TitleRow({ title, items, loading, emptyHint, viewAllHref }: Prop
           {title}
         </h2>
         {viewAllHref && !showEmpty && (
-          <Link
-            to={viewAllHref}
+          <a
+            href={viewAllHref}
             className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 px-3 py-1 text-xs sm:text-sm text-muted-foreground hover:text-foreground hover:border-ring transition-colors"
           >
             View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          </a>
         )}
       </div>
       {showEmpty ? (
