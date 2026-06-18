@@ -7,7 +7,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 
 export const serverFnErrorLogger = createMiddleware({ type: "function" }).server(
-  async ({ next, context, functionId }) => {
+  async ({ next, context }) => {
     const { logServerFnRequest, newRequestId } = await import("./server-logger.server");
     const requestId = newRequestId();
     const startedAt = Date.now();
@@ -17,7 +17,7 @@ export const serverFnErrorLogger = createMiddleware({ type: "function" }).server
       void logServerFnRequest(
         {
           requestId,
-          fnExport: typeof functionId === "string" ? functionId : null,
+          fnExport: null,
           userId: ctx?.userId ?? null,
           status: 200,
           durationMs: Date.now() - startedAt,
@@ -30,7 +30,7 @@ export const serverFnErrorLogger = createMiddleware({ type: "function" }).server
       void logServerFnRequest(
         {
           requestId,
-          fnExport: typeof functionId === "string" ? functionId : null,
+          fnExport: null,
           userId: ctx?.userId ?? null,
           status: 500,
           durationMs: Date.now() - startedAt,

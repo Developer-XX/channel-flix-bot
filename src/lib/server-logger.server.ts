@@ -55,7 +55,7 @@ export async function logServerFnRequest(entry: LogEntry, isError: boolean) {
       error_message: entry.message?.slice(0, 2000) ?? null,
       error_stack: entry.stack?.slice(0, 5000) ?? null,
       duration_ms: entry.durationMs ?? null,
-      metadata: entry.metadata ?? {},
+      metadata: (entry.metadata ?? {}) as never,
     });
   } catch (insertErr) {
     // eslint-disable-next-line no-console
