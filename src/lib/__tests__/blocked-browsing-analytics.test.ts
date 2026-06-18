@@ -133,22 +133,49 @@ describe.skipIf(!hasKeys)("blocked browsing analytics", () => {
   });
 
   it("rate-limit (600/min) drops excess writes gracefully (no error)", async () => {
-    // Fire a burst. We don't try to hit 600 here (slow + DB-heavy); we verify
-    // each call returns success / no thrown error and the table stays consistent.
-    const burst = 25;
+    // Pre-seed > 600 rows in the last minute so the next anon call hits the cap.
+    const seedRows = Array.from({ length: 650 }, () => ({
+      reason: "regtest_ratelimit",
+      slug: "seed",
+      path: "/title/seed",
+      toggle_on: true,
+      user_agent: "vitest-seed",
+    }));
+    // Bulk insert via service role to fill the 1-minute window.
+    const seed = await admin.from("blocked_browsing_log").insert(seedRows);
+    expect(seed.error).toBeNull();
+
+    // Snapshot count right after seeding.
+    const since = new Date(Date.now() - 60_000).toISOString();
+    const before = await admin
+      .from("blocked_browsing_log")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since);
+    const baseline = before.count ?? 0;
+    expect(baseline > 600).toBe(true);
+
+    // Now fire a burst as anon — each should return gracefully and be dropped.
+    const burst = 10;
     const results = await Promise.all(
       Array.from({ length: burst }, (_, i) =>
         anon.rpc("log_blocked_browsing", {
           _reason: "regtest_ratelimit",
           _slug: `b${i}`,
           _path: `/title/b${i}`,
-          _user_agent: "vitest",
+          _user_agent: "vitest-burst",
         }),
       ),
     );
     for (const r of results) {
-      // Either inserted (no error) or rate-limited (still no error: function returns silently).
-      expect(r.error).toBeNull();
+      expect(r.error).toBeNull(); // function returns silently when capped
     }
+
+    // Confirm the burst rows were NOT inserted (rate-limit enforced).
+    const after = await admin
+      .from("blocked_browsing_log")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since)
+      .eq("user_agent", "vitest-burst");
+    expect(after.count ?? 0).toBe(0);
   });
 });
