@@ -36,6 +36,7 @@ import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
 import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
 import { Route as AuthenticatedAdminSlideshowRouteImport } from './routes/_authenticated/admin.slideshow'
+import { Route as AuthenticatedAdminShortenersRouteImport } from './routes/_authenticated/admin.shorteners'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
 import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authenticated/admin.premium'
@@ -44,9 +45,12 @@ import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authenticated/admin.error-log'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
 import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
+import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated/admin.audit'
 import { Route as AuthenticatedAdminAnnouncementsRouteImport } from './routes/_authenticated/admin.announcements'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
+import { Route as AuthenticatedAdminAlertsRouteImport } from './routes/_authenticated/admin.alerts'
 import { Route as AuthenticatedAdminAdsRouteImport } from './routes/_authenticated/admin.ads'
+import { Route as AuthenticatedAccountDownloadsRouteImport } from './routes/_authenticated/account.downloads'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillIngestRouteImport } from './routes/api/public/telegram/backfill-ingest'
@@ -56,6 +60,7 @@ import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$toke
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksProcessMessageDeletesRouteImport } from './routes/api/public/hooks/process-message-deletes'
+import { Route as ApiPublicHooksProcessDownloadQueueRouteImport } from './routes/api/public/hooks/process-download-queue'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
 const TrustRoute = TrustRouteImport.update({
@@ -199,6 +204,12 @@ const AuthenticatedAdminSlideshowRoute =
     path: '/slideshow',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminShortenersRoute =
+  AuthenticatedAdminShortenersRouteImport.update({
+    id: '/shorteners',
+    path: '/shorteners',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminSettingsRoute =
   AuthenticatedAdminSettingsRouteImport.update({
     id: '/settings',
@@ -246,6 +257,11 @@ const AuthenticatedAdminBulkRoute = AuthenticatedAdminBulkRouteImport.update({
   path: '/bulk',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminAuditRoute = AuthenticatedAdminAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const AuthenticatedAdminAnnouncementsRoute =
   AuthenticatedAdminAnnouncementsRouteImport.update({
     id: '/announcements',
@@ -258,11 +274,23 @@ const AuthenticatedAdminAnalyticsRoute =
     path: '/analytics',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminAlertsRoute =
+  AuthenticatedAdminAlertsRouteImport.update({
+    id: '/alerts',
+    path: '/alerts',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminAdsRoute = AuthenticatedAdminAdsRouteImport.update({
   id: '/ads',
   path: '/ads',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAccountDownloadsRoute =
+  AuthenticatedAccountDownloadsRouteImport.update({
+    id: '/downloads',
+    path: '/downloads',
+    getParentRoute: () => AuthenticatedAccountRoute,
+  } as any)
 const ApiPublicVTokenRoute = ApiPublicVTokenRouteImport.update({
   id: '/api/public/v/$token',
   path: '/api/public/v/$token',
@@ -314,6 +342,12 @@ const ApiPublicHooksProcessMessageDeletesRoute =
     path: '/api/public/hooks/process-message-deletes',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProcessDownloadQueueRoute =
+  ApiPublicHooksProcessDownloadQueueRouteImport.update({
+    id: '/api/public/hooks/process-download-queue',
+    path: '/api/public/hooks/process-download-queue',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMaybeRebuildIndexesRoute =
   ApiPublicHooksMaybeRebuildIndexesRouteImport.update({
     id: '/api/public/hooks/maybe-rebuild-indexes',
@@ -329,7 +363,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trust': typeof TrustRoute
-  '/account': typeof AuthenticatedAccountRoute
+  '/account': typeof AuthenticatedAccountRouteWithChildren
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/premium': typeof AuthenticatedPremiumRoute
   '/support': typeof AuthenticatedSupportRoute
@@ -337,9 +371,12 @@ export interface FileRoutesByFullPath {
   '/debug/auth': typeof DebugAuthRoute
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/admin/alerts': typeof AuthenticatedAdminAlertsRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
+  '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
@@ -348,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
@@ -360,6 +398,7 @@ export interface FileRoutesByFullPath {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -378,16 +417,19 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trust': typeof TrustRoute
-  '/account': typeof AuthenticatedAccountRoute
+  '/account': typeof AuthenticatedAccountRouteWithChildren
   '/premium': typeof AuthenticatedPremiumRoute
   '/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/admin/alerts': typeof AuthenticatedAdminAlertsRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
+  '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
@@ -396,6 +438,7 @@ export interface FileRoutesByTo {
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
@@ -408,6 +451,7 @@ export interface FileRoutesByTo {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -428,7 +472,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/trust': typeof TrustRoute
-  '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/account': typeof AuthenticatedAccountRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/premium': typeof AuthenticatedPremiumRoute
   '/_authenticated/support': typeof AuthenticatedSupportRoute
@@ -436,9 +480,12 @@ export interface FileRoutesById {
   '/debug/auth': typeof DebugAuthRoute
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/_authenticated/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/_authenticated/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/_authenticated/admin/alerts': typeof AuthenticatedAdminAlertsRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
+  '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/_authenticated/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
@@ -447,6 +494,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/_authenticated/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/_authenticated/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
   '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
@@ -459,6 +507,7 @@ export interface FileRoutesById {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -487,9 +536,12 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/section/$key'
     | '/title/$slug'
+    | '/account/downloads'
     | '/admin/ads'
+    | '/admin/alerts'
     | '/admin/analytics'
     | '/admin/announcements'
+    | '/admin/audit'
     | '/admin/bulk'
     | '/admin/diagnostics'
     | '/admin/error-log'
@@ -498,6 +550,7 @@ export interface FileRouteTypes {
     | '/admin/premium'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/shorteners'
     | '/admin/slideshow'
     | '/admin/support'
     | '/admin/sync-trace'
@@ -510,6 +563,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
@@ -535,9 +589,12 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/section/$key'
     | '/title/$slug'
+    | '/account/downloads'
     | '/admin/ads'
+    | '/admin/alerts'
     | '/admin/analytics'
     | '/admin/announcements'
+    | '/admin/audit'
     | '/admin/bulk'
     | '/admin/diagnostics'
     | '/admin/error-log'
@@ -546,6 +603,7 @@ export interface FileRouteTypes {
     | '/admin/premium'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/shorteners'
     | '/admin/slideshow'
     | '/admin/support'
     | '/admin/sync-trace'
@@ -558,6 +616,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
@@ -585,9 +644,12 @@ export interface FileRouteTypes {
     | '/debug/auth'
     | '/section/$key'
     | '/title/$slug'
+    | '/_authenticated/account/downloads'
     | '/_authenticated/admin/ads'
+    | '/_authenticated/admin/alerts'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/announcements'
+    | '/_authenticated/admin/audit'
     | '/_authenticated/admin/bulk'
     | '/_authenticated/admin/diagnostics'
     | '/_authenticated/admin/error-log'
@@ -596,6 +658,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/premium'
     | '/_authenticated/admin/requests'
     | '/_authenticated/admin/settings'
+    | '/_authenticated/admin/shorteners'
     | '/_authenticated/admin/slideshow'
     | '/_authenticated/admin/support'
     | '/_authenticated/admin/sync-trace'
@@ -608,6 +671,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
@@ -635,6 +699,7 @@ export interface RootRouteChildren {
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  ApiPublicHooksProcessDownloadQueueRoute: typeof ApiPublicHooksProcessDownloadQueueRoute
   ApiPublicHooksProcessMessageDeletesRoute: typeof ApiPublicHooksProcessMessageDeletesRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -837,6 +902,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSlideshowRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/shorteners': {
+      id: '/_authenticated/admin/shorteners'
+      path: '/shorteners'
+      fullPath: '/admin/shorteners'
+      preLoaderRoute: typeof AuthenticatedAdminShortenersRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/settings': {
       id: '/_authenticated/admin/settings'
       path: '/settings'
@@ -893,6 +965,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminBulkRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/audit': {
+      id: '/_authenticated/admin/audit'
+      path: '/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AuthenticatedAdminAuditRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/announcements': {
       id: '/_authenticated/admin/announcements'
       path: '/announcements'
@@ -907,12 +986,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAnalyticsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/alerts': {
+      id: '/_authenticated/admin/alerts'
+      path: '/alerts'
+      fullPath: '/admin/alerts'
+      preLoaderRoute: typeof AuthenticatedAdminAlertsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/ads': {
       id: '/_authenticated/admin/ads'
       path: '/ads'
       fullPath: '/admin/ads'
       preLoaderRoute: typeof AuthenticatedAdminAdsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/account/downloads': {
+      id: '/_authenticated/account/downloads'
+      path: '/downloads'
+      fullPath: '/account/downloads'
+      preLoaderRoute: typeof AuthenticatedAccountDownloadsRouteImport
+      parentRoute: typeof AuthenticatedAccountRoute
     }
     '/api/public/v/$token': {
       id: '/api/public/v/$token'
@@ -977,6 +1070,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksProcessMessageDeletesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/process-download-queue': {
+      id: '/api/public/hooks/process-download-queue'
+      path: '/api/public/hooks/process-download-queue'
+      fullPath: '/api/public/hooks/process-download-queue'
+      preLoaderRoute: typeof ApiPublicHooksProcessDownloadQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/maybe-rebuild-indexes': {
       id: '/api/public/hooks/maybe-rebuild-indexes'
       path: '/api/public/hooks/maybe-rebuild-indexes'
@@ -987,10 +1087,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedAccountRouteChildren {
+  AuthenticatedAccountDownloadsRoute: typeof AuthenticatedAccountDownloadsRoute
+}
+
+const AuthenticatedAccountRouteChildren: AuthenticatedAccountRouteChildren = {
+  AuthenticatedAccountDownloadsRoute: AuthenticatedAccountDownloadsRoute,
+}
+
+const AuthenticatedAccountRouteWithChildren =
+  AuthenticatedAccountRoute._addFileChildren(AuthenticatedAccountRouteChildren)
+
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAdsRoute: typeof AuthenticatedAdminAdsRoute
+  AuthenticatedAdminAlertsRoute: typeof AuthenticatedAdminAlertsRoute
   AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
   AuthenticatedAdminAnnouncementsRoute: typeof AuthenticatedAdminAnnouncementsRoute
+  AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
   AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
   AuthenticatedAdminErrorLogRoute: typeof AuthenticatedAdminErrorLogRoute
@@ -999,6 +1112,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPremiumRoute: typeof AuthenticatedAdminPremiumRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
+  AuthenticatedAdminShortenersRoute: typeof AuthenticatedAdminShortenersRoute
   AuthenticatedAdminSlideshowRoute: typeof AuthenticatedAdminSlideshowRoute
   AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
   AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
@@ -1012,8 +1126,10 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAdsRoute: AuthenticatedAdminAdsRoute,
+  AuthenticatedAdminAlertsRoute: AuthenticatedAdminAlertsRoute,
   AuthenticatedAdminAnalyticsRoute: AuthenticatedAdminAnalyticsRoute,
   AuthenticatedAdminAnnouncementsRoute: AuthenticatedAdminAnnouncementsRoute,
+  AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
   AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
   AuthenticatedAdminErrorLogRoute: AuthenticatedAdminErrorLogRoute,
@@ -1022,6 +1138,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminPremiumRoute: AuthenticatedAdminPremiumRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
+  AuthenticatedAdminShortenersRoute: AuthenticatedAdminShortenersRoute,
   AuthenticatedAdminSlideshowRoute: AuthenticatedAdminSlideshowRoute,
   AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
   AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
@@ -1038,14 +1155,14 @@ const AuthenticatedAdminRouteWithChildren =
   AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedAccountRoute: typeof AuthenticatedAccountRouteWithChildren
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedPremiumRoute: typeof AuthenticatedPremiumRoute
   AuthenticatedSupportRoute: typeof AuthenticatedSupportRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedAccountRoute: AuthenticatedAccountRouteWithChildren,
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedPremiumRoute: AuthenticatedPremiumRoute,
   AuthenticatedSupportRoute: AuthenticatedSupportRoute,
@@ -1071,6 +1188,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,
+  ApiPublicHooksProcessDownloadQueueRoute:
+    ApiPublicHooksProcessDownloadQueueRoute,
   ApiPublicHooksProcessMessageDeletesRoute:
     ApiPublicHooksProcessMessageDeletesRoute,
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,

@@ -14,43 +14,64 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { deleteMessage } = await import("@/lib/telegram-api.server");
+        const { recordCronRun } = await import("@/lib/audit.server");
 
-        const { data: rows, error } = await supabaseAdmin
-          .from("scheduled_message_deletes")
-          .select("id, chat_id, message_id, attempts")
-          .is("done_at", null)
-          .lte("delete_at", new Date().toISOString())
-          .order("delete_at", { ascending: true })
-          .limit(50);
-        if (error) {
-          return Response.json({ ok: false, error: error.message }, { status: 500 });
-        }
+        let processedCount = 0;
+        let okCount = 0;
+        let failedCount = 0;
+        let runError: string | null = null;
 
-        let ok = 0;
-        let failed = 0;
-        for (const row of rows ?? []) {
-          const r = await deleteMessage(row.chat_id, Number(row.message_id));
-          if (r.ok) {
-            await supabaseAdmin
-              .from("scheduled_message_deletes")
-              .update({ done_at: new Date().toISOString(), attempts: row.attempts + 1 })
-              .eq("id", row.id);
-            ok++;
-          } else {
-            const giveUp = row.attempts + 1 >= 5;
-            await supabaseAdmin
-              .from("scheduled_message_deletes")
-              .update({
-                attempts: row.attempts + 1,
-                last_error: r.error.slice(0, 300),
-                done_at: giveUp ? new Date().toISOString() : null,
-              })
-              .eq("id", row.id);
-            failed++;
+        try {
+          const { data: rows, error } = await supabaseAdmin
+            .from("scheduled_message_deletes")
+            .select("id, chat_id, message_id, attempts")
+            .is("done_at", null)
+            .lte("delete_at", new Date().toISOString())
+            .order("delete_at", { ascending: true })
+            .limit(50);
+          if (error) throw error;
+
+          processedCount = (rows ?? []).length;
+          for (const row of rows ?? []) {
+            const r = await deleteMessage(row.chat_id, Number(row.message_id));
+            if (r.ok) {
+              await supabaseAdmin
+                .from("scheduled_message_deletes")
+                .update({ done_at: new Date().toISOString(), attempts: row.attempts + 1 })
+                .eq("id", row.id);
+              okCount++;
+            } else {
+              const giveUp = row.attempts + 1 >= 5;
+              await supabaseAdmin
+                .from("scheduled_message_deletes")
+                .update({
+                  attempts: row.attempts + 1,
+                  last_error: r.error.slice(0, 300),
+                  done_at: giveUp ? new Date().toISOString() : null,
+                })
+                .eq("id", row.id);
+              failedCount++;
+            }
           }
+        } catch (e) {
+          runError = (e as Error).message;
         }
 
-        return Response.json({ ok: true, processed: (rows ?? []).length, deleted: ok, failed });
+        await recordCronRun(
+          supabaseAdmin,
+          "process-message-deletes",
+          runError === null,
+          { processed: processedCount, deleted: okCount, failed: failedCount },
+          runError,
+        );
+
+        return Response.json({
+          ok: runError === null,
+          processed: processedCount,
+          deleted: okCount,
+          failed: failedCount,
+          error: runError,
+        });
       },
     },
   },

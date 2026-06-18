@@ -1,5 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign } from "lucide-react";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign, ScrollText, Link2 } from "lucide-react";
+import { useQuery as useReactQuery } from "@tanstack/react-query";
+import { listAdminAlerts } from "@/lib/admin-alerts.functions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -119,6 +121,9 @@ function AdminLayout() {
           <NavItem to="/admin/diagnostics" icon={<Stethoscope className="h-4 w-4" />} label="Diagnostics" />
           <NavItem to="/admin/health" icon={<Activity className="h-4 w-4" />} label="Health check" />
           <NavItem to="/admin/error-log" icon={<AlertTriangle className="h-4 w-4" />} label="Error log" />
+          <NavItem to="/admin/alerts" icon={<Bell className="h-4 w-4" />} label="Alerts & cron" />
+          <NavItem to="/admin/audit" icon={<ScrollText className="h-4 w-4" />} label="Audit log" />
+          <NavItem to="/admin/shorteners" icon={<Link2 className="h-4 w-4" />} label="Shorteners" />
           <NavItem to="/admin/tutorial" icon={<PlayCircle className="h-4 w-4" />} label="Tutorial video" />
           <NavItem to="/admin/premium" icon={<Crown className="h-4 w-4" />} label="Premium" />
           <NavItem to="/admin/users" icon={<Users className="h-4 w-4" />} label="Users & Broadcast" />
@@ -150,6 +155,9 @@ function AdminLayout() {
             <MobileNavItem to="/admin/diagnostics" label="Diagnostics" />
             <MobileNavItem to="/admin/health" label="Health" />
             <MobileNavItem to="/admin/error-log" label="Errors" />
+            <MobileNavItem to="/admin/alerts" label="Alerts" />
+            <MobileNavItem to="/admin/audit" label="Audit" />
+            <MobileNavItem to="/admin/shorteners" label="Shorteners" />
             <MobileNavItem to="/admin/tutorial" label="Tutorial" />
             <MobileNavItem to="/admin/premium" label="Premium" />
             <MobileNavItem to="/admin/users" label="Users" />
@@ -161,9 +169,25 @@ function AdminLayout() {
             <MobileNavItem to="/admin/settings" label="Settings" />
           </nav>
         </div>
+        <AlertsBanner />
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function AlertsBanner() {
+  const fn = useServerFn(listAdminAlerts);
+  const q = useReactQuery({ queryKey: ["admin-alerts-banner"], queryFn: () => fn(), refetchInterval: 30_000, retry: 1 });
+  if (!q.data || (!q.data.hasErrors && !q.data.cron.some((c: any) => c.isLagging))) return null;
+  const errorCount = q.data.open.filter((a: any) => a.severity === "error").length;
+  const lagging = q.data.cron.filter((c: any) => c.isLagging).map((c: any) => c.job_name);
+  return (
+    <Link to="/admin/alerts" className="block bg-destructive/10 border-b border-destructive/30 text-destructive text-sm px-4 py-2 hover:bg-destructive/15">
+      <span className="font-medium">⚠ {errorCount > 0 ? `${errorCount} active alert${errorCount === 1 ? "" : "s"}` : "Cron lag detected"}</span>
+      {lagging.length > 0 && <span className="ml-2 text-xs opacity-80">Lagging: {lagging.join(", ")}</span>}
+      <span className="ml-2 text-xs underline">View →</span>
+    </Link>
   );
 }
 

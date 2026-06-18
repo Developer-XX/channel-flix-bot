@@ -185,6 +185,12 @@ export const requestDownload = createServerFn({ method: "POST" })
       upsertDeliveryAttempt,
       existingDelivery,
     } = await import("@/lib/delivery.server");
+    const {
+      claimOrFetchQueueRow,
+      markQueueSent,
+      markQueueFailureRetry,
+    } = await import("@/lib/download-queue.server");
+    const { openAdminAlert, maybeNotifyAdminsTelegram, writeAudit } = await import("@/lib/audit.server");
     const { getSettingNumber, getSetting } = await import("@/lib/runtime-settings.server");
 
     // 0. Verification gate (TTL from SHORTENER_ROTATION_HOURS)
@@ -248,8 +254,7 @@ export const requestDownload = createServerFn({ method: "POST" })
 
     const prior = await existingDelivery(supabaseAdmin, idemKey);
     if (prior?.status === "delivered" && prior.telegramMessageId) {
-      // Reuse: bot already sent this within the cooldown window. Record the
-      // re-click as a reused attempt for analytics, but do not re-send.
+      // Reuse: bot already sent this within the cooldown window.
       await upsertDeliveryAttempt(supabaseAdmin, {
         userId: context.userId,
         mediaFileId: file.id,
@@ -261,12 +266,52 @@ export const requestDownload = createServerFn({ method: "POST" })
         history: [{ at: new Date().toISOString(), ok: true, reused: true }],
         reusedFromCooldown: true,
       });
+      await markQueueSent(supabaseAdmin, idemKey, prior.telegramMessageId, botUserId, true);
+      await writeAudit(supabaseAdmin, {
+        action: "download.resend_reused",
+        actorUserId: context.userId,
+        metadata: { mediaFileId: file.id, messageId: prior.telegramMessageId, cooldownSec },
+      });
       return {
         ok: true as const,
         delivered: true,
         messageId: prior.telegramMessageId,
         reused: true as const,
         cooldownSec,
+      };
+    }
+
+    // 3b. Claim/insert the queue row (PK = idempotency key).
+    const queue = await claimOrFetchQueueRow(supabaseAdmin, {
+      idempotencyKey: idemKey,
+      userId: context.userId,
+      fileId: file.id,
+      titleId: file.title_id ?? null,
+      chatId: link.telegram_user_id,
+      payload: {
+        fromChatId: (file as any).telegram_channels.channel_id,
+        messageId: file.telegram_message_id!,
+        caption: `📥 ${file.file_name ?? "Your file"}\nDelivered by StreamVault`,
+      },
+    });
+    if (queue.existed && queue.row.status === "sent" && queue.row.message_id) {
+      // A parallel click already delivered. Return that.
+      return {
+        ok: true as const,
+        delivered: true,
+        messageId: queue.row.message_id,
+        reused: true as const,
+        cooldownSec,
+      };
+    }
+    if (queue.existed && (queue.row.status === "queued" || queue.row.status === "sending")) {
+      // Another in-flight request is sending. Don't double-send; the cron
+      // or the original caller will finalize.
+      return {
+        ok: true as const,
+        queued: true as const,
+        cooldownSec,
+        nextAttemptAt: queue.row.next_attempt_at,
       };
     }
 
@@ -306,6 +351,42 @@ export const requestDownload = createServerFn({ method: "POST" })
       attempt_count: history.length,
       attempt_history: history,
     });
+
+    // Update queue row.
+    if (result.ok) {
+      await markQueueSent(supabaseAdmin, idemKey, result.messageId, botUserId);
+    } else {
+      const retryable = result.kind === "rate_limited" || result.kind === "other";
+      const attempts = (queue.row.attempts ?? 0) + history.length;
+      if (retryable) {
+        const { giveUp } = await markQueueFailureRetry(supabaseAdmin, idemKey, {
+          attempts,
+          error: result.error,
+          retryAfterMs: lastRetryAfterMs,
+          maxAttempts: queue.row.max_attempts ?? 5,
+        });
+        if (giveUp) {
+          const alertId = await openAdminAlert(supabaseAdmin, {
+            kind: "download_queue_stuck",
+            severity: "error",
+            subject: `Download delivery exhausted retries`,
+            details: { userId: context.userId, fileId: file.id, error: result.error.slice(0, 300) },
+          });
+          await maybeNotifyAdminsTelegram(supabaseAdmin, {
+            alertId,
+            kind: "download_queue_stuck",
+            text: `⚠️ Download delivery gave up after ${attempts} attempts.\nFile: <code>${file.id}</code>\nError: ${result.error.slice(0, 200)}`,
+          });
+        }
+      } else {
+        // Non-retryable: mark failed permanently.
+        await markQueueFailureRetry(supabaseAdmin, idemKey, {
+          attempts: (queue.row.max_attempts ?? 5),
+          error: result.error,
+          maxAttempts: queue.row.max_attempts ?? 5,
+        });
+      }
+    }
 
     // 6. Schedule auto-delete of the delivered message (if enabled).
     let autoDeleteAt: string | null = null;

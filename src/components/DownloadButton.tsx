@@ -181,6 +181,8 @@ export function DownloadButton({
         if (cd > 0) setCooldownUntil(Date.now() + cd * 1000);
         if ((r as any).reused) {
           toast.message(`Already sent — check your Telegram (within ${cd || 8}s cooldown).`);
+        } else if ((r as any).queued) {
+          toast.message("Queued — we'll retry shortly. Check your Telegram in a minute.");
         } else {
           toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
         }

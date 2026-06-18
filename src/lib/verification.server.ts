@@ -42,9 +42,27 @@ async function isTruthySetting(key: string, fallback: boolean): Promise<boolean>
 }
 
 async function getEnabledProviders(): Promise<ProviderConfig[]> {
+  // Read admin overrides from shortener_configs (set via /admin/shorteners).
+  // Falls back to the legacy app_settings flag when no row exists.
+  let overrides: Map<string, { enabled: boolean; priority: number }> | null = null;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin
+      .from("shortener_configs")
+      .select("provider, enabled, priority");
+    overrides = new Map(((data as any[]) ?? []).map((r) => [r.provider, { enabled: r.enabled, priority: r.priority }]));
+  } catch { /* fall through to app_settings */ }
   const out: ProviderConfig[] = [];
   for (const p of PROVIDER_REGISTRY) {
-    if (await isTruthySetting(p.enabledKey, p.defaultEnabled)) out.push(p);
+    const override = overrides?.get(p.name);
+    const enabled = override
+      ? override.enabled
+      : await isTruthySetting(p.enabledKey, p.defaultEnabled);
+    if (enabled) out.push(p);
+  }
+  // Sort by admin priority when overrides present (lower first).
+  if (overrides) {
+    out.sort((a, b) => (overrides!.get(a.name)?.priority ?? 100) - (overrides!.get(b.name)?.priority ?? 100));
   }
   return out;
 }
@@ -312,6 +330,14 @@ export async function consumeToken(args: {
   try {
     await (supabase.rpc as any)("increment_verification_count", { _user_id: row.user_id });
   } catch { /* optional RPC */ }
+  try {
+    const { writeAudit } = await import("@/lib/audit.server");
+    await writeAudit(supabase, {
+      action: "token_verification.success",
+      actorUserId: row.user_id,
+      metadata: { provider: row.provider, mediaFileId: row.media_file_id ?? null },
+    });
+  } catch {}
 
   return {
     ok: true,
