@@ -185,6 +185,12 @@ export const requestDownload = createServerFn({ method: "POST" })
       upsertDeliveryAttempt,
       existingDelivery,
     } = await import("@/lib/delivery.server");
+    const {
+      claimOrFetchQueueRow,
+      markQueueSent,
+      markQueueFailureRetry,
+    } = await import("@/lib/download-queue.server");
+    const { openAdminAlert, maybeNotifyAdminsTelegram, writeAudit } = await import("@/lib/audit.server");
     const { getSettingNumber, getSetting } = await import("@/lib/runtime-settings.server");
 
     // 0. Verification gate (TTL from SHORTENER_ROTATION_HOURS)
