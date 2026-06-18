@@ -40,6 +40,18 @@ export function DownloadButton({
   const [code, setCode] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string | null>(null);
   const [errorState, setErrorState] = useState<{ message: string; detail?: string; cid: string } | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [cooldownUntil]);
+
+  const cooldownLeftSec =
+    cooldownUntil && cooldownUntil > now ? Math.ceil((cooldownUntil - now) / 1000) : 0;
+  const isCoolingDown = cooldownLeftSec > 0;
 
   function newCorrelationId(): string {
     try {
