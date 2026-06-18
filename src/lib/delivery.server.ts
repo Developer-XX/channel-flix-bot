@@ -7,12 +7,12 @@ export type DeliveryResult =
   | { ok: true; messageId: number }
   | { ok: false; error: string; kind: "blocked" | "not_started" | "not_found" | "other" };
 
-// Hour-bucket key: same user re-clicking the same file within an hour is
-// treated as the same request, but a new hour creates a fresh row.
+// Unique per send: every Download click should produce a fresh delivery row
+// so the bot resends the file. A tiny cooldown is enforced in the handler
+// before calling this helper.
 export function makeIdempotencyKey(userId: string, mediaFileId: string): string {
-  const bucket = Math.floor(Date.now() / (60 * 60 * 1000));
   return createHash("sha256")
-    .update(`${userId}|${mediaFileId}|${bucket}`)
+    .update(`${userId}|${mediaFileId}|${Date.now()}|${Math.random()}`)
     .digest("base64url")
     .slice(0, 32);
 }

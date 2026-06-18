@@ -183,10 +183,10 @@ export const requestDownload = createServerFn({ method: "POST" })
       getBotUserId,
       deliverWithRetry,
       upsertDeliveryAttempt,
-      existingDelivery,
     } = await import("@/lib/delivery.server");
+    const { getSettingNumber, getSetting } = await import("@/lib/runtime-settings.server");
 
-    // 0. Verification gate (24h)
+    // 0. Verification gate (TTL from SHORTENER_ROTATION_HOURS)
     const ver = await getVerificationState(supabaseAdmin, context.userId);
     if (!ver.verified) {
       await auditFailure("needs_verification", { expiresAt: ver.expiresAt });
@@ -236,23 +236,36 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "not_linked" as const };
     }
 
-    // 3. Idempotency check — same user+file inside the same hour bucket
-    const idemKey = makeIdempotencyKey(context.userId, file.id);
-    const existing = await existingDelivery(supabaseAdmin, idemKey);
-    if (existing?.status === "delivered" && existing.telegramMessageId) {
-      // Re-send the same message id is undefined; treat as success and let
-      // the user know. (We don't re-copy to avoid Telegram dedupe surprises.)
-      return {
-        ok: true as const,
-        delivered: true,
-        deduped: true,
-        messageId: existing.telegramMessageId,
-      };
+    // 3. Cooldown — admin-configurable (default 8s). If user clicks again
+    //    sooner than this, we tell them to wait instead of double-sending.
+    const cooldownSec = Math.max(0, Math.min(60, await getSettingNumber("DOWNLOAD_RESEND_COOLDOWN_SECONDS", 8)));
+    if (cooldownSec > 0) {
+      const cutoff = new Date(Date.now() - cooldownSec * 1000).toISOString();
+      const { data: recent } = await supabaseAdmin
+        .from("delivery_attempts")
+        .select("updated_at")
+        .eq("user_id", context.userId)
+        .eq("media_file_id", file.id)
+        .eq("status", "delivered")
+        .gte("updated_at", cutoff)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (recent?.updated_at) {
+        const waitMs = Math.max(0, cooldownSec * 1000 - (Date.now() - new Date(recent.updated_at).getTime()));
+        return {
+          ok: false as const,
+          reason: "cooldown" as const,
+          retryAfterSeconds: Math.ceil(waitMs / 1000),
+        };
+      }
     }
 
+    // 4. Fresh idempotency key per click → always resend.
+    const idemKey = makeIdempotencyKey(context.userId, file.id);
     const botUserId = await getBotUserId();
 
-    // 4. Deliver with retries
+    // 5. Deliver with retries
     const { result, history } = await deliverWithRetry({
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
@@ -288,7 +301,27 @@ export const requestDownload = createServerFn({ method: "POST" })
       attempt_history: history,
     });
 
-    if (result.ok) return { ok: true as const, delivered: true, messageId: result.messageId };
+    // 6. Schedule auto-delete of the delivered message (if enabled).
+    if (result.ok) {
+      try {
+        const value = Math.max(0, await getSettingNumber("DOWNLOAD_AUTO_DELETE_VALUE", 30));
+        const unit = ((await getSetting("DOWNLOAD_AUTO_DELETE_UNIT")) ?? "minutes").toLowerCase().trim();
+        if (value > 0) {
+          const mult = unit === "seconds" ? 1000 : unit === "hours" ? 3600_000 : 60_000;
+          const deleteAt = new Date(Date.now() + value * mult).toISOString();
+          await supabaseAdmin.from("scheduled_message_deletes").insert({
+            chat_id: link.telegram_user_id,
+            message_id: result.messageId,
+            user_id: context.userId,
+            media_file_id: file.id,
+            delete_at: deleteAt,
+          });
+        }
+      } catch (e) {
+        console.warn("[download] schedule delete failed:", (e as Error).message);
+      }
+      return { ok: true as const, delivered: true, messageId: result.messageId };
+    }
     if (result.kind === "blocked" || result.kind === "not_started") {
       await auditFailure("bot_blocked", { kind: result.kind });
       return { ok: false as const, reason: "bot_blocked" as const };
