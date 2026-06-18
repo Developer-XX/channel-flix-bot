@@ -178,7 +178,8 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
     }
 
     // Blocked browsing analytics
-    const [blockedToday, blocked7d, blocked30d, blockedAll, blockedRecent, browsingFlag] =
+    const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
+    const [blockedToday, blocked7d, blocked30d, blockedAll, blockedRecent, browsingFlag, lastMinute] =
       await Promise.all([
         sb.from("blocked_browsing_log").select("id", { count: "exact", head: true }).gte("created_at", todayISO),
         sb.from("blocked_browsing_log").select("id", { count: "exact", head: true }).gte("created_at", d7),
@@ -190,6 +191,7 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
           .order("created_at", { ascending: false })
           .limit(25),
         sb.rpc("is_public_browsing_enabled"),
+        sb.from("blocked_browsing_log").select("id", { count: "exact", head: true }).gte("created_at", oneMinAgo),
       ]);
     const reasonCounts = new Map<string, number>();
     for (const row of (blockedAll.data ?? []) as Array<{ reason: string }>) {
@@ -198,6 +200,15 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
     const byReason = Array.from(reasonCounts.entries())
       .map(([reason, count]) => ({ reason, count }))
       .sort((a, b) => b.count - a.count);
+
+    const usedLastMinute = lastMinute.count ?? 0;
+    const CAP = 600 as const;
+    const utilizationPct = Math.min(100, Math.round((usedLastMinute / CAP) * 100));
+    // Function caps writes at 600; anything observed above cap means earlier
+    // calls in the same window were dropped silently. usedLastMinute can also
+    // be < cap with drops if many calls arrived after the cap was reached —
+    // we surface a conservative estimate via the over-cap delta only.
+    const droppedEstimate = Math.max(0, usedLastMinute - CAP);
 
     return {
       generatedAt: new Date().toISOString(),
