@@ -154,6 +154,15 @@ export const requestDownload = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { getVerificationState } = await import("@/lib/verification.server");
     const { getRequestHeader } = await import("@tanstack/react-start/server");
+
+    // Global rate-limit: 10 download requests / minute / user. Returns 429
+    // with Retry-After + RateLimit-* headers (RFC 9331 draft).
+    const { enforceServerFnRateLimit } = await import("@/lib/rate-limit.server");
+    await enforceServerFnRateLimit({
+      key: `download:${context.userId}`,
+      limit: 10,
+      windowSec: 60,
+    });
     const auditFailure = async (reason: string, metadata: Record<string, unknown> = {}) => {
       try {
         await supabaseAdmin.from("admin_audit_log").insert({
