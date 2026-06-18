@@ -36,6 +36,8 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
 import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authenticated/admin.premium'
 import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin.notifications'
+import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenticated/admin.health'
+import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authenticated/admin.error-log'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
 import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
 import { Route as AuthenticatedAdminAnnouncementsRouteImport } from './routes/_authenticated/admin.announcements'
@@ -191,6 +193,18 @@ const AuthenticatedAdminNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminHealthRoute =
+  AuthenticatedAdminHealthRouteImport.update({
+    id: '/health',
+    path: '/health',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminErrorLogRoute =
+  AuthenticatedAdminErrorLogRouteImport.update({
+    id: '/error-log',
+    path: '/error-log',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminDiagnosticsRoute =
   AuthenticatedAdminDiagnosticsRouteImport.update({
     id: '/diagnostics',
@@ -266,6 +280,8 @@ export interface FileRoutesByFullPath {
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -303,6 +319,8 @@ export interface FileRoutesByTo {
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -343,6 +361,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/_authenticated/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/_authenticated/admin/health': typeof AuthenticatedAdminHealthRoute
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/_authenticated/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -383,6 +403,8 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/bulk'
     | '/admin/diagnostics'
+    | '/admin/error-log'
+    | '/admin/health'
     | '/admin/notifications'
     | '/admin/premium'
     | '/admin/requests'
@@ -420,6 +442,8 @@ export interface FileRouteTypes {
     | '/admin/announcements'
     | '/admin/bulk'
     | '/admin/diagnostics'
+    | '/admin/error-log'
+    | '/admin/health'
     | '/admin/notifications'
     | '/admin/premium'
     | '/admin/requests'
@@ -459,6 +483,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/announcements'
     | '/_authenticated/admin/bulk'
     | '/_authenticated/admin/diagnostics'
+    | '/_authenticated/admin/error-log'
+    | '/_authenticated/admin/health'
     | '/_authenticated/admin/notifications'
     | '/_authenticated/admin/premium'
     | '/_authenticated/admin/requests'
@@ -694,6 +720,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminNotificationsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/health': {
+      id: '/_authenticated/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AuthenticatedAdminHealthRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/error-log': {
+      id: '/_authenticated/admin/error-log'
+      path: '/error-log'
+      fullPath: '/admin/error-log'
+      preLoaderRoute: typeof AuthenticatedAdminErrorLogRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/diagnostics': {
       id: '/_authenticated/admin/diagnostics'
       path: '/diagnostics'
@@ -771,6 +811,8 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAnnouncementsRoute: typeof AuthenticatedAdminAnnouncementsRoute
   AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
+  AuthenticatedAdminErrorLogRoute: typeof AuthenticatedAdminErrorLogRoute
+  AuthenticatedAdminHealthRoute: typeof AuthenticatedAdminHealthRoute
   AuthenticatedAdminNotificationsRoute: typeof AuthenticatedAdminNotificationsRoute
   AuthenticatedAdminPremiumRoute: typeof AuthenticatedAdminPremiumRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
@@ -788,6 +830,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAnnouncementsRoute: AuthenticatedAdminAnnouncementsRoute,
   AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
+  AuthenticatedAdminErrorLogRoute: AuthenticatedAdminErrorLogRoute,
+  AuthenticatedAdminHealthRoute: AuthenticatedAdminHealthRoute,
   AuthenticatedAdminNotificationsRoute: AuthenticatedAdminNotificationsRoute,
   AuthenticatedAdminPremiumRoute: AuthenticatedAdminPremiumRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
