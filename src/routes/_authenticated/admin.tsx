@@ -121,6 +121,9 @@ function AdminLayout() {
           <NavItem to="/admin/diagnostics" icon={<Stethoscope className="h-4 w-4" />} label="Diagnostics" />
           <NavItem to="/admin/health" icon={<Activity className="h-4 w-4" />} label="Health check" />
           <NavItem to="/admin/error-log" icon={<AlertTriangle className="h-4 w-4" />} label="Error log" />
+          <NavItem to="/admin/alerts" icon={<Bell className="h-4 w-4" />} label="Alerts & cron" />
+          <NavItem to="/admin/audit" icon={<ScrollText className="h-4 w-4" />} label="Audit log" />
+          <NavItem to="/admin/shorteners" icon={<Link2 className="h-4 w-4" />} label="Shorteners" />
           <NavItem to="/admin/tutorial" icon={<PlayCircle className="h-4 w-4" />} label="Tutorial video" />
           <NavItem to="/admin/premium" icon={<Crown className="h-4 w-4" />} label="Premium" />
           <NavItem to="/admin/users" icon={<Users className="h-4 w-4" />} label="Users & Broadcast" />
