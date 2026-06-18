@@ -41,26 +41,26 @@ export function SiteHeader() {
       }`}
     >
       <AnnouncementBar />
-      <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 min-w-0">
+      <div className="mx-auto grid h-14 sm:h-16 max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 min-w-0">
         <Link
           to="/"
-          className="flex items-center gap-2 font-display font-bold tracking-tight shrink-0"
+          className="flex items-center gap-2 font-display font-bold tracking-tight shrink-0 min-w-0"
         >
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-primary glow-primary">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-primary glow-primary">
             <Film className="h-4 w-4 text-primary-foreground" />
           </span>
-          <span className="text-base sm:text-lg">
+          <span className="truncate text-base sm:text-lg">
             Stream<span className="text-gradient-primary">Vault</span>
           </span>
         </Link>
 
-        <nav className="hidden xl:flex items-center gap-1 text-sm min-w-0">
+        <nav className="hidden xl:flex items-center gap-1 text-sm min-w-0 overflow-hidden">
           {CATEGORIES.map((c) => (
             <Link
               key={c.slug}
               to="/browse/$category"
               params={{ category: c.slug }}
-              className="px-3 py-2 rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-surface whitespace-nowrap"
+              className="px-2.5 py-2 rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-surface whitespace-nowrap"
               activeProps={{ className: "text-foreground bg-surface" }}
             >
               {c.label}
@@ -68,74 +68,52 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <form onSubmit={submit} className="ml-auto hidden md:flex items-center min-w-0">
+        <form
+          onSubmit={submit}
+          className="hidden xl:flex items-center min-w-0 justify-self-end"
+        >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search titles…"
-              className="h-9 w-40 lg:w-56 rounded-full bg-surface/80 pl-9 pr-3 text-sm outline-none border border-border focus:border-ring focus:ring-2 focus:ring-ring/40 transition"
+              className="h-9 w-44 lg:w-56 rounded-full bg-surface/80 pl-9 pr-3 text-sm outline-none border border-border focus:border-ring focus:ring-2 focus:ring-ring/40 transition"
             />
           </div>
         </form>
 
-        <div className="ml-auto md:ml-2 flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Mobile search icon */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 justify-self-end xl:hidden">
+          {/* Search icon — opens search page on small + medium screens */}
           <button
             type="button"
             onClick={() => navigate({ to: "/search", search: { q: "" } })}
-            className="md:hidden grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-surface"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground hover:bg-surface"
             aria-label="Search"
           >
             <Search className="h-4 w-4" />
           </button>
 
           {isAdmin && (
-            <Link to="/admin" aria-label="Admin panel">
-              <Button variant="outline" size="sm" className="hidden sm:inline-flex">
-                <Shield className="h-4 w-4 sm:mr-1.5" />
-                <span className="hidden sm:inline">Admin</span>
+            <Link
+              to="/admin"
+              aria-label="Admin panel"
+              className="hidden md:inline-flex"
+            >
+              <Button variant="outline" size="sm">
+                <Shield className="h-4 w-4 mr-1.5" />
+                Admin
               </Button>
-              <span className="sm:hidden grid h-9 w-9 place-items-center rounded-full border border-border text-foreground hover:bg-surface">
-                <Shield className="h-4 w-4" />
-              </span>
             </Link>
           )}
 
           {user ? (
-            <>
-              <Link to="/premium" aria-label="Premium" className="hidden md:block">
-                <Button variant="ghost" size="sm">
-                  <Crown className="h-4 w-4 mr-1.5 text-amber-400" />
-                  Premium
-                </Button>
-              </Link>
-              <Link to="/support" aria-label="Support" className="hidden md:block">
-                <Button variant="ghost" size="sm">
-                  <MessageCircle className="h-4 w-4 mr-1.5" />
-                  Help
-                </Button>
-              </Link>
-              <Link to="/account" aria-label="Account" className="hidden sm:block">
-                <Button variant="ghost" size="sm">
-                  <UserIcon className="h-4 w-4 mr-1.5" />
-                  Account
-                </Button>
-              </Link>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="hidden sm:inline-flex"
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  navigate({ to: "/" });
-                }}
-              >
-                <LogOut className="h-4 w-4 mr-1.5" />
-                Sign out
+            <Link to="/premium" aria-label="Premium" className="hidden sm:inline-flex">
+              <Button variant="ghost" size="sm">
+                <Crown className="h-4 w-4 mr-1.5 text-amber-400" />
+                Premium
               </Button>
-            </>
+            </Link>
           ) : (
             <Link to="/auth">
               <Button
@@ -149,12 +127,44 @@ export function SiteHeader() {
 
           <button
             onClick={() => setMobileOpen((v) => !v)}
-            className="xl:hidden grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-surface border border-transparent hover:border-border"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-foreground hover:bg-surface border border-transparent hover:border-border"
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
+        </div>
+
+        {/* Desktop (xl+) account cluster */}
+        <div className="hidden xl:flex items-center gap-1.5 shrink-0 justify-self-end col-start-3 row-start-1">
+          {isAdmin && (
+            <Link to="/admin" aria-label="Admin panel">
+              <Button variant="outline" size="sm">
+                <Shield className="h-4 w-4 mr-1.5" />
+                Admin
+              </Button>
+            </Link>
+          )}
+          {user ? (
+            <>
+              <Link to="/premium"><Button variant="ghost" size="sm"><Crown className="h-4 w-4 mr-1.5 text-amber-400" />Premium</Button></Link>
+              <Link to="/support"><Button variant="ghost" size="sm"><MessageCircle className="h-4 w-4 mr-1.5" />Help</Button></Link>
+              <Link to="/account"><Button variant="ghost" size="sm"><UserIcon className="h-4 w-4 mr-1.5" />Account</Button></Link>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/" }); }}
+              >
+                <LogOut className="h-4 w-4 mr-1.5" />Sign out
+              </Button>
+            </>
+          ) : (
+            <Link to="/auth">
+              <Button size="sm" className="bg-gradient-primary hover:opacity-90 text-primary-foreground border-0">
+                Sign in
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
