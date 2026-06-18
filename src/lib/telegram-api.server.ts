@@ -1,13 +1,19 @@
-// Thin wrappers around the Telegram Bot API. Server-only — uses TELEGRAM_BOT_TOKEN.
+// Thin wrappers around the Telegram Bot API. Server-only.
+// Token resolution: admin-editable app_settings TELEGRAM_BOT_TOKEN wins,
+// falls back to the TELEGRAM_BOT_TOKEN env var.
 
-function token(): string {
+async function token(): Promise<string> {
+  const { getSetting } = await import("@/lib/runtime-settings.server");
+  const fromDb = await getSetting("TELEGRAM_BOT_TOKEN");
+  if (fromDb) return fromDb;
   const t = process.env.TELEGRAM_BOT_TOKEN;
   if (!t) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
   return t;
 }
 
 async function callTg<T = any>(method: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`https://api.telegram.org/bot${token()}/${method}`, {
+  const t = await token();
+  const res = await fetch(`https://api.telegram.org/bot${t}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -17,6 +23,25 @@ async function callTg<T = any>(method: string, body: Record<string, unknown>): P
     throw new Error(`Telegram ${method} failed: ${JSON.stringify(json)}`);
   }
   return json.result as T;
+}
+
+export async function setWebhook(args: {
+  url: string;
+  secretToken: string;
+  allowedUpdates?: string[];
+}) {
+  return callTg("setWebhook", {
+    url: args.url,
+    secret_token: args.secretToken,
+    allowed_updates: args.allowedUpdates ?? ["message", "edited_message", "channel_post", "edited_channel_post"],
+  });
+}
+
+export async function getWebhookInfo() {
+  return callTg<{ url: string; pending_update_count: number; last_error_message?: string }>(
+    "getWebhookInfo",
+    {},
+  );
 }
 
 export async function sendMessage(chatId: number | string, text: string, opts: Record<string, unknown> = {}) {

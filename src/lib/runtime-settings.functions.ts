@@ -7,6 +7,7 @@ import { requireAdminAccess } from "@/lib/admin-auth";
 // value from the client and only returns a "has value" flag.
 export const SETTING_KEYS = [
   { key: "PUBLIC_BASE_URL",             group: "Domain",        isSecret: false, placeholder: "https://channel-flix-bot.lovable.app" },
+  { key: "TELEGRAM_BOT_TOKEN",          group: "Telegram",      isSecret: true,  placeholder: "123456:ABC-DEF... (overrides env)" },
   { key: "TMDB_API_KEY",                group: "TMDB",          isSecret: true,  placeholder: "v3 API key" },
   { key: "ADRINOLINKS_API_KEY",         group: "Shorteners",    isSecret: true,  placeholder: "adrinolinks.in API key" },
   { key: "NANOLINKS_API_KEY",           group: "Shorteners",    isSecret: true,  placeholder: "nanolinks.in API key" },

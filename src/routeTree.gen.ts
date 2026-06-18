@@ -27,6 +27,7 @@ import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authentic
 import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicClientErrorsRouteImport } from './routes/api/public/client-errors'
 import { Route as AuthenticatedAdminVerificationLimitsRouteImport } from './routes/_authenticated/admin.verification-limits'
+import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminTutorialRouteImport } from './routes/_authenticated/admin.tutorial'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
@@ -139,6 +140,11 @@ const AuthenticatedAdminVerificationLimitsRoute =
     path: '/verification-limits',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const AuthenticatedAdminTutorialRoute =
   AuthenticatedAdminTutorialRouteImport.update({
     id: '/tutorial',
@@ -291,6 +297,7 @@ export interface FileRoutesByFullPath {
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
+  '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -330,6 +337,7 @@ export interface FileRoutesByTo {
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
+  '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -372,6 +380,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
+  '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
@@ -414,6 +423,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin/tutorial'
+    | '/admin/users'
     | '/admin/verification-limits'
     | '/api/public/client-errors'
     | '/api/public/health'
@@ -453,6 +463,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/titles'
     | '/admin/tutorial'
+    | '/admin/users'
     | '/admin/verification-limits'
     | '/api/public/client-errors'
     | '/api/public/health'
@@ -494,6 +505,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/tutorial'
+    | '/_authenticated/admin/users'
     | '/_authenticated/admin/verification-limits'
     | '/api/public/client-errors'
     | '/api/public/health'
@@ -655,6 +667,13 @@ declare module '@tanstack/react-router' {
       path: '/verification-limits'
       fullPath: '/admin/verification-limits'
       preLoaderRoute: typeof AuthenticatedAdminVerificationLimitsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/users': {
+      id: '/_authenticated/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AuthenticatedAdminUsersRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/tutorial': {
@@ -822,6 +841,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
   AuthenticatedAdminTutorialRoute: typeof AuthenticatedAdminTutorialRoute
+  AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminVerificationLimitsRoute: typeof AuthenticatedAdminVerificationLimitsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
 }
@@ -841,6 +861,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
   AuthenticatedAdminTutorialRoute: AuthenticatedAdminTutorialRoute,
+  AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminVerificationLimitsRoute:
     AuthenticatedAdminVerificationLimitsRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
