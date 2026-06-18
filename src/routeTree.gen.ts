@@ -23,6 +23,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminVerificationLimitsRouteImport } from './routes/_authenticated/admin.verification-limits'
+import { Route as AuthenticatedAdminTutorialRouteImport } from './routes/_authenticated/admin.tutorial'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
@@ -105,6 +106,12 @@ const AuthenticatedAdminVerificationLimitsRoute =
   AuthenticatedAdminVerificationLimitsRouteImport.update({
     id: '/verification-limits',
     path: '/verification-limits',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminTutorialRoute =
+  AuthenticatedAdminTutorialRouteImport.update({
+    id: '/tutorial',
+    path: '/tutorial',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminTitlesRoute =
@@ -202,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
+  '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -229,6 +237,7 @@ export interface FileRoutesByTo {
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
+  '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -259,6 +268,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
+  '/_authenticated/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/titles'
+    | '/admin/tutorial'
     | '/admin/verification-limits'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -316,6 +327,7 @@ export interface FileRouteTypes {
     | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/titles'
+    | '/admin/tutorial'
     | '/admin/verification-limits'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -345,6 +357,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/sync-trace'
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
+    | '/_authenticated/admin/tutorial'
     | '/_authenticated/admin/verification-limits'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -474,6 +487,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminVerificationLimitsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/tutorial': {
+      id: '/_authenticated/admin/tutorial'
+      path: '/tutorial'
+      fullPath: '/admin/tutorial'
+      preLoaderRoute: typeof AuthenticatedAdminTutorialRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/titles': {
       id: '/_authenticated/admin/titles'
       path: '/titles'
@@ -576,6 +596,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
+  AuthenticatedAdminTutorialRoute: typeof AuthenticatedAdminTutorialRoute
   AuthenticatedAdminVerificationLimitsRoute: typeof AuthenticatedAdminVerificationLimitsRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
 }
@@ -588,6 +609,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
+  AuthenticatedAdminTutorialRoute: AuthenticatedAdminTutorialRoute,
   AuthenticatedAdminVerificationLimitsRoute:
     AuthenticatedAdminVerificationLimitsRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,

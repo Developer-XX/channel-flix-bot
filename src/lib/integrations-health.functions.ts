@@ -11,6 +11,17 @@ type CheckResult = {
   latencyMs?: number;
 };
 
+export type ShortenerProvider = "adrinolinks" | "nanolinks" | "arolinks" | "linkpays";
+
+const SHORTENER_PROVIDERS: Array<{ id: ShortenerProvider; name: string; envVar: string; host: string }> = [
+  { id: "adrinolinks", name: "AdrinoLinks shortener", envVar: "ADRINOLINKS_API_KEY", host: "adrinolinks.in" },
+  { id: "nanolinks",   name: "NanoLinks shortener",   envVar: "NANOLINKS_API_KEY",   host: "nanolinks.in" },
+  { id: "arolinks",    name: "AroLinks shortener",    envVar: "AROLINKS_API_KEY",    host: "arolinks.com" },
+  { id: "linkpays",    name: "LinkPays shortener",    envVar: "LINKPAYS_API_KEY",    host: "linkpays.in" },
+];
+
+const ALL_IDS = SHORTENER_PROVIDERS.map((p) => p.id) as [ShortenerProvider, ...ShortenerProvider[]];
+
 async function timed<T>(fn: () => Promise<T>): Promise<{ result: T; ms: number }> {
   const t0 = Date.now();
   const result = await fn();
@@ -18,7 +29,6 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ result: T; ms: number }
 }
 
 async function readKey(envVar: string): Promise<string | null> {
-  // Runtime override (app_settings) wins, then process.env.
   try {
     const { getSetting } = await import("@/lib/runtime-settings.server");
     return await getSetting(envVar);
@@ -70,21 +80,22 @@ async function logShortenerHealth(
   latencyMs: number,
   httpStatus: number | null,
   error: string | null,
+  source: string = "admin_check",
 ) {
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("shortener_health_log").insert({
-      provider, ok, latency_ms: latencyMs, http_status: httpStatus, error, source: "admin_check",
+      provider, ok, latency_ms: latencyMs, http_status: httpStatus, error, source,
     } as never);
   } catch (e) {
     console.warn("[shortener-health] log insert failed", (e as Error).message);
   }
 }
 
-async function checkShortener(providerKey: "adrinolinks" | "nanolinks", name: string, envVar: string, host: string): Promise<CheckResult> {
+async function checkShortener(providerKey: ShortenerProvider, name: string, envVar: string, host: string, source = "admin_check"): Promise<CheckResult> {
   const key = await readKey(envVar);
   if (!key) {
-    await logShortenerHealth(providerKey, false, 0, null, "no_key");
+    await logShortenerHealth(providerKey, false, 0, null, "no_key", source);
     return { name, configured: false, ok: false, detail: `${envVar} not set` };
   }
   try {
@@ -94,13 +105,13 @@ async function checkShortener(providerKey: "adrinolinks" | "nanolinks", name: st
     );
     const text = await result.text().catch(() => "");
     const ok = result.ok && /^https?:\/\//i.test(text.trim());
-    await logShortenerHealth(providerKey, ok, ms, result.status, ok ? null : text.slice(0, 200));
+    await logShortenerHealth(providerKey, ok, ms, result.status, ok ? null : text.slice(0, 200), source);
     return {
       name, configured: true, ok, latencyMs: ms,
       detail: ok ? `shortened OK (len=${text.trim().length})` : `HTTP ${result.status} ${text.slice(0, 80)}`,
     };
   } catch (e: any) {
-    await logShortenerHealth(providerKey, false, 0, null, e?.message ?? "fetch_failed");
+    await logShortenerHealth(providerKey, false, 0, null, e?.message ?? "fetch_failed", source);
     return { name, configured: true, ok: false, detail: e?.message ?? "fetch failed" };
   }
 }
@@ -109,25 +120,26 @@ export const runIntegrationsHealth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
-    const [telegram, tmdb, adrino, nano] = await Promise.all([
-      checkTelegram(),
-      checkTmdb(),
-      checkShortener("adrinolinks", "AdrinoLinks shortener", "ADRINOLINKS_API_KEY", "adrinolinks.in"),
-      checkShortener("nanolinks", "NanoLinks shortener", "NANOLINKS_API_KEY", "nanolinks.in"),
-    ]);
-    return { checks: [telegram, tmdb, adrino, nano], checkedAt: new Date().toISOString() };
+    const shortenerResults = await Promise.all(
+      SHORTENER_PROVIDERS.map((p) => checkShortener(p.id, p.name, p.envVar, p.host)),
+    );
+    const [telegram, tmdb] = await Promise.all([checkTelegram(), checkTmdb()]);
+    return { checks: [telegram, tmdb, ...shortenerResults], checkedAt: new Date().toISOString() };
   });
 
 // Aggregated rolling health for the admin Diagnostics page.
 export const getShortenerHealth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ provider: z.enum(["adrinolinks", "nanolinks"]).optional(), limit: z.number().int().min(1).max(200).optional() }).parse(d ?? {}),
+    z.object({
+      provider: z.enum(ALL_IDS).optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+    }).parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const providers: Array<"adrinolinks" | "nanolinks"> = data.provider ? [data.provider] : ["adrinolinks", "nanolinks"];
+    const providers: ShortenerProvider[] = data.provider ? [data.provider] : SHORTENER_PROVIDERS.map((p) => p.id);
     const limit = data.limit ?? 50;
 
     const out: Array<{
@@ -163,13 +175,10 @@ export const getShortenerHealth = createServerFn({ method: "GET" })
       else if (successRate >= 0.5) status = "warn";
       else status = "fail";
       out.push({
-        provider: p,
-        status,
+        provider: p, status,
         lastCheckedAt: last?.checked_at ?? null,
         lastError: lastFail?.error ?? null,
-        successRate,
-        avgLatencyMs,
-        samples,
+        successRate, avgLatencyMs, samples,
         recent: r.slice(0, 10),
       });
     }
@@ -180,14 +189,12 @@ export const getShortenerHealth = createServerFn({ method: "GET" })
 export const probeShortener = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ provider: z.enum(["adrinolinks", "nanolinks"]) }).parse(d),
+    z.object({ provider: z.enum(ALL_IDS) }).parse(d),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
-    const cfg = data.provider === "adrinolinks"
-      ? { name: "AdrinoLinks shortener", env: "ADRINOLINKS_API_KEY", host: "adrinolinks.in" }
-      : { name: "NanoLinks shortener", env: "NANOLINKS_API_KEY", host: "nanolinks.in" };
-    const result = await checkShortener(data.provider, cfg.name, cfg.env, cfg.host);
+    const cfg = SHORTENER_PROVIDERS.find((p) => p.id === data.provider)!;
+    const result = await checkShortener(data.provider, cfg.name, cfg.envVar, cfg.host);
     return { ...result, checkedAt: new Date().toISOString() };
   });
 
@@ -217,3 +224,39 @@ export const exportShortenerHealthCsv = createServerFn({ method: "GET" })
     );
     return { csv: [header, ...lines].join("\n"), rowCount: rows?.length ?? 0 };
   });
+
+/**
+ * Server-side helper for the rotation logic. Returns the set of provider ids
+ * considered "healthy enough" to receive traffic, based on their most recent
+ * sample in shortener_health_log. A provider with no samples is treated as
+ * healthy (assume OK until proven otherwise).
+ *
+ * Unhealthy = last sample failed AND the failure is within the freshness window.
+ */
+export async function getHealthyShortenerSet(opts?: { freshnessMs?: number }): Promise<Set<string>> {
+  const freshnessMs = opts?.freshnessMs ?? 30 * 60 * 1000;
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const sinceIso = new Date(Date.now() - freshnessMs).toISOString();
+    const { data } = await supabaseAdmin
+      .from("shortener_health_log")
+      .select("provider, ok, checked_at")
+      .gte("checked_at", sinceIso)
+      .order("checked_at", { ascending: false })
+      .limit(200);
+    const last = new Map<string, { ok: boolean; checked_at: string }>();
+    for (const row of (data ?? []) as Array<{ provider: string; ok: boolean; checked_at: string }>) {
+      if (!last.has(row.provider)) last.set(row.provider, row);
+    }
+    const healthy = new Set<string>();
+    for (const id of SHORTENER_PROVIDERS.map((p) => p.id)) {
+      const r = last.get(id);
+      // No fresh sample → assume healthy. Fresh sample → require ok=true.
+      if (!r || r.ok) healthy.add(id);
+    }
+    return healthy;
+  } catch {
+    // If the health table can't be read, don't gate rotation on it.
+    return new Set(SHORTENER_PROVIDERS.map((p) => p.id));
+  }
+}

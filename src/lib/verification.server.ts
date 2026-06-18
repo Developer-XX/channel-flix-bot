@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
 import { getPublicBaseUrl, getPublicBaseUrlAsync } from "./site-url.server";
 import { getSetting, getSettingNumber } from "./runtime-settings.server";
+import { pickProviderForBucket, graceRemainingMs as graceRemainingPure } from "./shortener-rotation";
 
 export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -42,25 +43,28 @@ async function getEnabledProviders(): Promise<ProviderConfig[]> {
   return out;
 }
 
-// Pick the active provider for this rotation window. We bucket time into
-// SHORTENER_ROTATION_HOURS-wide slots and offset by user id so different
-// users don't all rotate at the same instant.
+// Pick the active provider for this rotation window. Uses the pure
+// pickProviderForBucket helper (also unit-tested), and skips providers
+// flagged unhealthy by the shortener health monitor.
 async function pickRotatedProvider(userId: string, lastProvider: string | null): Promise<Provider | null> {
   const enabled = await getEnabledProviders();
   if (enabled.length === 0) return null;
-  if (enabled.length === 1) return enabled[0].name;
   const hours = Math.max(1, await getSettingNumber("SHORTENER_ROTATION_HOURS", 12));
   const slotMs = hours * 60 * 60 * 1000;
-  // Stable per-user offset
-  let h = 0;
-  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0;
-  const slot = Math.floor((Date.now() + (h % slotMs)) / slotMs);
-  const candidate = enabled[slot % enabled.length].name;
-  // Don't repeat the immediately previous one if possible
-  if (candidate === lastProvider && enabled.length > 1) {
-    return enabled[(slot + 1) % enabled.length].name;
-  }
-  return candidate;
+  let healthy: Set<string> | null = null;
+  try {
+    const { getHealthyShortenerSet } = await import("./integrations-health.functions");
+    healthy = await getHealthyShortenerSet();
+  } catch { /* health is advisory */ }
+  const picked = pickProviderForBucket({
+    enabled: enabled.map((p) => p.name),
+    userId,
+    slotMs,
+    now: Date.now(),
+    lastProvider,
+    healthy,
+  });
+  return (picked as Provider | null) ?? null;
 }
 
 // Back-compat helper used by some callers.
@@ -100,11 +104,8 @@ export async function getGraceRemainingMs(
   userId: string,
 ): Promise<number> {
   const days = await getSettingNumber("VERIFICATION_GRACE_DAYS", 0);
-  if (days <= 0) return 0;
   const createdAt = await getUserCreatedAt(supabase, userId);
-  if (!createdAt) return 0;
-  const expiresAt = createdAt.getTime() + days * 24 * 60 * 60 * 1000;
-  return Math.max(0, expiresAt - Date.now());
+  return graceRemainingPure({ createdAt, graceDays: days, now: Date.now() });
 }
 
 export async function getVerificationState(

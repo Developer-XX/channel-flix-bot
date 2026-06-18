@@ -822,6 +822,39 @@ export type Database = {
           },
         ]
       }
+      onboarding_events: {
+        Row: {
+          created_at: string
+          event: string
+          id: number
+          session_id: string | null
+          user_id: string | null
+          video_type: string | null
+          video_url: string | null
+          watched_ms: number | null
+        }
+        Insert: {
+          created_at?: string
+          event: string
+          id?: number
+          session_id?: string | null
+          user_id?: string | null
+          video_type?: string | null
+          video_url?: string | null
+          watched_ms?: number | null
+        }
+        Update: {
+          created_at?: string
+          event?: string
+          id?: number
+          session_id?: string | null
+          user_id?: string | null
+          video_type?: string | null
+          video_url?: string | null
+          watched_ms?: number | null
+        }
+        Relationships: []
+      }
       pending_destructive_actions: {
         Row: {
           action: string
