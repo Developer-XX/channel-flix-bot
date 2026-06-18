@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, XCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAdminHealth } from "@/lib/admin-health.functions";
+import { getAdminHealth, getAuthDiagnostics } from "@/lib/admin-health.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/health")({
   component: AdminHealthPage,
@@ -11,11 +11,18 @@ export const Route = createFileRoute("/_authenticated/admin/health")({
 
 function AdminHealthPage() {
   const fn = useServerFn(getAdminHealth);
+  const authFn = useServerFn(getAuthDiagnostics);
   const q = useQuery({
     queryKey: ["admin-health"],
     queryFn: () => fn(),
     refetchInterval: 30_000,
-    retry: 0,
+    retry: 1,
+  });
+  const auth = useQuery({
+    queryKey: ["admin-auth-diagnostics"],
+    queryFn: () => authFn(),
+    refetchInterval: 60_000,
+    retry: 1,
   });
 
   return (
@@ -80,6 +87,45 @@ function AdminHealthPage() {
           </Section>
         </>
       )}
+
+      <Section title="Auth diagnostics (current session)">
+        {auth.isLoading && <div className="text-xs text-muted-foreground">Loading auth state…</div>}
+        {auth.error && (
+          <pre className="text-xs bg-destructive/10 text-destructive p-2 rounded overflow-auto">
+            {(auth.error as Error).message}
+          </pre>
+        )}
+        {auth.data && (
+          <>
+            <Row label="Bearer received by server" value={auth.data.bearerReceived ? "Yes" : "No"} ok={auth.data.bearerReceived} />
+            <Row label="User ID" value={auth.data.userId} mono />
+            <Row label="Email" value={auth.data.email ?? "—"} />
+            <Row label="Display name" value={auth.data.displayName ?? "—"} />
+            <Row
+              label="Roles"
+              value={auth.data.roles.length ? auth.data.roles.join(", ") : "none"}
+              ok={auth.data.roles.includes("admin")}
+            />
+            <Row
+              label="Token expires"
+              value={auth.data.tokenExpiresAt ? new Date(auth.data.tokenExpiresAt).toLocaleString() : "—"}
+            />
+            <Row label="Server time" value={new Date(auth.data.serverTime).toLocaleString()} />
+            {auth.data.recentAuthErrors.length > 0 && (
+              <div className="pt-2 text-xs">
+                <div className="font-medium mb-1">Recent 401/403 for this user:</div>
+                <ul className="space-y-1">
+                  {auth.data.recentAuthErrors.map((e) => (
+                    <li key={e.id} className="font-mono text-[10px] text-muted-foreground">
+                      [{e.status}] {new Date(e.created_at).toLocaleTimeString()} · {e.fn_export ?? "?"} · {e.error_message ?? ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </Section>
     </div>
   );
 }

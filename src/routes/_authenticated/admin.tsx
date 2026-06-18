@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,18 @@ function AdminGateLayout() {
   });
 
   if (q.isLoading) {
-    return <div className="p-8 text-sm text-muted-foreground">Checking admin access…</div>;
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-8 w-8 rounded-md" />
+          <Skeleton className="h-6 w-48" />
+        </div>
+        <p className="text-xs text-muted-foreground">Verifying admin access…</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+        </div>
+      </div>
+    );
   }
   if (q.error) {
     return (

@@ -235,6 +235,9 @@ function TelegramAdmin() {
                 let safety = 50; // hard cap: 50 batches = 10k rows
                 while (safety-- > 0) {
                   const r = await reparseAllCaptions({ data: { limit: batch, offset, channelRowId, sleepMs: 25 } });
+                  if (!r || typeof r.scanned !== "number") {
+                    throw new Error("Server returned no result (request likely failed — check Admin → Error log).");
+                  }
                   totalScanned += r.scanned;
                   totalChanged += r.changed;
                   totalPromoted += r.promoted;
