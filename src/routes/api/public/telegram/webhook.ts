@@ -360,11 +360,41 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+        // Replay protection: if we've already recorded this update_id, return
+        // the previous outcome without re-running command dispatch or ingest.
+        // Telegram retries failed deliveries; processing once-and-only-once
+        // prevents duplicate sync rows, double-counted analytics, and
+        // re-sent broadcasts.
+        if (typeof update?.update_id === "number") {
+          const { data: prior } = await supabaseAdmin
+            .from("telegram_webhook_events")
+            .select("status")
+            .eq("update_id", update.update_id)
+            .maybeSingle();
+          if (prior) {
+            console.log(`[telegram-webhook] replay update_id=${update.update_id} prior_status=${prior.status}`);
+            return Response.json({ ok: true, replay: true, status: prior.status });
+          }
+        }
+
         // DM command dispatch (private chats only). Channel posts fall through
         // to the ingest pipeline.
         try {
           const cmd = await handleCommand(update, supabaseAdmin);
           if (cmd.handled) {
+            if (typeof update?.update_id === "number") {
+              try {
+                await supabaseAdmin.from("telegram_webhook_events").insert({
+                  update_id: update.update_id,
+                  telegram_channel_id:
+                    update?.message?.chat?.id ?? update?.edited_message?.chat?.id ?? 0,
+                  telegram_message_id:
+                    update?.message?.message_id ?? update?.edited_message?.message_id ?? 0,
+                  source: "webhook",
+                  status: "processed",
+                });
+              } catch { /* unique violation = already recorded */ }
+            }
             console.log(`[telegram-webhook] command handled update_id=${update?.update_id}`);
             return Response.json({ ok: true, kind: "command" });
           }
