@@ -762,6 +762,7 @@ export const diagnoseIngest = createServerFn({ method: "GET" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { runMatcher, loadMatchingSettings } = await import("@/lib/telegram-ingest.server");
+    const { parseMedia, parseSingleSource } = await import("@/lib/telegram-parser");
     const { data: row, error } = await context.supabase
       .from("telegram_ingest")
       .select("parsed_title, parsed_year, parsed_category, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_language, file_name, caption")
@@ -770,13 +771,38 @@ export const diagnoseIngest = createServerFn({ method: "GET" })
     if (error) throw error;
     if (!row) throw new Error("Ingest row not found");
     const settings = await loadMatchingSettings(context.supabase);
+
+    // Caption-priority parsing breakdown, so admins can see how each raw source
+    // is parsed independently and which one fed the merged result.
+    const captionRaw = (row.caption ?? "").trim();
+    const filenameRaw = (row.file_name ?? "").trim();
+    const captionParsed = captionRaw ? parseSingleSource(captionRaw) : null;
+    const filenameParsed = filenameRaw ? parseSingleSource(filenameRaw) : null;
+    const merged = parseMedia(row.caption, row.file_name);
+    const captionTitleUsable =
+      !!captionParsed && captionParsed.title !== "Untitled" && captionParsed.title.trim().length >= 2;
+    const titleSource: "caption" | "filename" | "none" =
+      captionTitleUsable ? "caption" :
+      (filenameParsed && filenameParsed.title !== "Untitled" ? "filename" : "none");
+
     const result = await runMatcher(
       context.supabase,
-      { title: row.parsed_title ?? "", year: row.parsed_year ?? null, category: row.parsed_category ?? null },
+      { title: merged.title, year: merged.year, category: merged.category },
       settings,
     );
-    return { ...result, parsed: row, settings };
+    return {
+      ...result,
+      parsed: row,
+      settings,
+      captionRaw,
+      filenameRaw,
+      captionParsed,
+      filenameParsed,
+      merged,
+      titleSource,
+    };
   });
+
 
 export const rematchOne = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
