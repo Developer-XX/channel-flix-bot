@@ -273,6 +273,13 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
           path: r.path,
           toggle_on: Boolean(r.toggle_on),
         })),
+        rateLimit: {
+          windowSec: 60,
+          cap: CAP,
+          usedLastMinute,
+          utilizationPct,
+          droppedEstimate,
+        },
       },
     };
   });
