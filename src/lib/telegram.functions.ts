@@ -762,6 +762,7 @@ export const diagnoseIngest = createServerFn({ method: "GET" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { runMatcher, loadMatchingSettings } = await import("@/lib/telegram-ingest.server");
+    const { parseMedia, parseSingleSource } = await import("@/lib/telegram-parser");
     const { data: row, error } = await context.supabase
       .from("telegram_ingest")
       .select("parsed_title, parsed_year, parsed_category, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_language, file_name, caption")
@@ -770,13 +771,38 @@ export const diagnoseIngest = createServerFn({ method: "GET" })
     if (error) throw error;
     if (!row) throw new Error("Ingest row not found");
     const settings = await loadMatchingSettings(context.supabase);
+
+    // Caption-priority parsing breakdown, so admins can see how each raw source
+    // is parsed independently and which one fed the merged result.
+    const captionRaw = (row.caption ?? "").trim();
+    const filenameRaw = (row.file_name ?? "").trim();
+    const captionParsed = captionRaw ? parseSingleSource(captionRaw) : null;
+    const filenameParsed = filenameRaw ? parseSingleSource(filenameRaw) : null;
+    const merged = parseMedia(row.caption, row.file_name);
+    const captionTitleUsable =
+      !!captionParsed && captionParsed.title !== "Untitled" && captionParsed.title.trim().length >= 2;
+    const titleSource: "caption" | "filename" | "none" =
+      captionTitleUsable ? "caption" :
+      (filenameParsed && filenameParsed.title !== "Untitled" ? "filename" : "none");
+
     const result = await runMatcher(
       context.supabase,
-      { title: row.parsed_title ?? "", year: row.parsed_year ?? null, category: row.parsed_category ?? null },
+      { title: merged.title, year: merged.year, category: merged.category },
       settings,
     );
-    return { ...result, parsed: row, settings };
+    return {
+      ...result,
+      parsed: row,
+      settings,
+      captionRaw,
+      filenameRaw,
+      captionParsed,
+      filenameParsed,
+      merged,
+      titleSource,
+    };
   });
+
 
 export const rematchOne = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1408,11 +1434,13 @@ export const reparseIngest = createServerFn({ method: "POST" })
  */
 export const reparseChannelFromCaptions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { channelRowId?: string; limit?: number }) =>
+  .inputValidator((d: { channelRowId?: string; limit?: number; offset?: number; sleepMs?: number }) =>
     z.object({
       channelRowId: z.string().uuid().optional(),
-      limit: z.number().int().min(1).max(2000).optional(),
-    }).parse(d),
+      limit: z.number().int().min(1).max(500).optional(),
+      offset: z.number().int().min(0).max(1_000_000).optional(),
+      sleepMs: z.number().int().min(0).max(2000).optional(),
+    }).parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
@@ -1425,94 +1453,121 @@ export const reparseChannelFromCaptions = createServerFn({ method: "POST" })
     } = await import("@/lib/telegram-ingest.server");
     const { writeMatchAudit } = await import("@/lib/match-audit.server");
 
+    const limit = data.limit ?? 200;
+    const offset = data.offset ?? 0;
+    const sleepMs = data.sleepMs ?? 25;
+
+    // Total row count (for client-side progress reporting).
+    let totalRows = 0;
+    {
+      let cq = supabaseAdmin
+        .from("telegram_ingest")
+        .select("id", { count: "exact", head: true })
+        .is("deleted_at", null);
+      if (data.channelRowId) cq = cq.eq("channel_id", data.channelRowId);
+      const { count } = await cq;
+      totalRows = count ?? 0;
+    }
+
     let q = supabaseAdmin
       .from("telegram_ingest")
       .select("id, caption, file_name, matched_title_id, promoted_media_file_id, telegram_file_id, telegram_message_id, channel_id, mime_type, file_size, duration_seconds")
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(data.limit ?? 500);
+      .range(offset, offset + limit - 1);
     if (data.channelRowId) q = q.eq("channel_id", data.channelRowId);
 
     const { data: rows, error } = await q;
     if (error) throw error;
     const settings = await loadMatchingSettings(supabaseAdmin);
 
-    let scanned = 0, changed = 0, promoted = 0, demoted = 0, unmatched = 0;
+    let scanned = 0, changed = 0, promoted = 0, demoted = 0, unmatched = 0, errors = 0;
+    const errorSamples: Array<{ id: string; message: string }> = [];
+
     for (const r of rows ?? []) {
       scanned++;
-      const parsed = parseMedia(r.caption, r.file_name);
-      const match = await runMatcher(
-        supabaseAdmin,
-        { title: parsed.title, year: parsed.year, category: parsed.category },
-        settings,
-      );
-      const newTitleId = match.matchedTitleId;
-      const priorTitleId = r.matched_title_id;
-      const priorMediaFileId = r.promoted_media_file_id;
-      const titleChanged = !!priorTitleId && priorTitleId !== newTitleId;
-      const becameUnmatched = !!priorTitleId && !newTitleId;
+      try {
+        const parsed = parseMedia(r.caption, r.file_name);
+        const match = await runMatcher(
+          supabaseAdmin,
+          { title: parsed.title, year: parsed.year, category: parsed.category },
+          settings,
+        );
+        const newTitleId = match.matchedTitleId;
+        const priorTitleId = r.matched_title_id;
+        const priorMediaFileId = r.promoted_media_file_id;
+        const titleChanged = !!priorTitleId && priorTitleId !== newTitleId;
+        const becameUnmatched = !!priorTitleId && !newTitleId;
 
-      if (priorMediaFileId && (titleChanged || becameUnmatched)) {
-        await supabaseAdmin.from("media_files").update({ is_active: false }).eq("id", priorMediaFileId);
-        demoted++;
-        await writeMatchAudit(supabaseAdmin, {
-          ingestId: r.id, titleId: priorTitleId, settings,
-          decision: "demoted",
-          reason: becameUnmatched ? "bulk_reparse: now unmatched" : `bulk_reparse: moved to ${newTitleId}`,
-          actor: `admin:${context.userId}`,
-          oldScore: null, newScore: match.matchScore, threshold: settings.threshold,
-          parsedSnapshot: {
-            title: parsed.title, year: parsed.year, category: parsed.category,
-            season: parsed.season, episode: parsed.episode,
-          },
-          extra: { mediaFileId: priorMediaFileId },
-        });
-      }
-
-      await supabaseAdmin.from("telegram_ingest").update({
-        parsed_title: parsed.title,
-        parsed_year: parsed.year,
-        parsed_season: parsed.season,
-        parsed_episode: parsed.episode,
-        parsed_quality: parsed.quality,
-        parsed_resolution: parsed.resolution,
-        parsed_codec: parsed.codec,
-        parsed_language: parsed.language,
-        parsed_category: parsed.category,
-        match_status: newTitleId ? "matched" : "unmatched",
-        matched_title_id: newTitleId,
-        match_score: match.matchScore,
-        promoted_media_file_id:
-          (titleChanged || becameUnmatched) ? null : r.promoted_media_file_id,
-      }).eq("id", r.id);
-
-      if (newTitleId !== priorTitleId) changed++;
-      if (!newTitleId) unmatched++;
-
-      if (newTitleId && r.telegram_file_id) {
-        try {
-          await autoPromoteToMediaFile(supabaseAdmin, {
-            ingestId: r.id,
-            titleId: newTitleId,
-            channelRowId: r.channel_id,
-            telegramFileId: r.telegram_file_id,
-            telegramMessageId: r.telegram_message_id,
-            fileName: r.file_name ?? parsed.title ?? "file",
-            caption: r.caption,
-            mimeType: r.mime_type,
-            fileSize: r.file_size,
-            durationSeconds: r.duration_seconds,
-            quality: parsed.quality,
-            resolution: parsed.resolution,
-            language: parsed.language,
-            season: parsed.season,
-            episode: parsed.episode,
+        if (priorMediaFileId && (titleChanged || becameUnmatched)) {
+          await supabaseAdmin.from("media_files").update({ is_active: false }).eq("id", priorMediaFileId);
+          demoted++;
+          await writeMatchAudit(supabaseAdmin, {
+            ingestId: r.id, titleId: priorTitleId, settings,
+            decision: "demoted",
+            reason: becameUnmatched ? "bulk_reparse: now unmatched" : `bulk_reparse: moved to ${newTitleId}`,
+            actor: `admin:${context.userId}`,
+            oldScore: null, newScore: match.matchScore, threshold: settings.threshold,
+            parsedSnapshot: {
+              title: parsed.title, year: parsed.year, category: parsed.category,
+              season: parsed.season, episode: parsed.episode,
+            },
+            extra: { mediaFileId: priorMediaFileId },
           });
-          promoted++;
-        } catch (e) {
-          console.warn("[reparseChannelFromCaptions] promote failed", r.id, (e as Error).message);
         }
+
+        await supabaseAdmin.from("telegram_ingest").update({
+          parsed_title: parsed.title,
+          parsed_year: parsed.year,
+          parsed_season: parsed.season,
+          parsed_episode: parsed.episode,
+          parsed_quality: parsed.quality,
+          parsed_resolution: parsed.resolution,
+          parsed_codec: parsed.codec,
+          parsed_language: parsed.language,
+          parsed_category: parsed.category,
+          match_status: newTitleId ? "matched" : "unmatched",
+          matched_title_id: newTitleId,
+          match_score: match.matchScore,
+          promoted_media_file_id:
+            (titleChanged || becameUnmatched) ? null : r.promoted_media_file_id,
+        }).eq("id", r.id);
+
+        if (newTitleId !== priorTitleId) changed++;
+        if (!newTitleId) unmatched++;
+
+        if (newTitleId && r.telegram_file_id) {
+          try {
+            await autoPromoteToMediaFile(supabaseAdmin, {
+              ingestId: r.id,
+              titleId: newTitleId,
+              channelRowId: r.channel_id,
+              telegramFileId: r.telegram_file_id,
+              telegramMessageId: r.telegram_message_id,
+              fileName: r.file_name ?? parsed.title ?? "file",
+              caption: r.caption,
+              mimeType: r.mime_type,
+              fileSize: r.file_size,
+              durationSeconds: r.duration_seconds,
+              quality: parsed.quality,
+              resolution: parsed.resolution,
+              language: parsed.language,
+              season: parsed.season,
+              episode: parsed.episode,
+            });
+            promoted++;
+          } catch (e) {
+            console.warn("[reparseChannelFromCaptions] promote failed", r.id, (e as Error).message);
+          }
+        }
+      } catch (e) {
+        errors++;
+        const msg = (e as Error).message ?? String(e);
+        console.warn("[reparseChannelFromCaptions] row failed", r.id, msg);
+        if (errorSamples.length < 5) errorSamples.push({ id: r.id, message: msg });
       }
+      // Soft rate-limit between rows so a big sweep doesn't saturate the DB.
+      if (sleepMs > 0) await new Promise((res) => setTimeout(res, sleepMs));
     }
 
     try {
@@ -1520,7 +1575,14 @@ export const reparseChannelFromCaptions = createServerFn({ method: "POST" })
       await bumpCacheVersion(supabaseAdmin);
     } catch {}
     await writeAdminAudit(context, "telegram.reparse_channel_from_captions", "success", {
-      channelRowId: data.channelRowId ?? null, scanned, changed, promoted, demoted, unmatched,
+      channelRowId: data.channelRowId ?? null,
+      offset, limit, scanned, changed, promoted, demoted, unmatched, errors, totalRows,
     });
-    return { ok: true, scanned, changed, promoted, demoted, unmatched };
+    const nextOffset = offset + scanned;
+    const hasMore = nextOffset < totalRows;
+    return {
+      ok: true, scanned, changed, promoted, demoted, unmatched, errors, errorSamples,
+      offset, limit, nextOffset, totalRows, hasMore,
+    };
   });
+

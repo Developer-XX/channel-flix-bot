@@ -82,6 +82,32 @@ function cleanTitle(input: string): string {
     .trim();
 }
 
+// A "content word" is an alphabetic token that isn't a known quality, codec,
+// resolution, language, or release-tag word. We use this to decide whether a
+// parsed title carries real show/movie text or is just leftover tags.
+const TAG_WORDS = new Set(
+  [
+    ...RES_PATTERNS.map(([, v]) => v.toLowerCase()),
+    ...QUALITY_PATTERNS.map(([, v]) => v.toLowerCase()),
+    ...CODEC_PATTERNS.map(([, v]) => v.toLowerCase()),
+    ...LANG_TOKENS.map((l) => l.toLowerCase()),
+    "dual", "audio", "multi", "dubbed", "subbed", "subtitled",
+    "web", "dl", "rip", "bluray", "hdtv", "remux", "proper", "repack",
+    "4k", "uhd", "hdr", "10bit", "8bit", "esub", "msub", "x265", "x264",
+  ].map((s) => s.replace(/[^a-z0-9]/g, "")),
+);
+
+function hasContentWord(title: string): boolean {
+  const norm = title.toLowerCase().replace(/[^a-z0-9\s]+/g, " ");
+  for (const tok of norm.split(/\s+/).filter(Boolean)) {
+    if (!/[a-z]/.test(tok)) continue; // pure number → not a content word
+    if (TAG_WORDS.has(tok)) continue;
+    return true;
+  }
+  return false;
+}
+
+
 function firstMatch(
   text: string,
   patterns: Array<[RegExp, string]>,
@@ -106,7 +132,7 @@ function detectCategory(text: string, season: number | null): CategorySlug | nul
   return null;
 }
 
-function parseSingleSource(raw: string): ParsedMedia {
+export function parseSingleSource(raw: string): ParsedMedia {
   const text = raw.replace(/\s+/g, " ").trim();
 
   const res = firstMatch(text, RES_PATTERNS);
@@ -200,16 +226,20 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
   };
 
   // Title: caption wins when it produced something usable; otherwise filename.
+  // "Usable" requires at least one word that isn't a known quality/res/codec
+  // tag — otherwise a caption like "1080p WEB-DL" would shadow a perfectly
+  // good filename.
   const captionTitleUsable =
     !!captionParsed &&
     !!captionParsed.title &&
     captionParsed.title !== "Untitled" &&
-    normalizeTitle(captionParsed.title).length >= 2;
+    hasContentWord(captionParsed.title);
   const title = captionTitleUsable
     ? captionParsed!.title
-    : (fileParsed?.title && fileParsed.title !== "Untitled"
+    : (fileParsed?.title && fileParsed.title !== "Untitled" && hasContentWord(fileParsed.title)
         ? fileParsed.title
-        : (captionParsed?.title ?? "Untitled"));
+        : (captionParsed?.title ?? fileParsed?.title ?? "Untitled"));
+
 
   return {
     title,
