@@ -1,10 +1,11 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Search, Menu, X, Film, Shield, User as UserIcon, LogOut } from "lucide-react";
+import { Search, Menu, X, Film, Shield, User as UserIcon, LogOut, MessageCircle, Crown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CATEGORIES } from "@/lib/categories";
 import { useAuth, useIsAdmin } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { AnnouncementBar } from "@/components/AnnouncementBar";
 
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
@@ -39,6 +40,7 @@ export function SiteHeader() {
           : "bg-gradient-to-b from-background/90 via-background/60 to-transparent"
       }`}
     >
+      <AnnouncementBar />
       <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 min-w-0">
         <Link
           to="/"
@@ -103,6 +105,18 @@ export function SiteHeader() {
 
           {user ? (
             <>
+              <Link to="/premium" aria-label="Premium" className="hidden md:block">
+                <Button variant="ghost" size="sm">
+                  <Crown className="h-4 w-4 mr-1.5 text-amber-400" />
+                  Premium
+                </Button>
+              </Link>
+              <Link to="/support" aria-label="Support" className="hidden md:block">
+                <Button variant="ghost" size="sm">
+                  <MessageCircle className="h-4 w-4 mr-1.5" />
+                  Help
+                </Button>
+              </Link>
               <Link to="/account" aria-label="Account" className="hidden sm:block">
                 <Button variant="ghost" size="sm">
                   <UserIcon className="h-4 w-4 mr-1.5" />
@@ -181,6 +195,18 @@ export function SiteHeader() {
               )}
               {user && (
                 <>
+                  <Link
+                    to="/premium"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-surface"
+                  >
+                    <Crown className="h-4 w-4 text-amber-400" /> Premium
+                  </Link>
+                  <Link
+                    to="/support"
+                    className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-surface"
+                  >
+                    <MessageCircle className="h-4 w-4" /> Help & Support
+                  </Link>
                   <Link
                     to="/account"
                     className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-surface"
