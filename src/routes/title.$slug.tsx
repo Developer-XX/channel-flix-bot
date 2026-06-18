@@ -11,6 +11,7 @@ import { SeasonAccordion } from "@/components/SeasonAccordion";
 import { TitleDebugPanel } from "@/components/TitleDebugPanel";
 import { HowToDownload } from "@/components/HowToDownload";
 import { OnboardingTutorial } from "@/components/OnboardingTutorial";
+import { AdSlot } from "@/components/AdSlot";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
@@ -182,6 +183,7 @@ function TitlePage() {
         </div>
 
         <section className="mx-auto max-w-7xl px-4 md:px-6 py-6 sm:py-8">
+          <AdSlot placement="title_page" className="mb-6" />
           <h2 className="font-display text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Downloads</h2>
           {t.category === "movie" ? (
             filesQ.isLoading ? (
