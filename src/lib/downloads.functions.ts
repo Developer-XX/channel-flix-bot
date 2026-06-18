@@ -183,6 +183,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       getBotUserId,
       deliverWithRetry,
       upsertDeliveryAttempt,
+      existingDelivery,
     } = await import("@/lib/delivery.server");
     const { getSettingNumber, getSetting } = await import("@/lib/runtime-settings.server");
 
@@ -236,37 +237,41 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "not_linked" as const };
     }
 
-    // 3. Cooldown — admin-configurable (default 8s). If user clicks again
-    //    sooner than this, we tell them to wait instead of double-sending.
-    const cooldownSec = Math.max(0, Math.min(60, await getSettingNumber("DOWNLOAD_RESEND_COOLDOWN_SECONDS", 8)));
-    if (cooldownSec > 0) {
-      const cutoff = new Date(Date.now() - cooldownSec * 1000).toISOString();
-      const { data: recent } = await supabaseAdmin
-        .from("delivery_attempts")
-        .select("updated_at")
-        .eq("user_id", context.userId)
-        .eq("media_file_id", file.id)
-        .eq("status", "delivered")
-        .gte("updated_at", cutoff)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (recent?.updated_at) {
-        const waitMs = Math.max(0, cooldownSec * 1000 - (Date.now() - new Date(recent.updated_at).getTime()));
-        return {
-          ok: false as const,
-          reason: "cooldown" as const,
-          retryAfterSeconds: Math.ceil(waitMs / 1000),
-        };
-      }
-    }
-
-    // 4. Fresh idempotency key per click → always resend.
-    const idemKey = makeIdempotencyKey(context.userId, file.id);
+    // 3. Cooldown-window keyed idempotency. The key includes a window bucket
+    //    derived from DOWNLOAD_RESEND_COOLDOWN_SECONDS. Within the same window
+    //    the same (user, file) → same key → we return the prior delivered
+    //    message instead of re-sending. After the window expires the bucket
+    //    changes → new key → fresh send.
+    const cooldownSec = Math.max(1, Math.min(60, await getSettingNumber("DOWNLOAD_RESEND_COOLDOWN_SECONDS", 8)));
+    const idemKey = makeIdempotencyKey(context.userId, file.id, cooldownSec);
     const botUserId = await getBotUserId();
 
-    // 5. Deliver with retries
-    const { result, history } = await deliverWithRetry({
+    const prior = await existingDelivery(supabaseAdmin, idemKey);
+    if (prior?.status === "delivered" && prior.telegramMessageId) {
+      // Reuse: bot already sent this within the cooldown window. Record the
+      // re-click as a reused attempt for analytics, but do not re-send.
+      await upsertDeliveryAttempt(supabaseAdmin, {
+        userId: context.userId,
+        mediaFileId: file.id,
+        idempotencyKey: idemKey,
+        attemptNo: (prior.attemptNo ?? 0) + 1,
+        status: "delivered",
+        telegramMessageId: prior.telegramMessageId,
+        botUserId,
+        history: [{ at: new Date().toISOString(), ok: true, reused: true }],
+        reusedFromCooldown: true,
+      });
+      return {
+        ok: true as const,
+        delivered: true,
+        messageId: prior.telegramMessageId,
+        reused: true as const,
+        cooldownSec,
+      };
+    }
+
+    // 4. Deliver with retries (honors 429 retry_after)
+    const { result, history, lastRetryAfterMs } = await deliverWithRetry({
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
       messageId: file.telegram_message_id!,
@@ -283,6 +288,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       telegramMessageId: result.ok ? result.messageId : null,
       botUserId,
       history,
+      lastRetryAfterMs,
     });
 
     await supabaseAdmin.from("download_logs").insert({
