@@ -22,6 +22,15 @@ export type AdminAnalytics = {
     last30d: number;
     deliveredToday: number;
     failedToday: number;
+    resendsToday: number;
+    resends7d: number;
+  };
+  autoDelete: {
+    pendingDue: number;
+    completedToday: number;
+    completed7d: number;
+    exhaustedFailed24h: number;
+    lastRunAt: string | null;
   };
   catalog: {
     titles: number;
