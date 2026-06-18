@@ -552,6 +552,7 @@ export const saveTelegramChannel = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { writeAudit } = await import("@/lib/audit.server");
     const { error } = await supabaseAdmin
       .from("telegram_channels")
       .upsert(
@@ -566,6 +567,11 @@ export const saveTelegramChannel = createServerFn({ method: "POST" })
         { onConflict: "channel_id" },
       );
     if (error) throw error;
+    await writeAudit(supabaseAdmin, {
+      action: "channel_sync.upsert",
+      actorUserId: context.userId,
+      metadata: { channel_id: data.channel_id, name: data.name, is_active: data.is_active ?? true },
+    });
     return { ok: true };
   });
 
@@ -574,8 +580,14 @@ export const deleteTelegramChannel = createServerFn({ method: "POST" })
   .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
+    const { writeAudit } = await import("@/lib/audit.server");
     const { error } = await context.supabase.from("telegram_channels").delete().eq("id", data.id);
     if (error) throw error;
+    await writeAudit(context.supabase, {
+      action: "channel_sync.delete",
+      actorUserId: context.userId,
+      metadata: { id: data.id },
+    });
     return { ok: true };
   });
 
