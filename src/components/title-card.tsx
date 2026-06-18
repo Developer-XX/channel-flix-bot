@@ -1,6 +1,8 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Star, PlayCircle } from "lucide-react";
 import { CATEGORY_LABEL, type CategorySlug } from "@/lib/categories";
+import { useIsAuthed } from "@/hooks/use-session-flag";
+import { usePublicBrowsing } from "@/hooks/use-public-browsing";
 
 export interface TitleCardData {
   id: string;
@@ -13,11 +15,22 @@ export interface TitleCardData {
 }
 
 export function TitleCard({ item }: { item: TitleCardData }) {
+  const isAuthed = useIsAuthed();
+  const publicBrowsing = usePublicBrowsing();
+  const navigate = useNavigate();
   const cardClass =
     "group relative block overflow-hidden rounded-lg sm:rounded-xl bg-surface shadow-card transition-all duration-300 active:scale-[0.98] md:hover:scale-[1.04] md:hover:z-10 md:hover:shadow-[0_20px_50px_-12px_oklch(0.62_0.24_18/0.4)] ring-1 ring-border/40 hover:ring-primary/40";
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!isAuthed && !publicBrowsing) {
+      e.preventDefault();
+      navigate({ to: "/auth", search: { redirect: `/title/${item.slug}` } });
+    }
+  };
+
   return (
-    <Link to="/title/$slug" params={{ slug: item.slug }} className={cardClass}>
+    <Link to="/title/$slug" params={{ slug: item.slug }} className={cardClass} onClick={handleClick}>
+
       <div className="aspect-[2/3] w-full bg-muted relative">
         {item.poster_url ? (
           <img
