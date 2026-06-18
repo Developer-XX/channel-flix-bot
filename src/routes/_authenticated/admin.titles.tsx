@@ -786,6 +786,7 @@ function EditTitleDialog({ id, onClose, onSaved }: { id: string; onClose: () => 
           </div>
         )}
         <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
+          <AddToSlideshowButton titleId={id} titleName={form?.title ?? ""} variant="full" />
           <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving || !form} className="bg-gradient-primary text-primary-foreground border-0">
             {saving ? "Saving…" : "Save changes"}
