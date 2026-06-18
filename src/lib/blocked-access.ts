@@ -13,11 +13,11 @@ export async function logBlockedBrowsing(reason: string, slug?: string, path?: s
     sent.add(key);
     if (sent.size > 64) sent.clear();
     const ua =
-      typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 512) : null;
+      typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 512) : undefined;
     await supabase.rpc("log_blocked_browsing", {
       _reason: reason.slice(0, 64),
-      _slug: slug ?? null,
-      _path: path ?? (typeof window !== "undefined" ? window.location.pathname : null),
+      _slug: slug ?? undefined,
+      _path: path ?? (typeof window !== "undefined" ? window.location.pathname : undefined),
       _user_agent: ua,
     });
   } catch {
