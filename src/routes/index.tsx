@@ -105,13 +105,13 @@ function HomePage() {
   const totalCount = (trending.data?.length ?? 0) + (latest.data?.length ?? 0);
   const empty = !trending.isLoading && !latest.isLoading && totalCount === 0;
 
-  const sections: Record<string, { title: string; q: typeof trending; hint?: string }> = {
-    trending: { title: "Trending now", q: trending, hint: "No trending titles yet." },
-    latest: { title: "Latest additions", q: latest, hint: "Nothing added yet." },
-    movies: { title: "Movies", q: movies },
-    series: { title: "Web Series", q: series },
-    anime: { title: "Anime", q: anime },
-    kdrama: { title: "K-Drama", q: kdrama },
+  const sections: Record<string, { title: string; q: typeof trending; hint?: string; href?: string }> = {
+    trending: { title: "Trending now", q: trending, hint: "No trending titles yet.", href: "/section/trending" },
+    latest: { title: "Latest additions", q: latest, hint: "Nothing added yet.", href: "/section/latest" },
+    movies: { title: "Movies", q: movies, href: "/browse/movie" },
+    series: { title: "Web Series", q: series, href: "/browse/series" },
+    anime: { title: "Anime", q: anime, href: "/browse/anime" },
+    kdrama: { title: "K-Drama", q: kdrama, href: "/browse/kdrama" },
   };
   const order = (layout.data?.sectionOrder?.length ? layout.data.sectionOrder : [...DEFAULT_SECTION_ORDER]).filter(
     (k) => sections[k],
@@ -167,6 +167,7 @@ function HomePage() {
                     items={s.q.data}
                     loading={s.q.isLoading}
                     emptyHint={s.hint}
+                    viewAllHref={s.href}
                   />
                   {idx === Math.floor(order.length / 2) - 1 && (
                     <AdSlot placement="between_rows" className="px-4 md:px-6 my-4" />

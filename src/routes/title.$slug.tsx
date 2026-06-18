@@ -57,7 +57,7 @@ function TitlePage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("media_files")
-        .select("id, file_name, quality, resolution, language, file_size")
+        .select("id, file_name, caption, quality, resolution, language, file_size")
         .eq("title_id", titleQ.data!.id)
         .eq("is_active", true)
         .order("resolution", { ascending: false, nullsFirst: false })
@@ -206,7 +206,10 @@ function TitlePage() {
                       <Download className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-medium text-sm sm:text-base truncate">{f.file_name}</div>
+                      <div className="font-medium text-sm sm:text-base break-words">{(f as { caption?: string | null }).caption?.trim() || f.file_name}</div>
+                      {(f as { caption?: string | null }).caption?.trim() && (
+                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate" title={f.file_name}>{f.file_name}</div>
+                      )}
                       <div className="text-[11px] sm:text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         {f.quality && <span>{f.quality}</span>}
                         {f.resolution && <span>· {f.resolution}</span>}
