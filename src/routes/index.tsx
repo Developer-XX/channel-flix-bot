@@ -1,12 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { Hero } from "@/components/hero";
+import { HomeSlideshow } from "@/components/HomeSlideshow";
 import { TitleRow } from "@/components/title-row";
 import type { TitleCardData } from "@/components/title-card";
 import { CATEGORIES } from "@/lib/categories";
+import { getHomepageLayout, DEFAULT_SECTION_ORDER } from "@/lib/homepage.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,6 +33,9 @@ export const Route = createFileRoute("/")({
 const card = "id, slug, title, poster_url, release_year, rating, category";
 
 function HomePage() {
+  const layoutFn = useServerFn(getHomepageLayout);
+  const layout = useQuery({ queryKey: ["homepage-layout"], queryFn: () => layoutFn(), retry: false });
+
   const featured = useQuery({
     queryKey: ["featured"],
     queryFn: async () => {
@@ -96,11 +102,25 @@ function HomePage() {
   const totalCount = (trending.data?.length ?? 0) + (latest.data?.length ?? 0);
   const empty = !trending.isLoading && !latest.isLoading && totalCount === 0;
 
+  const sections: Record<string, { title: string; q: typeof trending; hint?: string }> = {
+    trending: { title: "Trending now", q: trending, hint: "No trending titles yet." },
+    latest: { title: "Latest additions", q: latest, hint: "Nothing added yet." },
+    movies: { title: "Movies", q: movies },
+    series: { title: "Web Series", q: series },
+    anime: { title: "Anime", q: anime },
+    kdrama: { title: "K-Drama", q: kdrama },
+  };
+  const order = (layout.data?.sectionOrder?.length ? layout.data.sectionOrder : [...DEFAULT_SECTION_ORDER]).filter(
+    (k) => sections[k],
+  );
+
+  const slides = layout.data?.slideshowEnabled ? (layout.data?.slides ?? []) : [];
+
   return (
     <div className="min-h-screen flex flex-col">
       <SiteHeader />
       <main className="flex-1">
-        <Hero featured={featured.data} />
+        {slides.length > 0 ? <HomeSlideshow slides={slides} /> : <Hero featured={featured.data} />}
 
         {empty && (
           <section className="mx-auto max-w-3xl px-6 py-16 text-center">
@@ -134,12 +154,18 @@ function HomePage() {
 
         {!empty && (
           <div className="mx-auto max-w-7xl py-8">
-            <TitleRow title="Trending now" items={trending.data} loading={trending.isLoading} emptyHint="No trending titles yet." />
-            <TitleRow title="Latest additions" items={latest.data} loading={latest.isLoading} emptyHint="Nothing added yet." />
-            <TitleRow title="Movies" items={movies.data} loading={movies.isLoading} />
-            <TitleRow title="Web Series" items={series.data} loading={series.isLoading} />
-            <TitleRow title="Anime" items={anime.data} loading={anime.isLoading} />
-            <TitleRow title="K-Drama" items={kdrama.data} loading={kdrama.isLoading} />
+            {order.map((key) => {
+              const s = sections[key];
+              return (
+                <TitleRow
+                  key={key}
+                  title={s.title}
+                  items={s.q.data}
+                  loading={s.q.isLoading}
+                  emptyHint={s.hint}
+                />
+              );
+            })}
           </div>
         )}
       </main>

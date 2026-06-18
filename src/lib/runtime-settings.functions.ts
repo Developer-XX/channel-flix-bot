@@ -36,6 +36,8 @@ export const SETTING_KEYS = [
   { key: "SHORTENER_ALERT_MIN_SAMPLES", group: "Alerts",        isSecret: false, placeholder: "5 (min samples before alerting)" },
   { key: "SHORTENER_ALERT_WINDOW_MIN",  group: "Alerts",        isSecret: false, placeholder: "30 (freshness window minutes)" },
   { key: "ALERT_TELEGRAM_CHAT_ID",      group: "Alerts",        isSecret: false, placeholder: "Telegram chat id for admin alerts" },
+  { key: "HOMEPAGE_SLIDESHOW_ENABLED",  group: "Homepage",      isSecret: false, placeholder: "true / false (default true)" },
+  { key: "HOMEPAGE_SECTION_ORDER",      group: "Homepage",      isSecret: false, placeholder: "trending,latest,movies,series,anime,kdrama" },
 ] as const;
 
 const KEYS: Set<string> = new Set(SETTING_KEYS.map((s) => s.key));
