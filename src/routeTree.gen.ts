@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrustRouteImport } from './routes/trust'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -52,6 +53,11 @@ import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
+const TrustRoute = TrustRouteImport.update({
+  id: '/trust',
+  path: '/trust',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -289,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/trust': typeof TrustRoute
   '/account': typeof AuthenticatedAccountRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/premium': typeof AuthenticatedPremiumRoute
@@ -332,6 +339,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/trust': typeof TrustRoute
   '/account': typeof AuthenticatedAccountRoute
   '/premium': typeof AuthenticatedPremiumRoute
   '/support': typeof AuthenticatedSupportRoute
@@ -376,6 +384,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/trust': typeof TrustRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/premium': typeof AuthenticatedPremiumRoute
@@ -421,6 +430,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/search'
     | '/sitemap.xml'
+    | '/trust'
     | '/account'
     | '/admin'
     | '/premium'
@@ -464,6 +474,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/search'
     | '/sitemap.xml'
+    | '/trust'
     | '/account'
     | '/premium'
     | '/support'
@@ -507,6 +518,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/search'
     | '/sitemap.xml'
+    | '/trust'
     | '/_authenticated/account'
     | '/_authenticated/admin'
     | '/_authenticated/premium'
@@ -552,6 +564,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TrustRoute: typeof TrustRoute
   BrowseCategoryRoute: typeof BrowseCategoryRoute
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
@@ -568,6 +581,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/trust': {
+      id: '/trust'
+      path: '/trust'
+      fullPath: '/trust'
+      preLoaderRoute: typeof TrustRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -938,6 +958,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TrustRoute: TrustRoute,
   BrowseCategoryRoute: BrowseCategoryRoute,
   DebugAuthRoute: DebugAuthRoute,
   TitleSlugRoute: TitleSlugRoute,
