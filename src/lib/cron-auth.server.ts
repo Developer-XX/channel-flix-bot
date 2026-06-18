@@ -17,6 +17,17 @@ function timingSafeEq(a: string, b: string): boolean {
 export function checkCronAuth(request: Request): { ok: true } | { ok: false; response: Response } {
   const cronSecret = process.env.CRON_SECRET ?? "";
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  // Lovable Cloud pg_cron jobs send the publishable/anon key in the
+  // `apikey` header (canonical pattern). Accept it so cron jobs don't 401
+  // after a CRON_SECRET rotation or env drift.
+  const publishable =
+    process.env.SUPABASE_PUBLISHABLE_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
+    "";
+
+  const apiKeyHeader = request.headers.get("apikey") ?? "";
+  if (apiKeyHeader && publishable && timingSafeEq(apiKeyHeader, publishable)) return { ok: true };
 
   const headerSecret =
     request.headers.get("x-cron-secret") ??
@@ -25,9 +36,9 @@ export function checkCronAuth(request: Request): { ok: true } | { ok: false; res
   if (!headerSecret) {
     return { ok: false, response: new Response("Unauthorized", { status: 401 }) };
   }
-
   if (cronSecret && timingSafeEq(headerSecret, cronSecret)) return { ok: true };
   if (serviceRole && timingSafeEq(headerSecret, serviceRole)) return { ok: true };
+  if (publishable && timingSafeEq(headerSecret, publishable)) return { ok: true };
 
   return { ok: false, response: new Response("Unauthorized", { status: 401 }) };
 }
