@@ -343,6 +343,15 @@ export async function ingestTelegramUpdate(
     .update({ status: "processed" })
     .eq("update_id", update.update_id);
 
+  // Invalidate downstream caches so /section/ and homepage reads pick up the
+  // newly-ingested file on the very next request. Deterministic and global.
+  try {
+    const { bumpCacheVersionNow } = await import("@/lib/cache.server");
+    await bumpCacheVersionNow();
+  } catch (e) {
+    console.warn("[telegram-ingest] cache bump failed:", (e as Error).message);
+  }
+
   if (chanRow?.id) {
     await supabase
       .from("telegram_channels")
