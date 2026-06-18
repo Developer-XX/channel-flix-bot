@@ -179,6 +179,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          html: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          kind: Database["public"]["Enums"]["ad_kind"]
+          link_url: string | null
+          name: string
+          placement: Database["public"]["Enums"]["ad_placement"]
+          sort_order: number
+          starts_at: string | null
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          html?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          kind?: Database["public"]["Enums"]["ad_kind"]
+          link_url?: string | null
+          name: string
+          placement: Database["public"]["Enums"]["ad_placement"]
+          sort_order?: number
+          starts_at?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          html?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          kind?: Database["public"]["Enums"]["ad_kind"]
+          link_url?: string | null
+          name?: string
+          placement?: Database["public"]["Enums"]["ad_placement"]
+          sort_order?: number
+          starts_at?: string | null
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       announcements: {
         Row: {
           body: string
@@ -2111,6 +2165,12 @@ export type Database = {
       wipe_application_data: { Args: never; Returns: Json }
     }
     Enums: {
+      ad_kind: "image" | "video" | "html"
+      ad_placement:
+        | "homepage_banner"
+        | "between_rows"
+        | "title_page"
+        | "before_download"
       app_role: "admin" | "moderator" | "user"
       content_category:
         | "movie"
@@ -2249,6 +2309,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      ad_kind: ["image", "video", "html"],
+      ad_placement: [
+        "homepage_banner",
+        "between_rows",
+        "title_page",
+        "before_download",
+      ],
       app_role: ["admin", "moderator", "user"],
       content_category: [
         "movie",
