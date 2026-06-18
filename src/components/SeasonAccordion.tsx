@@ -11,6 +11,7 @@ interface Props {
 type FileRow = {
   id: string;
   file_name: string;
+  caption: string | null;
   quality: string | null;
   resolution: string | null;
   language: string | null;
@@ -32,7 +33,7 @@ export function SeasonAccordion({ titleId }: Props) {
       const { data, error } = await supabase
         .from("media_files")
         .select(
-          "id, file_name, quality, resolution, language, file_size, episode_id, episodes(episode_number, name, seasons(season_number, name))",
+          "id, file_name, caption, quality, resolution, language, file_size, episode_id, episodes(episode_number, name, seasons(season_number, name))",
         )
         .eq("title_id", titleId)
         .eq("is_active", true);
@@ -151,7 +152,10 @@ function SeasonBlock({
                         <Download className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-sm font-medium break-words sm:truncate">{f.file_name}</div>
+                        <div className="text-sm font-medium break-words">{f.caption?.trim() || f.file_name}</div>
+                        {f.caption?.trim() && (
+                          <div className="text-[11px] text-muted-foreground mt-0.5 truncate" title={f.file_name}>{f.file_name}</div>
+                        )}
                         <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
                           {f.quality && <span>{f.quality}</span>}
                           {f.resolution && <span>· {f.resolution}</span>}
