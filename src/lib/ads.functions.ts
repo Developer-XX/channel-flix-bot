@@ -119,3 +119,71 @@ export const adminDeleteAd = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+// Record an ad impression / click. Uses the public (anon) Data API path so
+// it works for signed-out visitors too. RLS allows INSERT for anon.
+export const recordAdEvent = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z.object({
+      ad_id: z.string().uuid(),
+      placement: z.enum(AD_PLACEMENTS),
+      event_type: z.enum(["impression", "click"]),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const sb = publicClient();
+      await (sb as any).from("ad_events").insert({
+        ad_id: data.ad_id,
+        placement: data.placement,
+        event_type: data.event_type,
+      });
+    } catch {
+      /* swallow — analytics must never break rendering */
+    }
+    return { ok: true };
+  });
+
+export type AdStat = {
+  ad_id: string;
+  name: string;
+  placement: AdPlacement;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+};
+
+export const adminAdStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: ads }, { data: events }] = await Promise.all([
+      supabaseAdmin.from("ads").select("id,name,placement"),
+      (supabaseAdmin as any)
+        .from("ad_events")
+        .select("ad_id,event_type")
+        .gte("created_at", since)
+        .limit(50_000),
+    ]);
+    const tally = new Map<string, { i: number; c: number }>();
+    for (const e of (events ?? []) as any[]) {
+      const t = tally.get(e.ad_id) ?? { i: 0, c: 0 };
+      if (e.event_type === "impression") t.i++;
+      else if (e.event_type === "click") t.c++;
+      tally.set(e.ad_id, t);
+    }
+    const out: AdStat[] = ((ads ?? []) as any[]).map((a) => {
+      const t = tally.get(a.id) ?? { i: 0, c: 0 };
+      return {
+        ad_id: a.id,
+        name: a.name,
+        placement: a.placement,
+        impressions: t.i,
+        clicks: t.c,
+        ctr: t.i > 0 ? t.c / t.i : 0,
+      };
+    });
+    return { stats: out, windowDays: 30 };
+  });

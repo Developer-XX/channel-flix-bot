@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { adminListAds, adminUpsertAd, adminDeleteAd, AD_PLACEMENTS } from "@/lib/ads.functions";
+import { adminListAds, adminUpsertAd, adminDeleteAd, adminAdStats, AD_PLACEMENTS } from "@/lib/ads.functions";
 import { listAppSettings, updateAppSetting } from "@/lib/runtime-settings.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/ads")({
@@ -22,11 +22,14 @@ function AdsAdmin() {
   const del = useServerFn(adminDeleteAd);
   const listSettings = useServerFn(listAppSettings);
   const updateSetting = useServerFn(updateAppSetting);
+  const statsFn = useServerFn(adminAdStats);
 
   const q = useQuery({ queryKey: ["admin-ads"], queryFn: () => list(), retry: false });
   const s = useQuery({ queryKey: ["admin-ad-settings"], queryFn: () => listSettings(), retry: false });
+  const stats = useQuery({ queryKey: ["admin-ad-stats"], queryFn: () => statsFn(), retry: false, staleTime: 60_000 });
 
   const adsEnabled = (s.data?.find((x: any) => x.key === "ADS_ENABLED")?.value ?? "true") !== "false";
+  const statsById = new Map<string, any>((stats.data?.stats ?? []).map((r: any) => [r.ad_id, r]));
 
   async function save(a: any) {
     try { await upsert({ data: a }); toast.success("Saved"); q.refetch(); }
@@ -59,29 +62,75 @@ function AdsAdmin() {
         </div>
       </div>
 
+      <div className="rounded-md border border-border p-4 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Analytics (last 30 days)</h2>
+          <Button size="sm" variant="ghost" onClick={() => stats.refetch()}>Refresh</Button>
+        </div>
+        {(stats.data?.stats ?? []).length === 0 ? (
+          <p className="text-xs text-muted-foreground">No impressions yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-muted-foreground">
+                <tr className="text-left">
+                  <th className="py-1 pr-2">Ad</th>
+                  <th className="py-1 pr-2">Placement</th>
+                  <th className="py-1 pr-2 text-right">Impr.</th>
+                  <th className="py-1 pr-2 text-right">Clicks</th>
+                  <th className="py-1 text-right">CTR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(stats.data?.stats ?? []).map((r: any) => (
+                  <tr key={r.ad_id} className="border-t border-border/60">
+                    <td className="py-1 pr-2 truncate max-w-[160px]">{r.name}</td>
+                    <td className="py-1 pr-2 text-muted-foreground">{r.placement}</td>
+                    <td className="py-1 pr-2 text-right tabular-nums">{r.impressions}</td>
+                    <td className="py-1 pr-2 text-right tabular-nums">{r.clicks}</td>
+                    <td className="py-1 text-right tabular-nums">{(r.ctr * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-2">
-        {(q.data ?? []).map((a: any) => (
-          <AdRow
-            key={a.id}
-            a={a}
-            onSave={save}
-            onDelete={async () => {
-              if (!confirm("Delete this ad?")) return;
-              try { await del({ data: { id: a.id } }); toast.success("Deleted"); q.refetch(); }
-              catch (e: any) { toast.error(e?.message ?? "Failed"); }
-            }}
-          />
-        ))}
+        {(q.data ?? []).map((a: any) => {
+          const st = statsById.get(a.id);
+          return (
+            <AdRow
+              key={a.id}
+              a={a}
+              stat={st}
+              onSave={save}
+              onDelete={async () => {
+                if (!confirm("Delete this ad?")) return;
+                try { await del({ data: { id: a.id } }); toast.success("Deleted"); q.refetch(); }
+                catch (e: any) { toast.error(e?.message ?? "Failed"); }
+              }}
+            />
+          );
+        })}
         {(q.data ?? []).length === 0 && <p className="text-xs text-muted-foreground">No ads yet.</p>}
       </div>
     </div>
   );
 }
 
-function AdRow({ a, onSave, onDelete }: { a: any; onSave: (a: any) => void; onDelete: () => void }) {
+function AdRow({ a, stat, onSave, onDelete }: { a: any; stat?: any; onSave: (a: any) => void; onDelete: () => void }) {
   const [d, setD] = useState(a);
   return (
     <div className="rounded-md border border-border p-3 space-y-2">
+      {stat && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span><span className="tabular-nums text-foreground">{stat.impressions}</span> impressions</span>
+          <span><span className="tabular-nums text-foreground">{stat.clicks}</span> clicks</span>
+          <span>CTR <span className="tabular-nums text-foreground">{(stat.ctr * 100).toFixed(1)}%</span></span>
+        </div>
+      )}
       <div className="grid sm:grid-cols-3 gap-2">
         <div>
           <Label className="text-[10px]">Name</Label>
