@@ -222,6 +222,22 @@ function TelegramAdmin() {
             Run backfill now
           </Button>
           <Button variant="outline" onClick={() => state.refetch()}>Refresh state</Button>
+          <Button
+            variant="outline"
+            title="Re-parse the most recent ingest rows from their stored captions (caption-priority) and re-run the matcher. Use this after a parser change or to sweep up caption edits that arrived without a webhook event."
+            onClick={async () => {
+              try {
+                const r = await reparseAllCaptions({ data: { limit: 500 } });
+                toast.success(
+                  `Re-parsed ${r.scanned} · changed ${r.changed} · promoted ${r.promoted} · demoted ${r.demoted} · unmatched ${r.unmatched}`,
+                );
+                ingest.refetch();
+                router.invalidate();
+              } catch (e: any) { toast.error(e?.message ?? "Re-parse failed"); }
+            }}
+          >
+            Re-parse all from captions
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground">
           A scheduled job also runs this endpoint periodically to catch posts missed by the webhook.
