@@ -121,6 +121,7 @@ function TitlesAdmin() {
                       onClick={() => toggleFlag.mutate({ id: t.id, field: "is_featured", value: !t.is_featured })}
                       className={`text-xs px-2 py-1 rounded inline-flex items-center gap-1 ${t.is_featured ? "bg-gold text-gold-foreground" : "bg-surface text-muted-foreground"}`}
                     ><Star className="h-3 w-3" />Featured</button>
+                    <AddToSlideshowButton titleId={t.id} titleName={t.title} />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right">
