@@ -1,0 +1,16 @@
+{
+  "name": "telegram-backfill",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "External MTProto backfill script for channel history. Runs on the admin's machine, not in the Lovable Worker.",
+  "scripts": {
+    "login": "node backfill.mjs --login",
+    "backfill": "node backfill.mjs"
+  },
+  "dependencies": {
+    "telegram": "^2.26.0",
+    "input": "^1.0.1",
+    "dotenv": "^16.4.5"
+  }
+}

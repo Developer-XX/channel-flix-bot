@@ -493,7 +493,9 @@ export type Database = {
           history: Json
           id: string
           idempotency_key: string
+          last_retry_after_ms: number | null
           media_file_id: string
+          reused_from_cooldown: boolean
           status: string
           telegram_message_id: number | null
           updated_at: string
@@ -507,7 +509,9 @@ export type Database = {
           history?: Json
           id?: string
           idempotency_key: string
+          last_retry_after_ms?: number | null
           media_file_id: string
+          reused_from_cooldown?: boolean
           status?: string
           telegram_message_id?: number | null
           updated_at?: string
@@ -521,7 +525,9 @@ export type Database = {
           history?: Json
           id?: string
           idempotency_key?: string
+          last_retry_after_ms?: number | null
           media_file_id?: string
+          reused_from_cooldown?: boolean
           status?: string
           telegram_message_id?: number | null
           updated_at?: string
@@ -1699,6 +1705,10 @@ export type Database = {
       }
       telegram_channels: {
         Row: {
+          backfill_cursor: number | null
+          backfill_ingested_count: number
+          backfill_last_run_at: string | null
+          backfill_status: string | null
           channel_id: number
           confirm_with_reply: boolean
           created_at: string
@@ -1711,6 +1721,10 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          backfill_cursor?: number | null
+          backfill_ingested_count?: number
+          backfill_last_run_at?: string | null
+          backfill_status?: string | null
           channel_id: number
           confirm_with_reply?: boolean
           created_at?: string
@@ -1723,6 +1737,10 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          backfill_cursor?: number | null
+          backfill_ingested_count?: number
+          backfill_last_run_at?: string | null
+          backfill_status?: string | null
           channel_id?: number
           confirm_with_reply?: boolean
           created_at?: string

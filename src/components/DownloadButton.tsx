@@ -165,7 +165,11 @@ export function DownloadButton({
 
       const r = await reqDownload({ data: { mediaFileId: activeFileId } });
       if (r.ok) {
-        toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
+        if ((r as any).reused) {
+          toast.message(`Already sent — check your Telegram (request collapsed within ${(r as any).cooldownSec ?? 8}s cooldown).`);
+        } else {
+          toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
+        }
         return;
       }
       if (r.reason === "needs_verification") {
@@ -197,11 +201,10 @@ export function DownloadButton({
         setLinkOpen(true);
         return;
       }
-      if (r.reason === "cooldown") {
-        const s = (r as any).retryAfterSeconds ?? 5;
-        toast.message(`Please wait ${s}s before requesting the same file again.`);
-        return;
-      }
+      // Note: cooldown is now handled server-side as a transparent re-use of
+      // the prior delivery within DOWNLOAD_RESEND_COOLDOWN_SECONDS — the
+      // server returns ok:true with reused:true and the bot's previous
+      // message is still in the user's chat.
       const rr = r as any;
       const friendly =
         rr.reason === "source_missing"

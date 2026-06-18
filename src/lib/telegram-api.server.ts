@@ -20,7 +20,14 @@ async function callTg<T = any>(method: string, body: Record<string, unknown>): P
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.ok) {
-    throw new Error(`Telegram ${method} failed: ${JSON.stringify(json)}`);
+    // Preserve retry_after on 429 so callers can honor Telegram flood control.
+    const retryAfter = (json as any)?.parameters?.retry_after;
+    const err: Error & { retryAfterMs?: number; status?: number } = new Error(
+      `Telegram ${method} failed: ${JSON.stringify(json)}`,
+    );
+    err.status = res.status;
+    if (typeof retryAfter === "number") err.retryAfterMs = retryAfter * 1000;
+    throw err;
   }
   return json.result as T;
 }
@@ -128,16 +135,18 @@ export async function deleteMessage(chatId: number | string, messageId: number):
 // Best-effort: returns null on common "bot can't DM the user" cases so the
 // caller can show a helpful "press Start in the bot first" message.
 export async function tryCopyMessage(args: Parameters<typeof copyMessage>[0]):
-  Promise<{ ok: true; messageId: number } | { ok: false; error: string; kind: "blocked" | "not_started" | "not_found" | "other" }> {
+  Promise<{ ok: true; messageId: number } | { ok: false; error: string; kind: "blocked" | "not_started" | "not_found" | "rate_limited" | "other"; retryAfterMs?: number }> {
   try {
     const r = await copyMessage(args);
     return { ok: true, messageId: r.message_id };
   } catch (e: any) {
     const msg = String(e?.message ?? e);
-    let kind: "blocked" | "not_started" | "not_found" | "other" = "other";
-    if (/bot was blocked/i.test(msg)) kind = "blocked";
+    const retryAfterMs: number | undefined = e?.retryAfterMs;
+    let kind: "blocked" | "not_started" | "not_found" | "rate_limited" | "other" = "other";
+    if (e?.status === 429 || /Too Many Requests|retry_after/i.test(msg)) kind = "rate_limited";
+    else if (/bot was blocked/i.test(msg)) kind = "blocked";
     else if (/chat not found|user not found/i.test(msg)) kind = "not_started";
     else if (/message to copy not found|MESSAGE_ID_INVALID/i.test(msg)) kind = "not_found";
-    return { ok: false, error: msg, kind };
+    return { ok: false, error: msg, kind, retryAfterMs };
   }
 }
