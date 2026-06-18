@@ -16,6 +16,8 @@ import {
   listAdminAuditLog,
 } from "@/lib/destructive.functions";
 import { listSettingsAuditLog, getIngestionDedupStats, getChannelMatchBreakdown24h } from "@/lib/admin-diagnostics-extra.functions";
+import { OnboardingChart } from "@/components/OnboardingChart";
+import { listAdminNotifications } from "@/lib/alerts.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/diagnostics")({
   component: DiagnosticsPage,
@@ -57,11 +59,15 @@ function DiagnosticsPage() {
         </Button>
       </div>
 
+      <NotificationsBanner />
+
       <WebVitalsPanel data={vitalsQ.data} loading={vitalsQ.isLoading} error={vitalsQ.error as Error | null} />
 
       <IntegrationsHealthPanel />
 
       <ShortenerHealthPanel />
+
+      <OnboardingChart />
 
       <OnboardingAnalyticsPanel />
 
@@ -176,6 +182,30 @@ function badgeClass(status: "ok" | "warn" | "fail" | string): string {
   if (status === "warn") return "text-amber-500";
   return "text-red-500";
 }
+
+function NotificationsBanner() {
+  const list = useServerFn(listAdminNotifications);
+  const q = useQuery({
+    queryKey: ["admin-notif-banner"],
+    queryFn: () => list({ data: { includeAcked: false, limit: 5 } }),
+    retry: false, refetchInterval: 60_000,
+  });
+  const items = q.data ?? [];
+  if (!items.length) return null;
+  return (
+    <section className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        <h2 className="font-semibold text-sm">{items.length} active alert{items.length > 1 ? "s" : ""}</h2>
+        <Link to="/admin/notifications" className="ml-auto text-xs text-primary">Manage →</Link>
+      </div>
+      <ul className="text-xs space-y-1">
+        {items.slice(0,3).map((n: any) => (
+          <li key={n.id} className="text-muted-foreground"><span className="font-medium text-foreground">{n.title}</span> — {n.body}</li>
+        ))}
+      </ul>
+    </section>
+  );
 
 // ---------------------------------------------------------------------------
 // Web Vitals (RUM) panel
