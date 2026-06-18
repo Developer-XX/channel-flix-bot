@@ -82,6 +82,32 @@ function cleanTitle(input: string): string {
     .trim();
 }
 
+// A "content word" is an alphabetic token that isn't a known quality, codec,
+// resolution, language, or release-tag word. We use this to decide whether a
+// parsed title carries real show/movie text or is just leftover tags.
+const TAG_WORDS = new Set(
+  [
+    ...RES_PATTERNS.map(([, v]) => v.toLowerCase()),
+    ...QUALITY_PATTERNS.map(([, v]) => v.toLowerCase()),
+    ...CODEC_PATTERNS.map(([, v]) => v.toLowerCase()),
+    ...LANG_TOKENS.map((l) => l.toLowerCase()),
+    "dual", "audio", "multi", "dubbed", "subbed", "subtitled",
+    "web", "dl", "rip", "bluray", "hdtv", "remux", "proper", "repack",
+    "4k", "uhd", "hdr", "10bit", "8bit", "esub", "msub", "x265", "x264",
+  ].map((s) => s.replace(/[^a-z0-9]/g, "")),
+);
+
+function hasContentWord(title: string): boolean {
+  const norm = title.toLowerCase().replace(/[^a-z0-9\s]+/g, " ");
+  for (const tok of norm.split(/\s+/).filter(Boolean)) {
+    if (!/[a-z]/.test(tok)) continue; // pure number → not a content word
+    if (TAG_WORDS.has(tok)) continue;
+    return true;
+  }
+  return false;
+}
+
+
 function firstMatch(
   text: string,
   patterns: Array<[RegExp, string]>,
