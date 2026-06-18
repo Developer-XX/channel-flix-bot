@@ -1,0 +1,97 @@
+name: blocked-browsing-regression
+
+# Runs the blocked-browsing E2E + analytics regression suite on every PR.
+# Fails the build on any coverage gap (test failure, missing file, or
+# unexpected skip when secrets are present).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  blocked-browsing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      E2E_BASE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Verify required regression files exist (coverage gate)
+        run: |
+          set -e
+          required=(
+            "src/lib/__tests__/public-browsing-rls.test.ts"
+            "src/lib/__tests__/blocked-browsing-analytics.test.ts"
+            "src/lib/__tests__/admin-analytics-blocked.test.ts"
+            "src/lib/__tests__/blocked-browsing-rpc-contract.test.ts"
+            "tests/e2e/anon-title-redirect.spec.ts"
+            "tests/e2e/anon-search-no-prefetch.spec.ts"
+          )
+          for f in "${required[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::missing required regression test file"
+              exit 1
+            fi
+          done
+          echo "all required regression files present"
+
+      - name: Fail if secrets are missing on protected branches
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY / SUPABASE_PUBLISHABLE_KEY are required for blocked-browsing tests"
+            exit 1
+          fi
+
+      - name: Vitest — blocked browsing + RLS + analytics + RPC contract
+        run: |
+          bunx vitest run \
+            src/lib/__tests__/public-browsing-rls.test.ts \
+            src/lib/__tests__/blocked-browsing-analytics.test.ts \
+            src/lib/__tests__/admin-analytics-blocked.test.ts \
+            src/lib/__tests__/blocked-browsing-rpc-contract.test.ts \
+            --reporter=verbose
+
+      - name: Build app for E2E
+        run: bun run build
+
+      - name: Start preview
+        run: |
+          bun run preview --port 8080 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080 >/dev/null && break
+            sleep 1
+          done
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Playwright — blocked browsing E2E
+        run: |
+          bunx playwright test \
+            tests/e2e/anon-title-redirect.spec.ts \
+            tests/e2e/anon-search-no-prefetch.spec.ts \
+            --reporter=list
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
