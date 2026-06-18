@@ -150,12 +150,15 @@ function AnalyticsPage() {
 
       {/* Blocked browsing (auth-only mode redirects) */}
       <Section title="Blocked browsing attempts" icon={<ShieldAlert className="h-4 w-4" />}>
-        <div className="mb-3 text-xs text-muted-foreground">
-          Public browsing is currently{" "}
-          <span className={a?.blockedBrowsing.publicBrowsingEnabled ? "text-emerald-500 font-semibold" : "text-red-500 font-semibold"}>
-            {a?.blockedBrowsing.publicBrowsingEnabled ? "ON (anyone can browse titles)" : "OFF (sign-in required)"}
-          </span>
-          . Counts below are anonymous visitors who were redirected to sign-in.
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs text-muted-foreground">
+            Public browsing is currently{" "}
+            <span className={a?.blockedBrowsing.publicBrowsingEnabled ? "text-emerald-500 font-semibold" : "text-red-500 font-semibold"}>
+              {a?.blockedBrowsing.publicBrowsingEnabled ? "ON (anyone can browse titles)" : "OFF (sign-in required)"}
+            </span>
+            . Counts below are anonymous visitors who were redirected to sign-in.
+          </div>
+          <ExportCsvButton />
         </div>
         <StatGrid>
           <Stat label="Today" value={a?.blockedBrowsing.today} icon={<ShieldAlert className="h-4 w-4" />} accent />
@@ -165,6 +168,51 @@ function AnalyticsPage() {
             <Stat key={r.reason} label={r.reason} value={r.count} />
           ))}
         </StatGrid>
+
+        {/* Rate-limit utilization */}
+        {a?.blockedBrowsing.rateLimit && (
+          <div className="mt-4 rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+              <Gauge className="h-3.5 w-3.5" /> log_blocked_browsing · rate-limit utilization (last minute)
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-2xl font-bold tabular-nums">
+                {a.blockedBrowsing.rateLimit.usedLastMinute}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                / {a.blockedBrowsing.rateLimit.cap} per {a.blockedBrowsing.rateLimit.windowSec}s
+              </span>
+              <span
+                className={`ml-auto text-xs font-semibold ${
+                  a.blockedBrowsing.rateLimit.utilizationPct >= 90
+                    ? "text-red-500"
+                    : a.blockedBrowsing.rateLimit.utilizationPct >= 60
+                    ? "text-amber-500"
+                    : "text-emerald-500"
+                }`}
+              >
+                {a.blockedBrowsing.rateLimit.utilizationPct}%
+              </span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-surface overflow-hidden">
+              <div
+                className={`h-full transition-all ${
+                  a.blockedBrowsing.rateLimit.utilizationPct >= 90
+                    ? "bg-red-500"
+                    : a.blockedBrowsing.rateLimit.utilizationPct >= 60
+                    ? "bg-amber-500"
+                    : "bg-emerald-500"
+                }`}
+                style={{ width: `${a.blockedBrowsing.rateLimit.utilizationPct}%` }}
+              />
+            </div>
+            <div className="mt-2 text-[11px] text-muted-foreground">
+              Dropped (estimate): <span className="font-semibold tabular-nums">{a.blockedBrowsing.rateLimit.droppedEstimate}</span>
+              {" · "}cap enforced server-side by <code className="font-mono">log_blocked_browsing</code>
+            </div>
+          </div>
+        )}
+
         {a?.blockedBrowsing.recent && a.blockedBrowsing.recent.length > 0 && (
           <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -187,6 +235,52 @@ function AnalyticsPage() {
           </div>
         )}
       </Section>
+    </div>
+  );
+}
+
+function ExportCsvButton() {
+  const [busy, setBusy] = useState(false);
+  const [windowDays, setWindowDays] = useState(30);
+
+  async function onExport() {
+    setBusy(true);
+    try {
+      const res = await exportBlockedBrowsingCsv({ data: { windowDays } });
+      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("CSV export failed", e);
+      alert(`CSV export failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={windowDays}
+        onChange={(e) => setWindowDays(Number(e.target.value))}
+        className="h-8 rounded-md border border-border bg-card px-2 text-xs"
+        disabled={busy}
+        aria-label="Export window"
+      >
+        <option value={7}>Last 7d</option>
+        <option value={30}>Last 30d</option>
+        <option value={90}>Last 90d</option>
+      </select>
+      <Button size="sm" variant="outline" onClick={onExport} disabled={busy}>
+        <FileDown className="h-3.5 w-3.5 mr-1" />
+        {busy ? "Exporting…" : "Export CSV"}
+      </Button>
     </div>
   );
 }
