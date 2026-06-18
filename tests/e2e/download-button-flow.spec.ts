@@ -1,17 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { hasCredentials, signInAs } from "./helpers";
 
 /**
- * Full DownloadButton flow.
+ * DownloadButton flow tests powered by shared mocks in fixtures.ts.
  *
- *  Verified path:    homepage → title page → click Download → Telegram redirect
- *                    with a token in the URL → verification call resolves OK →
- *                    file send response acknowledged.
- *  Unverified path:  same up to click → user is shown a verification prompt
- *                    (link-shortener step) instead of being redirected.
- *
- * Server-fn endpoints are intercepted so the test is hermetic and doesn't hit
- * real Telegram. We assert behaviour from the user-visible UI + outbound URLs.
+ * `mockTelegram` short-circuits t.me/telegram.me navigations and records the
+ * last URL, `mockVerification` toggles between verified/unverified, and
+ * `mockFileSend` records every delivery payload.
  */
 
 async function gotoFirstTitle(page: import("@playwright/test").Page) {
@@ -24,87 +19,65 @@ async function gotoFirstTitle(page: import("@playwright/test").Page) {
   return true;
 }
 
-test.describe("DownloadButton — verified user", () => {
-  test.skip(!hasCredentials, "Sign-in required for verified flow");
+test.describe("DownloadButton — verified", () => {
+  test.skip(!hasCredentials, "Sign-in required");
 
-  test("redirects to Telegram with a token after verification passes", async ({ page, context }) => {
+  test("redirects to Telegram and dispatches a file-send call", async ({
+    page, mockTelegram, mockVerification, mockFileSend,
+  }) => {
     await signInAs(page);
-
-    // Mock verification + delivery endpoints to succeed.
-    await page.route(/verification|verify/i, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          result: { data: { verified: true, token: "tok_test_123" } },
-        }),
-      });
-    });
-    await page.route(/(download|delivery|telegram).*send/i, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ result: { data: { ok: true, deliveryId: "d_1" } } }),
-      });
-    });
+    mockVerification.setVerified(true);
 
     const ok = await gotoFirstTitle(page);
-    test.skip(!ok, "No titles available to exercise download flow");
+    test.skip(!ok, "No titles");
 
     const btn = page.getByRole("button", { name: /download/i }).first();
-    test.skip(!(await btn.count()), "Download button not present");
+    test.skip(!(await btn.count()), "No download button");
 
-    // The button typically opens t.me in a new tab. Capture both navigation
-    // and a same-tab redirect to be resilient to either implementation.
-    const popupPromise = context.waitForEvent("page", { timeout: 5_000 }).catch(() => null);
     await btn.click();
-    const popup = await popupPromise;
-    const targetUrl = popup ? popup.url() : page.url();
+    // Give async send + redirect a beat.
+    await page.waitForTimeout(800);
 
-    // Either a Telegram deep-link with a token, or a status confirmation on the page.
-    const isTelegram = /t\.me|telegram\.me/i.test(targetUrl);
+    const telegramUrl = mockTelegram.lastRedirectUrl();
+    const sends = mockFileSend.payloads();
     const onPageConfirm = await page
       .getByText(/sent to telegram|opening telegram|delivered|check your chat/i)
-      .first()
-      .isVisible()
-      .catch(() => false);
+      .first().isVisible().catch(() => false);
 
-    expect(isTelegram || onPageConfirm, `expected Telegram redirect or in-page confirmation, got ${targetUrl}`)
-      .toBe(true);
+    expect(
+      Boolean(telegramUrl) || sends.length > 0 || onPageConfirm,
+      `expected Telegram redirect, file-send call, or in-page confirmation`
+    ).toBe(true);
 
-    if (isTelegram) {
-      expect(targetUrl, "Telegram deep-link should carry a start/token param").toMatch(
-        /(start=|token=|tok_)/,
-      );
+    expect(mockVerification.calls(), "verification must run before delivery").toBeGreaterThan(0);
+
+    if (telegramUrl) {
+      expect(telegramUrl).toMatch(/(start=|token=|tok_)/);
     }
   });
 });
 
-test.describe("DownloadButton — non-verified user", () => {
-  test("shows verification prompt instead of redirecting", async ({ page }) => {
-    // Force verification to report 'not verified'.
-    await page.route(/verification|verify/i, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          result: { data: { verified: false, requireVerification: true, shortenerUrl: "https://example.com/short" } },
-        }),
-      });
-    });
+test.describe("DownloadButton — non-verified", () => {
+  test("shows verification prompt and does not call file-send", async ({
+    page, mockVerification, mockFileSend,
+  }) => {
+    mockVerification.setVerified(false);
+    mockVerification.setShortenerUrl("https://example.com/short");
 
     const ok = await gotoFirstTitle(page);
-    test.skip(!ok, "No titles available to exercise download flow");
+    test.skip(!ok, "No titles");
 
     const btn = page.getByRole("button", { name: /download/i }).first();
-    test.skip(!(await btn.count()), "Download button not present");
+    test.skip(!(await btn.count()), "No download button");
 
     await btn.click();
 
-    // Expect a verification step in the UI: a prompt, modal, or inline message.
-    const prompt = page
-      .getByText(/verify|verification|complete the short|continue to verify|unlock download/i)
-      .first();
+    const prompt = page.getByText(
+      /verify|verification|complete the short|continue to verify|unlock download/i,
+    ).first();
     await expect(prompt).toBeVisible({ timeout: 10_000 });
+
+    // No delivery should fire when the user is not yet verified.
+    expect(mockFileSend.payloads(), "file send must not run before verification").toEqual([]);
   });
 });
