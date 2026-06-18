@@ -224,20 +224,44 @@ function TelegramAdmin() {
           <Button variant="outline" onClick={() => state.refetch()}>Refresh state</Button>
           <Button
             variant="outline"
-            title="Re-parse the most recent ingest rows from their stored captions (caption-priority) and re-run the matcher. Use this after a parser change or to sweep up caption edits that arrived without a webhook event."
+            title="Re-parse the most recent ingest rows from their stored captions (caption-priority) and re-run the matcher. Use this after a parser change or to sweep up caption edits that arrived without a webhook event. Runs in batches of 200 with rate limiting so it is safe on large channels."
             onClick={async () => {
+              const channelRowId = filters.channelId || undefined;
+              const batch = 200;
+              let offset = 0;
+              let totalScanned = 0, totalChanged = 0, totalPromoted = 0, totalDemoted = 0, totalUnmatched = 0, totalErrors = 0;
+              let totalRows = 0;
               try {
-                const r = await reparseAllCaptions({ data: { limit: 500 } });
+                let safety = 50; // hard cap: 50 batches = 10k rows
+                while (safety-- > 0) {
+                  const r = await reparseAllCaptions({ data: { limit: batch, offset, channelRowId, sleepMs: 25 } });
+                  totalScanned += r.scanned;
+                  totalChanged += r.changed;
+                  totalPromoted += r.promoted;
+                  totalDemoted += r.demoted;
+                  totalUnmatched += r.unmatched;
+                  totalErrors += r.errors;
+                  totalRows = r.totalRows;
+                  toast.message(
+                    `Re-parsing… ${Math.min(r.nextOffset, r.totalRows)}/${r.totalRows}`,
+                    { description: `changed ${totalChanged} · promoted ${totalPromoted} · demoted ${totalDemoted} · unmatched ${totalUnmatched}${totalErrors ? ` · errors ${totalErrors}` : ""}` },
+                  );
+                  if (!r.hasMore || r.scanned === 0) break;
+                  offset = r.nextOffset;
+                }
                 toast.success(
-                  `Re-parsed ${r.scanned} · changed ${r.changed} · promoted ${r.promoted} · demoted ${r.demoted} · unmatched ${r.unmatched}`,
+                  `Re-parsed ${totalScanned}/${totalRows} · changed ${totalChanged} · promoted ${totalPromoted} · demoted ${totalDemoted} · unmatched ${totalUnmatched}${totalErrors ? ` · errors ${totalErrors}` : ""}`,
                 );
                 ingest.refetch();
                 router.invalidate();
-              } catch (e: any) { toast.error(e?.message ?? "Re-parse failed"); }
+              } catch (e: any) {
+                toast.error(`Re-parse failed at offset ${offset}: ${e?.message ?? "unknown"}`);
+              }
             }}
           >
             Re-parse all from captions
           </Button>
+
         </div>
         <p className="text-xs text-muted-foreground">
           A scheduled job also runs this endpoint periodically to catch posts missed by the webhook.
