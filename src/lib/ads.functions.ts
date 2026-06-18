@@ -133,7 +133,7 @@ export const recordAdEvent = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const sb = publicClient();
-      await sb.from("ad_events").insert({
+      await (sb as any).from("ad_events").insert({
         ad_id: data.ad_id,
         placement: data.placement,
         event_type: data.event_type,
