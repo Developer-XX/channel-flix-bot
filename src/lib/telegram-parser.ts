@@ -200,16 +200,20 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
   };
 
   // Title: caption wins when it produced something usable; otherwise filename.
+  // "Usable" requires at least one word that isn't a known quality/res/codec
+  // tag — otherwise a caption like "1080p WEB-DL" would shadow a perfectly
+  // good filename.
   const captionTitleUsable =
     !!captionParsed &&
     !!captionParsed.title &&
     captionParsed.title !== "Untitled" &&
-    normalizeTitle(captionParsed.title).length >= 2;
+    hasContentWord(captionParsed.title);
   const title = captionTitleUsable
     ? captionParsed!.title
-    : (fileParsed?.title && fileParsed.title !== "Untitled"
+    : (fileParsed?.title && fileParsed.title !== "Untitled" && hasContentWord(fileParsed.title)
         ? fileParsed.title
-        : (captionParsed?.title ?? "Untitled"));
+        : (captionParsed?.title ?? fileParsed?.title ?? "Untitled"));
+
 
   return {
     title,
