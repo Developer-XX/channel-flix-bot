@@ -41,7 +41,8 @@ export function SiteHeader() {
       }`}
     >
       <AnnouncementBar />
-      <div className="mx-auto grid h-14 sm:h-16 max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 min-w-0">
+      <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6 min-w-0">
+        <div className="hidden" />
         <Link
           to="/"
           className="flex items-center gap-2 font-display font-bold tracking-tight shrink-0 min-w-0"
