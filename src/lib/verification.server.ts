@@ -296,7 +296,7 @@ export async function consumeToken(args: {
   }
 
   const nowIso = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS).toISOString();
+  const expiresAt = new Date(Date.now() + (await getVerificationTtlMs())).toISOString();
 
   await supabase.from("verification_tokens").update({ consumed_at: nowIso }).eq("token", token);
   await supabase.from("user_verifications").upsert(
