@@ -358,6 +358,46 @@ export async function ingestTelegramUpdate(
     quality: parsed.quality, resolution: parsed.resolution, language: parsed.language,
   };
 
+  // Caption-edit demotion: if this is an edit and the previously promoted
+  // media_files row is now stale (title changed OR new match is below
+  // threshold), deactivate it so it disappears from the old title's page.
+  // The auto-promote below will (re)attach the file to the new title.
+  const priorTitleId = priorIngest?.matched_title_id ?? null;
+  const priorMediaFileId = priorIngest?.promoted_media_file_id ?? null;
+  const titleChanged =
+    !!priorTitleId && priorTitleId !== (match.matchedTitleId ?? null);
+  const becameUnmatched = !!priorTitleId && !match.matchedTitleId;
+  if ((isEdit || priorIngest) && priorMediaFileId && (titleChanged || becameUnmatched)) {
+    try {
+      await supabase
+        .from("media_files")
+        .update({ is_active: false })
+        .eq("id", priorMediaFileId);
+      await writeMatchAudit(supabase, {
+        ingestId: ingestRow.id,
+        titleId: priorTitleId,
+        settings,
+        decision: "demoted",
+        reason: becameUnmatched
+          ? `caption_edit: now unmatched (was title ${priorTitleId})`
+          : `caption_edit: title changed (was ${priorTitleId}, now ${match.matchedTitleId})`,
+        actor: "auto:caption-edit",
+        oldScore: null,
+        newScore: match.matchScore,
+        threshold: settings.threshold,
+        parsedSnapshot,
+        extra: { mediaFileId: priorMediaFileId, priorCaption: priorIngest?.caption ?? null },
+      });
+      try {
+        const { bumpCacheVersion } = await import("@/lib/indexes.server");
+        await bumpCacheVersion(supabase);
+      } catch {}
+    } catch (e) {
+      console.warn("[telegram-ingest] caption-edit demotion failed:", (e as Error).message);
+    }
+  }
+
+
   if (match.matchedTitleId && file.file_id) {
     try {
       await autoPromoteToMediaFile(supabase, {
