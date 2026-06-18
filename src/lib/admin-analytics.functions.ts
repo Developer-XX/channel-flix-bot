@@ -140,6 +140,47 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
       pendingReqs.error;
     if (firstErr) throw firstErr;
 
+    // Resend + auto-delete cron data (telemetry on Phase-1 reliability work)
+    const nowIso = new Date().toISOString();
+    const [resendsToday, resends7d, autoPendingDue, autoCompletedToday, autoCompleted7d, autoExhausted24h, lastRunRow] =
+      await Promise.all([
+        sb
+          .from("delivery_attempts")
+          .select("id", { count: "exact", head: true })
+          .gte("updated_at", todayISO)
+          .eq("reused_from_cooldown", true),
+        sb
+          .from("delivery_attempts")
+          .select("id", { count: "exact", head: true })
+          .gte("updated_at", d7)
+          .eq("reused_from_cooldown", true),
+        sb
+          .from("scheduled_message_deletes")
+          .select("id", { count: "exact", head: true })
+          .is("done_at", null)
+          .lte("delete_at", nowIso),
+        sb
+          .from("scheduled_message_deletes")
+          .select("id", { count: "exact", head: true })
+          .gte("done_at", todayISO),
+        sb
+          .from("scheduled_message_deletes")
+          .select("id", { count: "exact", head: true })
+          .gte("done_at", d7),
+        sb
+          .from("scheduled_message_deletes")
+          .select("id", { count: "exact", head: true })
+          .gte("attempts", 5)
+          .gte("updated_at", isoDaysAgo(1)),
+        sb
+          .from("scheduled_message_deletes")
+          .select("done_at")
+          .not("done_at", "is", null)
+          .order("done_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
     // DAU via distinct user_id in download_logs in window — light enough at small scale.
     const [{ data: dauTodayRows }, { data: dau7dRows }, { data: dau30dRows }] = await Promise.all([
       sb.from("download_logs").select("user_id").gte("created_at", todayISO).not("user_id", "is", null),
