@@ -165,7 +165,11 @@ export function DownloadButton({
 
       const r = await reqDownload({ data: { mediaFileId: activeFileId } });
       if (r.ok) {
-        toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
+        if ((r as any).reused) {
+          toast.message(`Already sent — check your Telegram (request collapsed within ${(r as any).cooldownSec ?? 8}s cooldown).`);
+        } else {
+          toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
+        }
         return;
       }
       if (r.reason === "needs_verification") {
