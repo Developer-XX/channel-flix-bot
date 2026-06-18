@@ -248,10 +248,12 @@ function TitlePage() {
             <p className="mt-2 text-muted-foreground">We'll review your request and notify you when it's available.</p>
             <Link to="/request" className="mt-4 inline-flex">
               <Button className="bg-gradient-primary text-primary-foreground border-0">Make a request</Button>
-            </Link>
           </div>
         </section>
+
+        <HowToDownload />
       </main>
+      <OnboardingTutorial />
       <SiteFooter />
     </div>
   );
