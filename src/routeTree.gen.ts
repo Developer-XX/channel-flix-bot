@@ -42,6 +42,7 @@ import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/publi
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
+import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -223,6 +224,12 @@ const ApiPublicHooksTelegramResyncRecentRoute =
     path: '/api/public/hooks/telegram-resync-recent',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksShortenerAlertsRoute =
+  ApiPublicHooksShortenerAlertsRouteImport.update({
+    id: '/api/public/hooks/shortener-alerts',
+    path: '/api/public/hooks/shortener-alerts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMaybeRebuildIndexesRoute =
   ApiPublicHooksMaybeRebuildIndexesRouteImport.update({
     id: '/api/public/hooks/maybe-rebuild-indexes',
@@ -259,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -293,6 +301,7 @@ export interface FileRoutesByTo {
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -330,6 +339,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
     | '/admin/verification-limits'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
     | '/api/public/telegram/backfill'
@@ -401,6 +412,7 @@ export interface FileRouteTypes {
     | '/admin/verification-limits'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
     | '/api/public/telegram/backfill'
@@ -437,6 +449,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/verification-limits'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
     | '/api/public/telegram/backfill'
@@ -456,6 +469,7 @@ export interface RootRouteChildren {
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
@@ -696,6 +710,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksTelegramResyncRecentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/shortener-alerts': {
+      id: '/api/public/hooks/shortener-alerts'
+      path: '/api/public/hooks/shortener-alerts'
+      fullPath: '/api/public/hooks/shortener-alerts'
+      preLoaderRoute: typeof ApiPublicHooksShortenerAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/maybe-rebuild-indexes': {
       id: '/api/public/hooks/maybe-rebuild-indexes'
       path: '/api/public/hooks/maybe-rebuild-indexes'
@@ -774,6 +795,7 @@ const rootRouteChildren: RootRouteChildren = {
   TitleSlugRoute: TitleSlugRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,
+  ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
   ApiPublicSTokenRoute: ApiPublicSTokenRoute,
