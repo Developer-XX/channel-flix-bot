@@ -1,4 +1,5 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/site-header";
@@ -6,6 +7,9 @@ import { SiteFooter } from "@/components/site-footer";
 import { TitleGrid } from "@/components/title-row";
 import type { TitleCardData } from "@/components/title-card";
 import { CATEGORY_LABEL, isCategory } from "@/lib/categories";
+import { useIsAuthed } from "@/hooks/use-session-flag";
+import { usePublicBrowsing } from "@/hooks/use-public-browsing";
+import { logBlockedBrowsing } from "@/lib/blocked-access";
 
 export const Route = createFileRoute("/browse/$category")({
   beforeLoad: ({ params }) => {
