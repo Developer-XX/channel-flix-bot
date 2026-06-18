@@ -215,7 +215,7 @@ export function DownloadButton({
           data-media-file-id={mediaFileId}
         >
           {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-          via Bot
+          Download
         </Button>
         {errorState && (
           <div
