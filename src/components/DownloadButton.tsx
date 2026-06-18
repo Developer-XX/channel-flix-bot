@@ -177,8 +177,10 @@ export function DownloadButton({
 
       const r = await reqDownload({ data: { mediaFileId: activeFileId } });
       if (r.ok) {
+        const cd = Number((r as any).cooldownSec ?? 0);
+        if (cd > 0) setCooldownUntil(Date.now() + cd * 1000);
         if ((r as any).reused) {
-          toast.message(`Already sent — check your Telegram (request collapsed within ${(r as any).cooldownSec ?? 8}s cooldown).`);
+          toast.message(`Already sent — check your Telegram (within ${cd || 8}s cooldown).`);
         } else {
           toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
         }
