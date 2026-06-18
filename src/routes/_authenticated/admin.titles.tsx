@@ -826,3 +826,50 @@ function ResyncTitleButton({ titleId, titleName }: { titleId: string; titleName:
     </button>
   );
 }
+
+function AddToSlideshowButton({
+  titleId,
+  titleName,
+  variant = "icon",
+}: {
+  titleId: string;
+  titleName: string;
+  variant?: "icon" | "full";
+}) {
+  const fn = useServerFn(adminAddTitleToSlideshow);
+  const [busy, setBusy] = useState(false);
+  const handle = async () => {
+    setBusy(true);
+    try {
+      const r = await fn({ data: { titleId } });
+      toast.success(
+        r.reactivated
+          ? `Reactivated slide for "${titleName}"`
+          : `Added "${titleName}" to the slideshow`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message || "Failed to add to slideshow");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (variant === "full") {
+    return (
+      <Button variant="ghost" onClick={handle} disabled={busy || !titleId} className="mr-auto">
+        <Images className="h-4 w-4 mr-1.5" />
+        {busy ? "Adding…" : "Add to slideshow"}
+      </Button>
+    );
+  }
+  return (
+    <button
+      onClick={handle}
+      disabled={busy}
+      title="Add to homepage slideshow"
+      aria-label="Add to homepage slideshow"
+      className="text-xs px-2 py-1 rounded inline-flex items-center gap-1 bg-surface text-muted-foreground hover:text-foreground disabled:opacity-50"
+    >
+      <Images className="h-3 w-3" />Slideshow
+    </button>
+  );
+}
