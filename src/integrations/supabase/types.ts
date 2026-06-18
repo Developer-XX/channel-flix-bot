@@ -1270,6 +1270,24 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_buckets: {
+        Row: {
+          bucket_key: string
+          count: number
+          window_start: string
+        }
+        Insert: {
+          bucket_key: string
+          count?: number
+          window_start: string
+        }
+        Update: {
+          bucket_key?: string
+          count?: number
+          window_start?: string
+        }
+        Relationships: []
+      }
       seasons: {
         Row: {
           air_date: string | null
@@ -2196,6 +2214,15 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      rl_hit: {
+        Args: { _key: string; _limit: number; _window_sec: number }
+        Returns: {
+          allowed: boolean
+          lim: number
+          reset_at: string
+          used: number
+        }[]
       }
       wipe_application_data: { Args: never; Returns: Json }
     }
