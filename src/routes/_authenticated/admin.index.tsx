@@ -25,11 +25,20 @@ function Dashboard() {
       <p className="mt-1 text-muted-foreground">Overview of your platform.</p>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
-        <StatCard icon={<Film className="h-5 w-5" />} label="Titles" value={stats.data?.titles} accent />
+        <Link to="/admin/analytics" className="contents">
+          <StatCard icon={<Film className="h-5 w-5" />} label="Titles" value={stats.data?.titles} accent />
+        </Link>
         <StatCard icon={<MessageSquare className="h-5 w-5" />} label="Pending requests" value={stats.data?.requests} />
         <StatCard icon={<Download className="h-5 w-5" />} label="Media files" value={stats.data?.files} />
         <StatCard icon={<Users className="h-5 w-5" />} label="Downloads" value={stats.data?.downloads} />
       </div>
+
+      <Link
+        to="/admin/analytics"
+        className="mt-4 inline-flex items-center gap-2 text-sm text-primary hover:underline"
+      >
+        <BarChart3 className="h-4 w-4" /> Open full analytics dashboard
+      </Link>
 
       <section className="mt-10 rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-4">
