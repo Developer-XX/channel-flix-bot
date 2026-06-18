@@ -52,7 +52,11 @@ export const ackAdminAlert = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const patch: Record<string, unknown> = {
+    const patch: {
+      acknowledged_at: string;
+      acknowledged_by: string;
+      resolved_at?: string;
+    } = {
       acknowledged_at: new Date().toISOString(),
       acknowledged_by: context.userId,
     };
