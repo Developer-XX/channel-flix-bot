@@ -2215,6 +2215,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_public_browsing_enabled: { Args: never; Returns: boolean }
       rl_hit: {
         Args: { _key: string; _limit: number; _window_sec: number }
         Returns: {
