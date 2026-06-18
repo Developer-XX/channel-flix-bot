@@ -1,7 +1,6 @@
 
 import { ArrowRight } from "lucide-react";
 import { TitleCard, TitleCardSkeleton, type TitleCardData } from "./title-card";
-import { useIsAuthed } from "@/hooks/use-session-flag";
 
 interface Props {
   title: string;
@@ -13,9 +12,6 @@ interface Props {
 
 export function TitleRow({ title, items, loading, emptyHint, viewAllHref }: Props) {
   const showEmpty = !loading && (!items || items.length === 0);
-  const isAuthed = useIsAuthed();
-  const gatedHref = (href: string) =>
-    isAuthed ? href : `/auth?redirect=${encodeURIComponent(href)}`;
   return (
     <section className="py-4 sm:py-6">
       <div className="px-4 md:px-6 mb-3 sm:mb-4 flex items-center justify-between gap-3">
@@ -24,7 +20,7 @@ export function TitleRow({ title, items, loading, emptyHint, viewAllHref }: Prop
         </h2>
         {viewAllHref && !showEmpty && (
           <a
-            href={gatedHref(viewAllHref)}
+            href={viewAllHref}
             className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 px-3 py-1 text-xs sm:text-sm text-muted-foreground hover:text-foreground hover:border-ring transition-colors"
           >
             View all <ArrowRight className="h-3.5 w-3.5" />

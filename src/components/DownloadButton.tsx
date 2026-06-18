@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -29,6 +30,7 @@ export function DownloadButton({
   season,
   episode,
 }: Props) {
+  const navigate = useNavigate();
   const reqDownload = useServerFn(requestDownload);
   const reqCode = useServerFn(requestLinkCode);
   const resolveEp = useServerFn(resolveEpisodeFile);
@@ -108,7 +110,8 @@ export function DownloadButton({
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
-        toast.error("Please sign in to download.");
+        const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        navigate({ to: "/auth", search: { redirect: returnTo } });
         return;
       }
 
