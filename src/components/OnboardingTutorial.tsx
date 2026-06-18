@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { PlayCircle } from "lucide-react";
 import { getTutorialConfig } from "@/lib/tutorial.functions";
+import { trackOnboardingEvent } from "@/lib/onboarding-track";
 
 const STORAGE_KEY = "sv:onboarding:seen-v1";
 
@@ -23,6 +24,7 @@ function extractYouTubeId(url: string): string | null {
 
 export function OnboardingTutorial() {
   const [open, setOpen] = useState(false);
+  const [openedAt, setOpenedAt] = useState<number | null>(null);
   const fn = useServerFn(getTutorialConfig);
   const q = useQuery({
     queryKey: ["tutorial-config"],
@@ -34,12 +36,27 @@ export function OnboardingTutorial() {
     if (typeof window === "undefined") return;
     if (!q.data?.enabled || !q.data.url) return;
     try {
-      if (!localStorage.getItem(STORAGE_KEY)) setOpen(true);
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        setOpen(true);
+        setOpenedAt(Date.now());
+        void trackOnboardingEvent({
+          event: "opened",
+          videoType: q.data.type,
+          videoUrl: q.data.url,
+        });
+      }
     } catch { /* private mode */ }
-  }, [q.data?.enabled, q.data?.url]);
+  }, [q.data?.enabled, q.data?.url, q.data?.type]);
 
-  function dismiss() {
+  function close(kind: "completed" | "skipped") {
     try { localStorage.setItem(STORAGE_KEY, String(Date.now())); } catch { /* ignore */ }
+    const watchedMs = openedAt ? Date.now() - openedAt : null;
+    void trackOnboardingEvent({
+      event: kind,
+      videoType: q.data?.type ?? null,
+      videoUrl: q.data?.url ?? null,
+      watchedMs,
+    });
     setOpen(false);
   }
 
@@ -48,7 +65,7 @@ export function OnboardingTutorial() {
   const ytId = cfg.type === "youtube" ? extractYouTubeId(cfg.url) : null;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) dismiss(); else setOpen(true); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) close("skipped"); else setOpen(true); }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -79,8 +96,8 @@ export function OnboardingTutorial() {
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={dismiss}>Skip</Button>
-          <Button onClick={dismiss}>Got it</Button>
+          <Button variant="outline" onClick={() => close("skipped")}>Skip</Button>
+          <Button onClick={() => close("completed")}>Got it</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

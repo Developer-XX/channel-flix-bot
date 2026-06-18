@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { runAuthDiagnostics, listAccessAudit } from "@/lib/diagnostics.functions";
 import { listWebVitalsSummary, type VitalsRow } from "@/lib/web-vitals.functions";
 import { runIntegrationsHealth, getShortenerHealth, probeShortener, exportShortenerHealthCsv } from "@/lib/integrations-health.functions";
+import { getOnboardingSummary } from "@/lib/onboarding-analytics.functions";
 import { getVerificationDiagnostics } from "@/lib/verification-diagnostics.functions";
 import {
   requestDatabaseWipe,
@@ -61,6 +62,8 @@ function DiagnosticsPage() {
       <IntegrationsHealthPanel />
 
       <ShortenerHealthPanel />
+
+      <OnboardingAnalyticsPanel />
 
       <IngestionDedupPanel />
 
@@ -703,7 +706,7 @@ function ShortenerHealthPanel() {
   });
   const [busy, setBusy] = useState<string | null>(null);
 
-  async function runProbe(provider: "adrinolinks" | "nanolinks") {
+  async function runProbe(provider: "adrinolinks" | "nanolinks" | "arolinks" | "linkpays") {
     setBusy(provider);
     try {
       await probe({ data: { provider } });
@@ -760,7 +763,7 @@ function ShortenerHealthPanel() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => runProbe(p.provider as "adrinolinks" | "nanolinks")}
+                    onClick={() => runProbe(p.provider as "adrinolinks" | "nanolinks" | "arolinks" | "linkpays")}
                     disabled={busy === p.provider}
                   >
                     <RefreshCw className={`h-3 w-3 sm:mr-1 ${busy === p.provider ? "animate-spin" : ""}`} />
