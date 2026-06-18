@@ -312,6 +312,14 @@ export async function consumeToken(args: {
   try {
     await (supabase.rpc as any)("increment_verification_count", { _user_id: row.user_id });
   } catch { /* optional RPC */ }
+  try {
+    const { writeAudit } = await import("@/lib/audit.server");
+    await writeAudit(supabase, {
+      action: "token_verification.success",
+      actorUserId: row.user_id,
+      metadata: { provider: row.provider, mediaFileId: row.media_file_id ?? null },
+    });
+  } catch {}
 
   return {
     ok: true,
