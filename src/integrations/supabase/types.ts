@@ -1392,6 +1392,90 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_broadcast_runs: {
+        Row: {
+          error_sample: string | null
+          failed_count: number
+          finished_at: string | null
+          id: string
+          initiated_by: string | null
+          initiated_via: string
+          source_chat_id: number | null
+          source_kind: string
+          source_msg_id: number | null
+          started_at: string
+          success_count: number
+          text_preview: string | null
+          total_targets: number
+        }
+        Insert: {
+          error_sample?: string | null
+          failed_count?: number
+          finished_at?: string | null
+          id?: string
+          initiated_by?: string | null
+          initiated_via?: string
+          source_chat_id?: number | null
+          source_kind: string
+          source_msg_id?: number | null
+          started_at?: string
+          success_count?: number
+          text_preview?: string | null
+          total_targets?: number
+        }
+        Update: {
+          error_sample?: string | null
+          failed_count?: number
+          finished_at?: string | null
+          id?: string
+          initiated_by?: string | null
+          initiated_via?: string
+          source_chat_id?: number | null
+          source_kind?: string
+          source_msg_id?: number | null
+          started_at?: string
+          success_count?: number
+          text_preview?: string | null
+          total_targets?: number
+        }
+        Relationships: []
+      }
+      telegram_broadcast_subscribers: {
+        Row: {
+          blocked: boolean
+          blocked_at: string | null
+          chat_id: number
+          first_name: string | null
+          first_seen_at: string
+          language_code: string | null
+          last_seen_at: string
+          telegram_user_id: number
+          username: string | null
+        }
+        Insert: {
+          blocked?: boolean
+          blocked_at?: string | null
+          chat_id: number
+          first_name?: string | null
+          first_seen_at?: string
+          language_code?: string | null
+          last_seen_at?: string
+          telegram_user_id: number
+          username?: string | null
+        }
+        Update: {
+          blocked?: boolean
+          blocked_at?: string | null
+          chat_id?: number
+          first_name?: string | null
+          first_seen_at?: string
+          language_code?: string | null
+          last_seen_at?: string
+          telegram_user_id?: number
+          username?: string | null
+        }
+        Relationships: []
+      }
       telegram_channels: {
         Row: {
           channel_id: number
