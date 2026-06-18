@@ -246,14 +246,19 @@ export function DownloadButton({
           size={size}
           variant={variant}
           onClick={handleClick}
-          disabled={loading}
+          disabled={loading || isCoolingDown}
           className="shrink-0"
           data-testid="download-btn"
           data-media-file-id={mediaFileId}
         >
           {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
-          Download
+          {isCoolingDown ? `Wait ${cooldownLeftSec}s` : "Download"}
         </Button>
+        {isCoolingDown && (
+          <p className="text-[11px] text-muted-foreground">
+            Sent to Telegram — re-clicks within {cooldownLeftSec}s reuse the same delivery.
+          </p>
+        )}
         {errorState && (
           <div
             role="alert"
