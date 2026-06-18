@@ -43,7 +43,11 @@ export function AnnouncementBar() {
   const a = items[0];
 
   return (
-    <div className={`relative z-[60] ${variantClass[a.variant]}`}>
+    <div
+      data-testid="announcement-bar"
+      role="status"
+      className={`relative z-[60] ${variantClass[a.variant]}`}
+    >
       <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 sm:px-4 py-1.5 text-xs sm:text-sm">
         <Megaphone className="h-3.5 w-3.5 shrink-0 opacity-80" />
         <div className="flex-1 truncate">

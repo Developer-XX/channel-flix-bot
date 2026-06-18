@@ -79,6 +79,8 @@ export function AdSlot({
 
   return (
     <div
+      data-ad-slot={placement}
+      data-testid={`ad-slot-${placement}`}
       className={`relative w-full max-w-full overflow-hidden rounded-lg ${className}`}
     >
       <span className="pointer-events-none absolute right-2 top-1 z-10 rounded bg-background/60 px-1 text-[9px] uppercase tracking-wider text-muted-foreground/70">
@@ -127,6 +129,7 @@ function AdContent({ ad, onClick }: { ad: Ad; onClick: () => void }) {
       return (
         <iframe
           title={ad.name}
+          data-ad-iframe="true"
           sandbox="allow-scripts allow-popups"
           referrerPolicy="no-referrer"
           loading="lazy"
