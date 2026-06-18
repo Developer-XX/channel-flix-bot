@@ -22,13 +22,12 @@ I watch your Telegram channels and import posted media files into the catalog.
 1. Add me as an <b>Administrator</b> of your channel (with "Read messages" — posting rights optional).
 2. Open the admin panel → Telegram → <b>Channel wizard</b> and paste the channel @username or id.
 3. Post a file with a clear caption, e.g. <code>Demon Slayer S01E02 1080p WEB-DL Hindi+English</code>.
-4. I'll react with 👀 on the post and the row will show up under "unmatched" or "matched".
 
 <b>Commands</b>
 /start, /help — this message
-/id — show your chat id (useful when adding /broadcast admins)
-/status — bot health and last ingest count
-/broadcast &lt;text&gt; — (admins only) send a message to every active channel`;
+/id — show your chat id
+/status — bot health, ingest count, broadcast subscribers
+/broadcast — (admins only) <b>forward a post</b> to me then <b>reply</b> /broadcast to send it to all bot users. Or use <code>/broadcast &lt;text&gt;</code> for a plain text blast.`;
 
 // Returns true if the Telegram user (by fromId) is a bot admin: either linked
 // to a website account that has the `admin` role, or listed explicitly in
@@ -51,13 +50,122 @@ async function isBotAdmin(supabaseAdmin: any, fromId: number | undefined): Promi
   return admins.includes(fromId);
 }
 
+async function captureSubscriber(supabaseAdmin: any, msg: any): Promise<void> {
+  try {
+    const fromId: number | undefined = msg?.from?.id;
+    const chatId: number | undefined = msg?.chat?.id;
+    if (!fromId || !chatId || msg?.chat?.type !== "private") return;
+    await supabaseAdmin
+      .from("telegram_broadcast_subscribers")
+      .upsert(
+        {
+          telegram_user_id: fromId,
+          chat_id: chatId,
+          username: msg.from?.username ?? null,
+          first_name: msg.from?.first_name ?? null,
+          language_code: msg.from?.language_code ?? null,
+          last_seen_at: new Date().toISOString(),
+          blocked: false,
+        },
+        { onConflict: "telegram_user_id" },
+      );
+  } catch (e) {
+    console.warn("[telegram-webhook] captureSubscriber failed:", (e as Error).message);
+  }
+}
+
+async function runBroadcast(
+  supabaseAdmin: any,
+  args: {
+    initiatedBy: string | null;
+    source: { kind: "forwarded_copy"; fromChatId: number; messageId: number } | { kind: "text"; text: string };
+    adminChatId: number;
+  },
+): Promise<{ ok: number; fail: number; total: number; runId: string | null }> {
+  const { sendMessage, copyMessage } = await import("@/lib/telegram-api.server");
+  const { data: subs } = await supabaseAdmin
+    .from("telegram_broadcast_subscribers")
+    .select("telegram_user_id, chat_id")
+    .eq("blocked", false);
+  const targets: Array<{ chat_id: number; telegram_user_id: number }> = subs ?? [];
+
+  const { data: run } = await supabaseAdmin
+    .from("telegram_broadcast_runs")
+    .insert({
+      initiated_by: args.initiatedBy,
+      initiated_via: "bot",
+      source_kind: args.source.kind,
+      source_chat_id: args.source.kind === "forwarded_copy" ? args.source.fromChatId : null,
+      source_msg_id: args.source.kind === "forwarded_copy" ? args.source.messageId : null,
+      text_preview: args.source.kind === "text" ? args.source.text.slice(0, 280) : null,
+      total_targets: targets.length,
+    })
+    .select("id")
+    .single();
+  const runId: string | null = run?.id ?? null;
+
+  let ok = 0, fail = 0;
+  let errorSample: string | null = null;
+  const blockedIds: number[] = [];
+
+  for (const t of targets) {
+    try {
+      if (args.source.kind === "forwarded_copy") {
+        await copyMessage({
+          toChatId: t.chat_id,
+          fromChatId: args.source.fromChatId,
+          messageId: args.source.messageId,
+        });
+      } else {
+        await sendMessage(t.chat_id, args.source.text);
+      }
+      ok++;
+    } catch (e: any) {
+      fail++;
+      const m = String(e?.message ?? e);
+      if (!errorSample) errorSample = m.slice(0, 500);
+      if (/bot was blocked|user is deactivated|chat not found/i.test(m)) {
+        blockedIds.push(t.telegram_user_id);
+      }
+    }
+    // Telegram rate limit ~30 msg/sec — keep well under
+    await new Promise((r) => setTimeout(r, 45));
+  }
+
+  if (blockedIds.length) {
+    try {
+      await supabaseAdmin
+        .from("telegram_broadcast_subscribers")
+        .update({ blocked: true, blocked_at: new Date().toISOString() })
+        .in("telegram_user_id", blockedIds);
+    } catch {}
+  }
+
+  if (runId) {
+    await supabaseAdmin
+      .from("telegram_broadcast_runs")
+      .update({
+        success_count: ok,
+        failed_count: fail,
+        finished_at: new Date().toISOString(),
+        error_sample: errorSample,
+      })
+      .eq("id", runId);
+  }
+  return { ok, fail, total: targets.length, runId };
+}
+
 async function handleCommand(
   update: any,
   supabaseAdmin: any,
 ): Promise<{ handled: true; reply?: string } | { handled: false }> {
   const msg = update.message ?? update.edited_message;
   if (!msg?.chat?.id || msg.chat.type !== "private") return { handled: false };
-  const text: string = (msg.text ?? "").trim();
+
+  // Capture every DM author into the broadcast subscriber list (even non-commands).
+  await captureSubscriber(supabaseAdmin, msg);
+
+  const text: string = (msg.text ?? msg.caption ?? "").trim();
   if (!text.startsWith("/")) return { handled: false };
 
   const { sendMessage } = await import("@/lib/telegram-api.server");
@@ -79,12 +187,9 @@ async function handleCommand(
     }
   }
 
-
   switch (cmd) {
     case "/start":
     case "/help": {
-      // Account-link flow: /start link_<CODE> binds the chatter's Telegram
-      // user id to whichever website account generated the code.
       const linkArg = args.trim();
       if (cmd === "/start" && /^link_[A-Z0-9]{4,10}$/i.test(linkArg)) {
         const code = linkArg.slice(5).toUpperCase();
@@ -153,38 +258,68 @@ async function handleCommand(
       return { handled: true };
     }
     case "/status": {
-      const [{ count: chanCount }, { count: ingestCount }, { data: state }] = await Promise.all([
+      const [{ count: chanCount }, { count: ingestCount }, { count: subCount }, { data: state }] = await Promise.all([
         supabaseAdmin.from("telegram_channels").select("id", { count: "exact", head: true }).eq("is_active", true),
         supabaseAdmin.from("telegram_ingest").select("id", { count: "exact", head: true }),
+        supabaseAdmin.from("telegram_broadcast_subscribers").select("telegram_user_id", { count: "exact", head: true }).eq("blocked", false),
         supabaseAdmin.from("telegram_bot_state").select("last_run_at, last_run_status, last_update_id").eq("id", "global").maybeSingle(),
       ]);
       await sendMessage(
         chatId,
-        `<b>Bot status</b>\nActive channels: ${chanCount ?? 0}\nIngested rows: ${ingestCount ?? 0}\nLast backfill: ${state?.last_run_at ?? "never"} (${state?.last_run_status ?? "—"})\nLast update_id: ${state?.last_update_id ?? 0}`,
+        `<b>Bot status</b>\nActive channels: ${chanCount ?? 0}\nIngested rows: ${ingestCount ?? 0}\nBroadcast subscribers: ${subCount ?? 0}\nLast backfill: ${state?.last_run_at ?? "never"} (${state?.last_run_status ?? "—"})\nLast update_id: ${state?.last_update_id ?? 0}`,
       );
       return { handled: true };
     }
-    // /channels removed — manage channels from the admin panel.
     case "/broadcast": {
-      // Admin check already enforced at the top of handleCommand.
-      if (!args) {
-        await sendMessage(chatId, "Usage: /broadcast &lt;message&gt;");
+      // Resolve linked website user (for audit trail).
+      const { data: link } = await supabaseAdmin
+        .from("telegram_user_links")
+        .select("user_id")
+        .eq("telegram_user_id", fromId ?? 0)
+        .maybeSingle();
+      const initiatedBy = link?.user_id ?? null;
+
+      // Preferred path: admin REPLIES to a forwarded post with /broadcast.
+      // We copy that exact source message to every subscriber.
+      const reply = msg.reply_to_message;
+      if (reply && reply.message_id && (reply.forward_from_chat?.id || reply.forward_from?.id || reply.chat?.id)) {
+        const sourceFromChatId =
+          reply.forward_from_chat?.id ?? reply.chat?.id;
+        const sourceMessageId =
+          reply.forward_from_message_id ?? reply.message_id;
+        await sendMessage(chatId, "📣 Starting broadcast — copying the forwarded post to all subscribers…");
+        const r = await runBroadcast(supabaseAdmin, {
+          initiatedBy,
+          source: { kind: "forwarded_copy", fromChatId: sourceFromChatId, messageId: sourceMessageId },
+          adminChatId: chatId,
+        });
+        await sendMessage(
+          chatId,
+          `📣 Broadcast complete\n✅ Sent: ${r.ok}\n❌ Failed: ${r.fail}\n👥 Total subscribers: ${r.total}${r.runId ? `\nRun id: <code>${r.runId}</code>` : ""}`,
+        );
         return { handled: true };
       }
-      const { data: chans } = await supabaseAdmin
-        .from("telegram_channels")
-        .select("channel_id")
-        .eq("is_active", true);
-      let ok = 0, fail = 0;
-      for (const c of chans ?? []) {
-        try { await sendMessage(c.channel_id, args); ok++; }
-        catch { fail++; }
+
+      // Fallback: plain text broadcast (/broadcast Hello everyone).
+      if (!args) {
+        await sendMessage(
+          chatId,
+          "Usage:\n• <b>Forward a post to me, then reply</b> /broadcast — copies it to every subscriber.\n• <code>/broadcast &lt;text&gt;</code> — sends text to every subscriber.",
+        );
+        return { handled: true };
       }
-      await sendMessage(chatId, `📣 Broadcast complete: ${ok} sent, ${fail} failed.`);
+      await sendMessage(chatId, "📣 Starting text broadcast to all subscribers…");
+      const r = await runBroadcast(supabaseAdmin, {
+        initiatedBy,
+        source: { kind: "text", text: args },
+        adminChatId: chatId,
+      });
+      await sendMessage(
+        chatId,
+        `📣 Broadcast complete\n✅ Sent: ${r.ok}\n❌ Failed: ${r.fail}\n👥 Total subscribers: ${r.total}${r.runId ? `\nRun id: <code>${r.runId}</code>` : ""}`,
+      );
       return { handled: true };
     }
-
-
     default: {
       await sendMessage(chatId, "Unknown command. Type /help for the list.");
       return { handled: true };
