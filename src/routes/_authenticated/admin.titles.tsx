@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2, Search, Star, X, Pencil, RotateCw } from "lucide-react";
+import { Plus, Trash2, Search, Star, X, Pencil, RotateCw, Images } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { tmdbSearch, tmdbDetails, tmdbFindByImdb } from "@/lib/tmdb.functions";
@@ -9,6 +9,7 @@ import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, type CategorySlug } from "@/lib/categories";
 import { createAdminTitle, deleteAdminTitle, listAdminTitles, updateAdminTitleFlag, updateAdminTitleStatus, getAdminTitle, updateAdminTitle } from "@/lib/admin.functions";
+import { adminAddTitleToSlideshow } from "@/lib/homepage.functions";
 import { resyncTitleFiles } from "@/lib/telegram.functions";
 
 
