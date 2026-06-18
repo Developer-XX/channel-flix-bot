@@ -19,6 +19,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TitleSlugRouteImport } from './routes/title.$slug'
 import { Route as DebugAuthRouteImport } from './routes/debug.auth'
 import { Route as BrowseCategoryRouteImport } from './routes/browse.$category'
+import { Route as AuthenticatedSupportRouteImport } from './routes/_authenticated/support'
+import { Route as AuthenticatedPremiumRouteImport } from './routes/_authenticated/premium'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
@@ -27,10 +29,14 @@ import { Route as AuthenticatedAdminTutorialRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
+import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
+import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authenticated/admin.premium'
+import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin.notifications'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
 import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
+import { Route as AuthenticatedAdminAnnouncementsRouteImport } from './routes/_authenticated/admin.announcements'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
@@ -87,6 +93,16 @@ const BrowseCategoryRoute = BrowseCategoryRouteImport.update({
   path: '/browse/$category',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSupportRoute = AuthenticatedSupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPremiumRoute = AuthenticatedPremiumRouteImport.update({
+  id: '/premium',
+  path: '/premium',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -132,6 +148,12 @@ const AuthenticatedAdminSyncTraceRoute =
     path: '/sync-trace',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminSupportRoute =
+  AuthenticatedAdminSupportRouteImport.update({
+    id: '/support',
+    path: '/support',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminSettingsRoute =
   AuthenticatedAdminSettingsRouteImport.update({
     id: '/settings',
@@ -142,6 +164,18 @@ const AuthenticatedAdminRequestsRoute =
   AuthenticatedAdminRequestsRouteImport.update({
     id: '/requests',
     path: '/requests',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminPremiumRoute =
+  AuthenticatedAdminPremiumRouteImport.update({
+    id: '/premium',
+    path: '/premium',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminNotificationsRoute =
+  AuthenticatedAdminNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminDiagnosticsRoute =
@@ -155,6 +189,12 @@ const AuthenticatedAdminBulkRoute = AuthenticatedAdminBulkRouteImport.update({
   path: '/bulk',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminAnnouncementsRoute =
+  AuthenticatedAdminAnnouncementsRouteImport.update({
+    id: '/announcements',
+    path: '/announcements',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const ApiPublicVTokenRoute = ApiPublicVTokenRouteImport.update({
   id: '/api/public/v/$token',
   path: '/api/public/v/$token',
@@ -199,13 +239,19 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/account': typeof AuthenticatedAccountRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/premium': typeof AuthenticatedPremiumRoute
+  '/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
+  '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -227,13 +273,19 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/account': typeof AuthenticatedAccountRoute
+  '/premium': typeof AuthenticatedPremiumRoute
+  '/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
+  '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -258,13 +310,19 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/_authenticated/premium': typeof AuthenticatedPremiumRoute
+  '/_authenticated/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
   '/title/$slug': typeof TitleSlugRoute
+  '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
+  '/_authenticated/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
   '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
@@ -289,13 +347,19 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/account'
     | '/admin'
+    | '/premium'
+    | '/support'
     | '/browse/$category'
     | '/debug/auth'
     | '/title/$slug'
+    | '/admin/announcements'
     | '/admin/bulk'
     | '/admin/diagnostics'
+    | '/admin/notifications'
+    | '/admin/premium'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/support'
     | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/titles'
@@ -317,13 +381,19 @@ export interface FileRouteTypes {
     | '/search'
     | '/sitemap.xml'
     | '/account'
+    | '/premium'
+    | '/support'
     | '/browse/$category'
     | '/debug/auth'
     | '/title/$slug'
+    | '/admin/announcements'
     | '/admin/bulk'
     | '/admin/diagnostics'
+    | '/admin/notifications'
+    | '/admin/premium'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/support'
     | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/titles'
@@ -347,13 +417,19 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/_authenticated/account'
     | '/_authenticated/admin'
+    | '/_authenticated/premium'
+    | '/_authenticated/support'
     | '/browse/$category'
     | '/debug/auth'
     | '/title/$slug'
+    | '/_authenticated/admin/announcements'
     | '/_authenticated/admin/bulk'
     | '/_authenticated/admin/diagnostics'
+    | '/_authenticated/admin/notifications'
+    | '/_authenticated/admin/premium'
     | '/_authenticated/admin/requests'
     | '/_authenticated/admin/settings'
+    | '/_authenticated/admin/support'
     | '/_authenticated/admin/sync-trace'
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/titles'
@@ -459,6 +535,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BrowseCategoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/support': {
+      id: '/_authenticated/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof AuthenticatedSupportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/premium': {
+      id: '/_authenticated/premium'
+      path: '/premium'
+      fullPath: '/premium'
+      preLoaderRoute: typeof AuthenticatedPremiumRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -515,6 +605,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSyncTraceRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/support': {
+      id: '/_authenticated/admin/support'
+      path: '/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AuthenticatedAdminSupportRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/settings': {
       id: '/_authenticated/admin/settings'
       path: '/settings'
@@ -529,6 +626,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRequestsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/premium': {
+      id: '/_authenticated/admin/premium'
+      path: '/premium'
+      fullPath: '/admin/premium'
+      preLoaderRoute: typeof AuthenticatedAdminPremiumRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/notifications': {
+      id: '/_authenticated/admin/notifications'
+      path: '/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AuthenticatedAdminNotificationsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/diagnostics': {
       id: '/_authenticated/admin/diagnostics'
       path: '/diagnostics'
@@ -541,6 +652,13 @@ declare module '@tanstack/react-router' {
       path: '/bulk'
       fullPath: '/admin/bulk'
       preLoaderRoute: typeof AuthenticatedAdminBulkRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/announcements': {
+      id: '/_authenticated/admin/announcements'
+      path: '/announcements'
+      fullPath: '/admin/announcements'
+      preLoaderRoute: typeof AuthenticatedAdminAnnouncementsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/api/public/v/$token': {
@@ -589,10 +707,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminAnnouncementsRoute: typeof AuthenticatedAdminAnnouncementsRoute
   AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
+  AuthenticatedAdminNotificationsRoute: typeof AuthenticatedAdminNotificationsRoute
+  AuthenticatedAdminPremiumRoute: typeof AuthenticatedAdminPremiumRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
+  AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
   AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
@@ -602,10 +724,14 @@ interface AuthenticatedAdminRouteChildren {
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminAnnouncementsRoute: AuthenticatedAdminAnnouncementsRoute,
   AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
+  AuthenticatedAdminNotificationsRoute: AuthenticatedAdminNotificationsRoute,
+  AuthenticatedAdminPremiumRoute: AuthenticatedAdminPremiumRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
+  AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
   AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
@@ -621,11 +747,15 @@ const AuthenticatedAdminRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedPremiumRoute: typeof AuthenticatedPremiumRoute
+  AuthenticatedSupportRoute: typeof AuthenticatedSupportRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedPremiumRoute: AuthenticatedPremiumRoute,
+  AuthenticatedSupportRoute: AuthenticatedSupportRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
