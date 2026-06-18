@@ -39,6 +39,11 @@ export const SETTING_KEYS = [
   { key: "HOMEPAGE_SLIDESHOW_ENABLED",  group: "Homepage",      isSecret: false, placeholder: "true / false (default true)" },
   { key: "HOMEPAGE_SECTION_ORDER",      group: "Homepage",      isSecret: false, placeholder: "trending,latest,movies,series,anime,kdrama" },
   { key: "ADS_ENABLED",                 group: "Ads",           isSecret: false, placeholder: "true / false (premium users never see ads)" },
+  { key: "AD_INTERSTITIAL_ENABLED",     group: "Ads",           isSecret: false, placeholder: "true / false — show full-screen video interstitials" },
+  { key: "AD_INTERSTITIAL_ON_LOGIN",    group: "Ads",           isSecret: false, placeholder: "true / false — show one right after sign-in / register" },
+  { key: "AD_INTERSTITIAL_CANCEL_SECONDS", group: "Ads",        isSecret: false, placeholder: "12 (3–60) seconds before cancel button appears" },
+  { key: "AD_INTERSTITIAL_PERIODIC_MINUTES", group: "Ads",      isSecret: false, placeholder: "120 minutes between periodic interstitials (0 disables)" },
+  { key: "AD_INTERSTITIAL_BEFORE_DOWNLOAD_COOLDOWN_MINUTES", group: "Ads", isSecret: false, placeholder: "120 minutes minimum gap between before-download interstitials" },
 ] as const;
 
 const KEYS: Set<string> = new Set(SETTING_KEYS.map((s) => s.key));

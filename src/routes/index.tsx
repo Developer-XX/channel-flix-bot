@@ -132,10 +132,7 @@ function HomePage() {
               No titles have been published yet. If you're an admin, head to the panel to add your first movie or series — TMDB will fill in the details automatically.
             </p>
             <div className="mt-6 flex justify-center gap-3">
-              <Link to="/admin" className="rounded-md bg-gradient-primary text-primary-foreground px-5 py-2.5 text-sm font-medium hover:opacity-90">
-                Open admin panel
-              </Link>
-              <Link to="/auth" className="rounded-md border border-border px-5 py-2.5 text-sm font-medium hover:bg-surface">
+              <Link to="/auth" className="rounded-md bg-gradient-primary text-primary-foreground px-5 py-2.5 text-sm font-medium hover:opacity-90">
                 Sign in
               </Link>
             </div>
