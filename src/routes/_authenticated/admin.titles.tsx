@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2, Search, Star, X, Pencil, RotateCw } from "lucide-react";
+import { Plus, Trash2, Search, Star, X, Pencil, RotateCw, Images } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { tmdbSearch, tmdbDetails, tmdbFindByImdb } from "@/lib/tmdb.functions";
@@ -9,6 +9,7 @@ import { slugify } from "@/lib/slug";
 import { Button } from "@/components/ui/button";
 import { CATEGORIES, type CategorySlug } from "@/lib/categories";
 import { createAdminTitle, deleteAdminTitle, listAdminTitles, updateAdminTitleFlag, updateAdminTitleStatus, getAdminTitle, updateAdminTitle } from "@/lib/admin.functions";
+import { adminAddTitleToSlideshow } from "@/lib/homepage.functions";
 import { resyncTitleFiles } from "@/lib/telegram.functions";
 
 
@@ -120,6 +121,7 @@ function TitlesAdmin() {
                       onClick={() => toggleFlag.mutate({ id: t.id, field: "is_featured", value: !t.is_featured })}
                       className={`text-xs px-2 py-1 rounded inline-flex items-center gap-1 ${t.is_featured ? "bg-gold text-gold-foreground" : "bg-surface text-muted-foreground"}`}
                     ><Star className="h-3 w-3" />Featured</button>
+                    <AddToSlideshowButton titleId={t.id} titleName={t.title} />
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -784,6 +786,7 @@ function EditTitleDialog({ id, onClose, onSaved }: { id: string; onClose: () => 
           </div>
         )}
         <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
+          <AddToSlideshowButton titleId={id} titleName={form?.title ?? ""} variant="full" />
           <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving || !form} className="bg-gradient-primary text-primary-foreground border-0">
             {saving ? "Saving…" : "Save changes"}
@@ -820,6 +823,53 @@ function ResyncTitleButton({ titleId, titleName }: { titleId: string; titleName:
       title="Resync this title"
     >
       <RotateCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+    </button>
+  );
+}
+
+function AddToSlideshowButton({
+  titleId,
+  titleName,
+  variant = "icon",
+}: {
+  titleId: string;
+  titleName: string;
+  variant?: "icon" | "full";
+}) {
+  const fn = useServerFn(adminAddTitleToSlideshow);
+  const [busy, setBusy] = useState(false);
+  const handle = async () => {
+    setBusy(true);
+    try {
+      const r = await fn({ data: { titleId } });
+      toast.success(
+        r.reactivated
+          ? `Reactivated slide for "${titleName}"`
+          : `Added "${titleName}" to the slideshow`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message || "Failed to add to slideshow");
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (variant === "full") {
+    return (
+      <Button variant="ghost" onClick={handle} disabled={busy || !titleId} className="mr-auto">
+        <Images className="h-4 w-4 mr-1.5" />
+        {busy ? "Adding…" : "Add to slideshow"}
+      </Button>
+    );
+  }
+  return (
+    <button
+      onClick={handle}
+      disabled={busy}
+      title="Add to homepage slideshow"
+      aria-label="Add to homepage slideshow"
+      className="text-xs px-2 py-1 rounded inline-flex items-center gap-1 bg-surface text-muted-foreground hover:text-foreground disabled:opacity-50"
+    >
+      <Images className="h-3 w-3" />Slideshow
     </button>
   );
 }
