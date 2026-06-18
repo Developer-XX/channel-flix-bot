@@ -114,6 +114,17 @@ export async function copyMessage(args: {
   });
 }
 
+// Delete a message previously sent to a chat. Best-effort; returns ok flag.
+export async function deleteMessage(chatId: number | string, messageId: number):
+  Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await callTg("deleteMessage", { chat_id: chatId, message_id: messageId });
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
 // Best-effort: returns null on common "bot can't DM the user" cases so the
 // caller can show a helpful "press Start in the bot first" message.
 export async function tryCopyMessage(args: Parameters<typeof copyMessage>[0]):
