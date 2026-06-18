@@ -197,11 +197,10 @@ export function DownloadButton({
         setLinkOpen(true);
         return;
       }
-      if (r.reason === "cooldown") {
-        const s = (r as any).retryAfterSeconds ?? 5;
-        toast.message(`Please wait ${s}s before requesting the same file again.`);
-        return;
-      }
+      // Note: cooldown is now handled server-side as a transparent re-use of
+      // the prior delivery within DOWNLOAD_RESEND_COOLDOWN_SECONDS — the
+      // server returns ok:true with reused:true and the bot's previous
+      // message is still in the user's chat.
       const rr = r as any;
       const friendly =
         rr.reason === "source_missing"
