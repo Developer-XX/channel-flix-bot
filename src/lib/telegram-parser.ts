@@ -106,16 +106,13 @@ function detectCategory(text: string, season: number | null): CategorySlug | nul
   return null;
 }
 
-export function parseMedia(rawCaption: string | null | undefined, fileName?: string | null): ParsedMedia {
-  const source = [rawCaption ?? "", fileName ?? ""].filter(Boolean).join(" \n ");
-  const text = source.replace(/\s+/g, " ").trim();
+function parseSingleSource(raw: string): ParsedMedia {
+  const text = raw.replace(/\s+/g, " ").trim();
 
-  // Resolution
   const res = firstMatch(text, RES_PATTERNS);
   const quality = firstMatch(text, QUALITY_PATTERNS);
   const codec = firstMatch(text, CODEC_PATTERNS);
 
-  // Languages — collect all distinct, preserve order.
   const langs: string[] = [];
   const langMatches = text.matchAll(LANG_RE);
   for (const m of langMatches) {
@@ -129,7 +126,6 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
   else if (langs.length === 1) language = dual ? `${langs[0]} (Dual)` : langs[0];
   else if (dual) language = dual[1].replace(/[\s._-]+/g, " ");
 
-  // Season / episode
   let season: number | null = null;
   let episode: number | null = null;
   const seMatch = text.match(SE_RE);
@@ -144,11 +140,9 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
     if (eo) episode = parseInt(eo[1], 10);
   }
 
-  // Year
   const yearMatch = text.match(YEAR_RE);
   const year = yearMatch ? parseInt(yearMatch[1], 10) : null;
 
-  // Title = everything before the earliest discriminator
   const cutCandidates = [
     yearMatch?.index,
     seMatch?.index,
@@ -171,6 +165,62 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
     codec: codec?.value ?? null,
     language,
     category,
+  };
+}
+
+/**
+ * Parse media metadata. **Caption is the primary source**; the filename is
+ * only used to fill fields the caption didn't yield (or used entirely when
+ * there is no caption). This matches Telegram channels where the uploader's
+ * caption is curated (correct title, correct SxxEyy) while the filename is
+ * often a leftover from the source release.
+ *
+ * Example:
+ *   caption  = "Doraemon S02E01 1080p Hindi"
+ *   fileName = "Chhota.Bheem.S01E01.720p.mkv"
+ *   → title="Doraemon", season=2, episode=1, resolution="1080p", language="Hindi"
+ */
+export function parseMedia(rawCaption: string | null | undefined, fileName?: string | null): ParsedMedia {
+  const cap = (rawCaption ?? "").trim();
+  const fn = (fileName ?? "").trim();
+  const captionParsed = cap ? parseSingleSource(cap) : null;
+  const fileParsed = fn ? parseSingleSource(fn) : null;
+
+  if (!captionParsed && !fileParsed) {
+    return {
+      title: "Untitled", year: null, season: null, episode: null,
+      resolution: null, quality: null, codec: null, language: null, category: null,
+    };
+  }
+
+  const pick = <K extends keyof ParsedMedia>(k: K): ParsedMedia[K] => {
+    const cVal = captionParsed ? captionParsed[k] : null;
+    const fVal = fileParsed ? fileParsed[k] : null;
+    return (cVal ?? fVal) as ParsedMedia[K];
+  };
+
+  // Title: caption wins when it produced something usable; otherwise filename.
+  const captionTitleUsable =
+    !!captionParsed &&
+    !!captionParsed.title &&
+    captionParsed.title !== "Untitled" &&
+    normalizeTitle(captionParsed.title).length >= 2;
+  const title = captionTitleUsable
+    ? captionParsed!.title
+    : (fileParsed?.title && fileParsed.title !== "Untitled"
+        ? fileParsed.title
+        : (captionParsed?.title ?? "Untitled"));
+
+  return {
+    title,
+    year: pick("year"),
+    season: pick("season"),
+    episode: pick("episode"),
+    resolution: pick("resolution"),
+    quality: pick("quality"),
+    codec: pick("codec"),
+    language: pick("language"),
+    category: pick("category"),
   };
 }
 

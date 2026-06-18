@@ -237,6 +237,7 @@ export async function ingestTelegramUpdate(
   update: TgUpdate,
   source: "webhook" | "backfill",
 ): Promise<IngestOutcome> {
+  const isEdit = !!(update.edited_channel_post || update.edited_message);
   const message = update.channel_post ?? update.edited_channel_post ?? update.message ?? update.edited_message;
   if (!message?.chat?.id || typeof update.update_id !== "number") {
     return { ok: true, status: "ignored", reason: "no_message" };
@@ -282,10 +283,20 @@ export async function ingestTelegramUpdate(
     return { ok: true, status: "ignored", reason: "channel_inactive" };
   }
 
+  // Snapshot the prior ingest row (if any) so we can detect title changes on
+  // a caption edit and demote the previously-promoted media_files row.
+  const { data: priorIngest } = await supabase
+    .from("telegram_ingest")
+    .select("id, matched_title_id, promoted_media_file_id, caption")
+    .eq("telegram_channel_id", tgChannelId)
+    .eq("telegram_message_id", tgMessageId)
+    .maybeSingle();
+
   const parsed = parseMedia(caption, file.file_name);
   const settings = await loadMatchingSettings(supabase);
   const match = await runMatcher(supabase, parsed, settings);
   const status = match.matchedTitleId ? "matched" : "unmatched";
+
 
   const { data: ingestRow, error: ingestErr } = await supabase
     .from("telegram_ingest")
@@ -346,6 +357,46 @@ export async function ingestTelegramUpdate(
     season: parsed.season, episode: parsed.episode,
     quality: parsed.quality, resolution: parsed.resolution, language: parsed.language,
   };
+
+  // Caption-edit demotion: if this is an edit and the previously promoted
+  // media_files row is now stale (title changed OR new match is below
+  // threshold), deactivate it so it disappears from the old title's page.
+  // The auto-promote below will (re)attach the file to the new title.
+  const priorTitleId = priorIngest?.matched_title_id ?? null;
+  const priorMediaFileId = priorIngest?.promoted_media_file_id ?? null;
+  const titleChanged =
+    !!priorTitleId && priorTitleId !== (match.matchedTitleId ?? null);
+  const becameUnmatched = !!priorTitleId && !match.matchedTitleId;
+  if ((isEdit || priorIngest) && priorMediaFileId && (titleChanged || becameUnmatched)) {
+    try {
+      await supabase
+        .from("media_files")
+        .update({ is_active: false })
+        .eq("id", priorMediaFileId);
+      await writeMatchAudit(supabase, {
+        ingestId: ingestRow.id,
+        titleId: priorTitleId,
+        settings,
+        decision: "demoted",
+        reason: becameUnmatched
+          ? `caption_edit: now unmatched (was title ${priorTitleId})`
+          : `caption_edit: title changed (was ${priorTitleId}, now ${match.matchedTitleId})`,
+        actor: "auto:caption-edit",
+        oldScore: null,
+        newScore: match.matchScore,
+        threshold: settings.threshold,
+        parsedSnapshot,
+        extra: { mediaFileId: priorMediaFileId, priorCaption: priorIngest?.caption ?? null },
+      });
+      try {
+        const { bumpCacheVersion } = await import("@/lib/indexes.server");
+        await bumpCacheVersion(supabase);
+      } catch {}
+    } catch (e) {
+      console.warn("[telegram-ingest] caption-edit demotion failed:", (e as Error).message);
+    }
+  }
+
 
   if (match.matchedTitleId && file.file_id) {
     try {

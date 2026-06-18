@@ -40,6 +40,8 @@ import {
   deleteAllIngest,
   restoreIngestRows,
   resyncChannels,
+  reparseIngest,
+  reparseChannelFromCaptions,
 } from "@/lib/telegram.functions";
 import { Switch } from "@/components/ui/switch";
 
@@ -75,6 +77,8 @@ function TelegramAdmin() {
   const delAll = useServerFn(deleteAllIngest);
   const restore = useServerFn(restoreIngestRows);
   const listChannels = useServerFn(listTelegramChannels);
+  const reparseOne = useServerFn(reparseIngest);
+  const reparseAllCaptions = useServerFn(reparseChannelFromCaptions);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
@@ -218,6 +222,22 @@ function TelegramAdmin() {
             Run backfill now
           </Button>
           <Button variant="outline" onClick={() => state.refetch()}>Refresh state</Button>
+          <Button
+            variant="outline"
+            title="Re-parse the most recent ingest rows from their stored captions (caption-priority) and re-run the matcher. Use this after a parser change or to sweep up caption edits that arrived without a webhook event."
+            onClick={async () => {
+              try {
+                const r = await reparseAllCaptions({ data: { limit: 500 } });
+                toast.success(
+                  `Re-parsed ${r.scanned} · changed ${r.changed} · promoted ${r.promoted} · demoted ${r.demoted} · unmatched ${r.unmatched}`,
+                );
+                ingest.refetch();
+                router.invalidate();
+              } catch (e: any) { toast.error(e?.message ?? "Re-parse failed"); }
+            }}
+          >
+            Re-parse all from captions
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground">
           A scheduled job also runs this endpoint periodically to catch posts missed by the webhook.
@@ -479,6 +499,19 @@ function TelegramAdmin() {
                 ingest.refetch();
                 router.invalidate();
               }}
+              onReparse={async () => {
+                try {
+                  const r = await reparseOne({ data: { ingestId: row.id, autoPromote: true } });
+                  const bits = [
+                    `title="${r.parsed.title}"`,
+                    r.parsed.season != null ? `S${String(r.parsed.season).padStart(2,"0")}${r.parsed.episode != null ? `E${String(r.parsed.episode).padStart(2,"0")}` : ""}` : null,
+                  ].filter(Boolean).join(" · ");
+                  if (r.match.matchedTitleId) toast.success(`Re-parsed · ${bits}${r.promoted ? " · promoted" : ""}${r.demoted ? " · demoted old" : ""}`);
+                  else toast.message(`Re-parsed · ${bits} · no match`);
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) { toast.error(e?.message ?? "Re-parse failed"); }
+              }}
               onDiagnose={() => diagnose({ data: { ingestId: row.id } })}
               onForcePublish={async (assignTitleId) => {
                 try {
@@ -521,7 +554,7 @@ function TelegramAdmin() {
 
 function IngestCard({
   row, expanded, selected, onSelectToggle, onToggle, onUpdate, onPromote,
-  onSaveAliasAndPromote, onIgnore, onRematch, onDiagnose, onForcePublish, search,
+  onSaveAliasAndPromote, onIgnore, onRematch, onReparse, onDiagnose, onForcePublish, search,
 }: {
   row: IngestRow;
   expanded: boolean;
@@ -533,6 +566,7 @@ function IngestCard({
   onSaveAliasAndPromote: (titleId: string, alias: string) => Promise<void>;
   onIgnore: () => Promise<void>;
   onRematch: () => Promise<void>;
+  onReparse: () => Promise<void>;
   onDiagnose: () => Promise<any>;
   onForcePublish: (assignTitleId?: string) => Promise<void>;
   search: (args: { data: { q: string } }) => Promise<Array<{ id: string; title: string; release_year: number | null; category: string }>>;
@@ -777,6 +811,14 @@ function IngestCard({
                 }}
               >
                 Rematch now
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                title="Re-parse this row from its stored caption (caption-priority), then re-run the matcher. Demotes the old promotion if the title changes or no longer matches."
+                onClick={onReparse}
+              >
+                Re-parse caption
               </Button>
               <Button
                 size="sm"
