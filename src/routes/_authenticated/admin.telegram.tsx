@@ -77,6 +77,8 @@ function TelegramAdmin() {
   const delAll = useServerFn(deleteAllIngest);
   const restore = useServerFn(restoreIngestRows);
   const listChannels = useServerFn(listTelegramChannels);
+  const reparseOne = useServerFn(reparseIngest);
+  const reparseAllCaptions = useServerFn(reparseChannelFromCaptions);
 
   const [statusFilter, setStatusFilter] =
     useState<"all" | "pending" | "matched" | "unmatched" | "ignored">("unmatched");
