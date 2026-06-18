@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
+  ShieldAlert,
 } from "lucide-react";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { Button } from "@/components/ui/button";
