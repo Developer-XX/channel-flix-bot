@@ -47,6 +47,7 @@ import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated/admin.audit'
 import { Route as AuthenticatedAdminAnnouncementsRouteImport } from './routes/_authenticated/admin.announcements'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
+import { Route as AuthenticatedAdminAlertsRouteImport } from './routes/_authenticated/admin.alerts'
 import { Route as AuthenticatedAdminAdsRouteImport } from './routes/_authenticated/admin.ads'
 import { Route as AuthenticatedAccountDownloadsRouteImport } from './routes/_authenticated/account.downloads'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
@@ -266,6 +267,12 @@ const AuthenticatedAdminAnalyticsRoute =
     path: '/analytics',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminAlertsRoute =
+  AuthenticatedAdminAlertsRouteImport.update({
+    id: '/alerts',
+    path: '/alerts',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminAdsRoute = AuthenticatedAdminAdsRouteImport.update({
   id: '/ads',
   path: '/ads',
@@ -359,6 +366,7 @@ export interface FileRoutesByFullPath {
   '/title/$slug': typeof TitleSlugRoute
   '/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/admin/alerts': typeof AuthenticatedAdminAlertsRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
@@ -410,6 +418,7 @@ export interface FileRoutesByTo {
   '/title/$slug': typeof TitleSlugRoute
   '/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/admin/alerts': typeof AuthenticatedAdminAlertsRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
@@ -464,6 +473,7 @@ export interface FileRoutesById {
   '/title/$slug': typeof TitleSlugRoute
   '/_authenticated/account/downloads': typeof AuthenticatedAccountDownloadsRoute
   '/_authenticated/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/_authenticated/admin/alerts': typeof AuthenticatedAdminAlertsRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
@@ -518,6 +528,7 @@ export interface FileRouteTypes {
     | '/title/$slug'
     | '/account/downloads'
     | '/admin/ads'
+    | '/admin/alerts'
     | '/admin/analytics'
     | '/admin/announcements'
     | '/admin/audit'
@@ -569,6 +580,7 @@ export interface FileRouteTypes {
     | '/title/$slug'
     | '/account/downloads'
     | '/admin/ads'
+    | '/admin/alerts'
     | '/admin/analytics'
     | '/admin/announcements'
     | '/admin/audit'
@@ -622,6 +634,7 @@ export interface FileRouteTypes {
     | '/title/$slug'
     | '/_authenticated/account/downloads'
     | '/_authenticated/admin/ads'
+    | '/_authenticated/admin/alerts'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/announcements'
     | '/_authenticated/admin/audit'
@@ -953,6 +966,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAnalyticsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/alerts': {
+      id: '/_authenticated/admin/alerts'
+      path: '/alerts'
+      fullPath: '/admin/alerts'
+      preLoaderRoute: typeof AuthenticatedAdminAlertsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/ads': {
       id: '/_authenticated/admin/ads'
       path: '/ads'
@@ -1060,6 +1080,7 @@ const AuthenticatedAccountRouteWithChildren =
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAdsRoute: typeof AuthenticatedAdminAdsRoute
+  AuthenticatedAdminAlertsRoute: typeof AuthenticatedAdminAlertsRoute
   AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
   AuthenticatedAdminAnnouncementsRoute: typeof AuthenticatedAdminAnnouncementsRoute
   AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
@@ -1084,6 +1105,7 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAdsRoute: AuthenticatedAdminAdsRoute,
+  AuthenticatedAdminAlertsRoute: AuthenticatedAdminAlertsRoute,
   AuthenticatedAdminAnalyticsRoute: AuthenticatedAdminAnalyticsRoute,
   AuthenticatedAdminAnnouncementsRoute: AuthenticatedAdminAnnouncementsRoute,
   AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
