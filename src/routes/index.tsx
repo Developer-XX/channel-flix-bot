@@ -11,6 +11,7 @@ import type { TitleCardData } from "@/components/title-card";
 import { CATEGORIES } from "@/lib/categories";
 import { getHomepageLayout, DEFAULT_SECTION_ORDER } from "@/lib/homepage.functions";
 import { AdSlot } from "@/components/AdSlot";
+import { useIsAuthed } from "@/hooks/use-session-flag";
 
 
 
@@ -102,8 +103,12 @@ function HomePage() {
   const anime = byCategory("anime");
   const kdrama = byCategory("kdrama");
 
+  const isAuthed = useIsAuthed();
   const totalCount = (trending.data?.length ?? 0) + (latest.data?.length ?? 0);
-  const empty = !trending.isLoading && !latest.isLoading && totalCount === 0;
+  // Only show the "vault is empty" message to signed-in users (admins).
+  // Anonymous visitors always see the rows (loading skeletons or whatever data exists).
+  const empty = isAuthed && !trending.isLoading && !latest.isLoading && totalCount === 0;
+
 
   const sections: Record<string, { title: string; q: typeof trending; hint?: string; href?: string }> = {
     trending: { title: "Trending now", q: trending, hint: "No trending titles yet.", href: "/section/trending" },
