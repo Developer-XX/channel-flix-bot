@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
 import { startVerification } from "@/lib/verification.functions";
+import { AdSlot } from "@/components/AdSlot";
 
 interface Props {
   mediaFileId: string;
@@ -204,7 +205,8 @@ export function DownloadButton({
 
   return (
     <>
-      <div className="flex flex-col gap-1 shrink-0">
+      <div className="flex flex-col gap-2 shrink-0">
+        <AdSlot placement="before_download" className="max-w-[280px]" />
         <Button
           size={size}
           variant={variant}
