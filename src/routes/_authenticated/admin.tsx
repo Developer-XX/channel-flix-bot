@@ -169,9 +169,25 @@ function AdminLayout() {
             <MobileNavItem to="/admin/settings" label="Settings" />
           </nav>
         </div>
+        <AlertsBanner />
         <Outlet />
       </main>
     </div>
+  );
+}
+
+function AlertsBanner() {
+  const fn = useServerFn(listAdminAlerts);
+  const q = useReactQuery({ queryKey: ["admin-alerts-banner"], queryFn: () => fn(), refetchInterval: 30_000, retry: 1 });
+  if (!q.data || (!q.data.hasErrors && !q.data.cron.some((c: any) => c.isLagging))) return null;
+  const errorCount = q.data.open.filter((a: any) => a.severity === "error").length;
+  const lagging = q.data.cron.filter((c: any) => c.isLagging).map((c: any) => c.job_name);
+  return (
+    <Link to="/admin/alerts" className="block bg-destructive/10 border-b border-destructive/30 text-destructive text-sm px-4 py-2 hover:bg-destructive/15">
+      <span className="font-medium">⚠ {errorCount > 0 ? `${errorCount} active alert${errorCount === 1 ? "" : "s"}` : "Cron lag detected"}</span>
+      {lagging.length > 0 && <span className="ml-2 text-xs opacity-80">Lagging: {lagging.join(", ")}</span>}
+      <span className="ml-2 text-xs underline">View →</span>
+    </Link>
   );
 }
 
