@@ -33,13 +33,14 @@ describe("pickProviderForBucket", () => {
 
   it("offsets buckets per user so different users can land on different providers", () => {
     const providers = ["adrinolinks", "nanolinks"];
-    const a = pickProviderForBucket({ enabled: providers, userId: "AAA", slotMs: SLOT, now: T0, lastProvider: null });
-    let differed = false;
-    for (const u of ["BBB", "CCC", "DDD", "EEE", "FFF"]) {
+    const seen = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      const u = `user-${i.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
       const p = pickProviderForBucket({ enabled: providers, userId: u, slotMs: SLOT, now: T0, lastProvider: null });
-      if (p !== a) { differed = true; break; }
+      if (p) seen.add(p);
+      if (seen.size === providers.length) break;
     }
-    expect(differed).toBe(true);
+    expect(seen.size).toBe(providers.length);
   });
 
   it("skips the immediately-previous provider on a re-mint", () => {
