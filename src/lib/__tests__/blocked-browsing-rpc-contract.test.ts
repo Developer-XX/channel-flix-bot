@@ -26,8 +26,7 @@ describe.skipIf(!ANON)("blocked-browsing RPC contract", () => {
 
   it("log_blocked_browsing(null reason) returns a structured error", async () => {
     const r = await anon.rpc("log_blocked_browsing", {
-      // @ts-expect-error — intentionally invalid
-      _reason: null,
+      _reason: null as unknown as string,
     });
     expect(r.error).not.toBeNull();
     // PostgREST error envelope: { message, code, details, hint }
