@@ -49,6 +49,14 @@ export type AdminAnalytics = {
     last30d: number;
     byReason: Array<{ reason: string; count: number }>;
     recent: Array<{ id: string; created_at: string; reason: string; slug: string | null; path: string | null; toggle_on: boolean }>;
+    /** RPC rate-limit utilization for log_blocked_browsing (cap = 600 / min). */
+    rateLimit: {
+      windowSec: 60;
+      cap: 600;
+      usedLastMinute: number;
+      utilizationPct: number;
+      droppedEstimate: number;
+    };
   };
 };
 
