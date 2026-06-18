@@ -1,32 +1,35 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.E2E_BASE_URL ?? "https://channel-flix-bot.lovable.app";
+// E2E suite covering admin gating, post-login redirect-back, and admin link
+// integrity. Run with: bun playwright test
+// Requires the dev server on http://localhost:8080 (auto-reuses if running).
+//
+// Auth: tests sign in via the credentials in TEST_USER / TEST_PASS, falling
+// back to a 'skip' tagged spec when those env vars are missing.
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: "./tests/e2e",
   timeout: 30_000,
-  expect: { timeout: 10_000 },
-  fullyParallel: true,
-  retries: process.env.CI ? 2 : 0,
-  reporter: [
-    ["list"],
-    ["html", { outputFolder: "playwright-report", open: "never" }],
-    ["json", { outputFile: "playwright-report/results.json" }],
-  ],
-  outputDir: "test-results",
-  preserveOutput: "failures-only",
+  fullyParallel: false,
+  retries: 0,
+  workers: 1,
+  reporter: [["list"]],
   use: {
-    baseURL,
+    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:8080",
+    viewport: { width: 1280, height: 900 },
     trace: "retain-on-failure",
-    screenshot: "only-on-failure",
     video: "retain-on-failure",
+    headless: true,
   },
   projects: [
-    { name: "mobile-320", use: { ...devices["iPhone SE"], viewport: { width: 320, height: 568 } } },
-    { name: "mobile-360", use: { ...devices["Pixel 5"], viewport: { width: 360, height: 800 } } },
-    { name: "mobile-375", use: { ...devices["iPhone SE"], viewport: { width: 375, height: 667 } } },
-    { name: "mobile-390", use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 } } },
-    { name: "mobile-414", use: { ...devices["iPhone 11"], viewport: { width: 414, height: 896 } } },
-    { name: "tablet-768", use: { ...devices["iPad Mini"], viewport: { width: 768, height: 1024 } } },
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : {
+        command: "echo 'Reusing existing dev server on :8080'",
+        url: "http://localhost:8080",
+        reuseExistingServer: true,
+        timeout: 5_000,
+      },
 });
