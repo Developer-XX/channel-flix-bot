@@ -93,9 +93,8 @@ const adUpsertSchema = z
   .object({
     id: z.string().uuid().optional().nullable(),
     name: z.string().min(1, "Name is required").max(120),
-    placement: z.enum(AD_PLACEMENTS, {
-      errorMap: () => ({ message: `Placement must be one of: ${AD_PLACEMENTS.join(", ")}` }),
-    }),
+    placement: z.enum(AD_PLACEMENTS),
+
     kind: z.enum(["image", "video", "html"]).default("image"),
     image_url: z.string().url("Image URL must be a valid URL").max(1000).optional().nullable(),
     video_url: z.string().url("Video URL must be a valid URL").max(1000).optional().nullable(),
