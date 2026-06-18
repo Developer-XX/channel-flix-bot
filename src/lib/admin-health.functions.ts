@@ -81,7 +81,11 @@ export const getAdminHealth = createServerFn({ method: "GET" })
 
 const ListSchema = z.object({
   limit: z.number().int().min(1).max(200).optional().default(50),
+  offset: z.number().int().min(0).optional().default(0),
   fnExport: z.string().optional(),
+  userId: z.string().uuid().optional(),
+  status: z.number().int().optional(),
+  sinceMs: z.number().int().min(0).optional(),
 });
 
 export const listAdminErrors = createServerFn({ method: "POST" })
@@ -90,13 +94,64 @@ export const listAdminErrors = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let query = supabaseAdmin
+
+    let q = supabaseAdmin
       .from("admin_error_log")
-      .select("id, request_id, fn_export, fn_file, user_id, status, error_message, duration_ms, created_at")
+      .select(
+        "id, request_id, fn_export, fn_file, user_id, status, error_message, duration_ms, created_at",
+        { count: "exact" },
+      );
+    if (data.fnExport) q = q.eq("fn_export", data.fnExport);
+    if (data.userId) q = q.eq("user_id", data.userId);
+    if (typeof data.status === "number") q = q.eq("status", data.status);
+    if (data.sinceMs && data.sinceMs > 0) {
+      const since = new Date(Date.now() - data.sinceMs).toISOString();
+      q = q.gte("created_at", since);
+    }
+
+    const { data: rows, error, count } = await q
       .order("created_at", { ascending: false })
-      .limit(data.limit);
-    if (data.fnExport) query = query.eq("fn_export", data.fnExport);
-    const { data: rows, error } = await query;
+      .range(data.offset, data.offset + data.limit - 1);
     if (error) throw error;
-    return { rows: rows ?? [] };
+    return { rows: rows ?? [], total: count ?? 0, offset: data.offset, limit: data.limit };
+  });
+
+/**
+ * Snapshot of the caller's auth state — used by the Admin Diagnostics UI
+ * so an admin can confirm the bearer is reaching the server and the
+ * has_role lookup succeeds.
+ */
+export const getAuthDiagnostics = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [{ data: roles }, { data: profile }] = await Promise.all([
+      supabaseAdmin.from("user_roles").select("role").eq("user_id", context.userId),
+      supabaseAdmin
+        .from("profiles")
+        .select("display_name")
+        .eq("id", context.userId)
+        .maybeSingle(),
+    ]);
+
+    const { data: recentAuthErrors } = await supabaseAdmin
+      .from("admin_error_log")
+      .select("id, fn_export, status, error_message, created_at")
+      .eq("user_id", context.userId)
+      .in("status", [401, 403])
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    const claims = (context.claims ?? null) as { email?: string; exp?: number } | null;
+    return {
+      userId: context.userId,
+      email: claims?.email ?? null,
+      displayName: profile?.display_name ?? null,
+      roles: (roles ?? []).map((r) => r.role),
+      tokenExpiresAt:
+        typeof claims?.exp === "number" ? new Date(claims.exp * 1000).toISOString() : null,
+      bearerReceived: true,
+      recentAuthErrors: recentAuthErrors ?? [],
+      serverTime: new Date().toISOString(),
+    };
   });
