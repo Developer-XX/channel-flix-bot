@@ -206,6 +206,9 @@ function NotificationsBanner() {
       </ul>
     </section>
   );
+}
+
+
 
 // ---------------------------------------------------------------------------
 // Web Vitals (RUM) panel
