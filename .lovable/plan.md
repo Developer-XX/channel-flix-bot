@@ -1,102 +1,79 @@
-# Phased Hardening Plan
+## Phase 1 scope (Telegram only)
 
-Tackling all 15 requested items in 3 phases. Each phase is one turn; I'll pause for your "go" between phases so you can review.
-
----
-
-## Phase 1 — Reliability & user-facing error UX (ship first)
-
-Goal: no more blank screens, no more stale-client hangs, clear status when something breaks.
-
-1. **`/api/public/health` server route**
-   - Returns `{ status, buildId, serverFnIds: string[], timestamp, commit? }`.
-   - `buildId` derived from a generated `src/build-id.ts` (timestamp at build) so client can compare.
-2. **Client `BuildSyncProvider`**
-   - On mount + every 60s, fetch `/api/public/health`.
-   - If `buildId` differs from the one baked into the client bundle → show a non-blocking toast "New version available — reload", auto hard-reload after 5s.
-   - Exposes `useServerStatus()` (green/red dot) for a small header indicator.
-3. **Stale-serverFn auto-recovery**
-   - Global `fetch` interceptor wrapping `/_serverFn/*` responses.
-   - On `500` with body containing `Invalid server function ID` (or 404 on `/_serverFn/`), trigger one automatic hard reload (with a `?_sfreload=1` guard so we don't loop).
-4. **In-app error banner + friendly 500 screen**
-   - `<ServerFnErrorBoundary>` mounted in `__root.tsx`.
-   - Decodes the base64 fn ID from the URL, shows: function name, timestamp, Retry button, link to `/admin/diagnostics`.
-   - Replaces the current blank screen for serverFn 500s.
-5. **Client error logger**
-   - `src/lib/client-error-log.ts` captures serverFn failures (fn name, request ID, timestamp, status) and POSTs to `/api/public/client-errors` (rate-limited, no PII).
+Three deliverables. Ads validation, analytics events, cron widget, and the download timer UI are deferred to Phase 2.
 
 ---
 
-## Phase 2 — Auth & navigation hardening
+### 1. Channel auto-sync — new posts (works today, Bot API)
 
-Goal: clicking Admin/Premium/Support never bounces to home; if unauthenticated, post-login returns to the exact URL.
+Goal: admin adds a channel ID in the panel, promotes the bot to channel admin, and from that moment every new post is ingested automatically. No "send file to bot" step.
 
-1. **Redirect-back after login**
-   - `_authenticated/route.tsx` already redirects to `/auth`; add `search: { redirect: location.href }`.
-   - `/auth` route reads `redirect` search param, navigates there after successful sign-in (validated to be same-origin path).
-2. **Guard decision logging**
-   - Server: `requireSupabaseAuth` middleware logs `{ requestId, path, hasToken, userId?, decision }` via the centralized logger (phase 3).
-   - Client: `_authenticated` layout logs guard transitions to console in dev only (gated by `import.meta.env.DEV`).
-3. **Header & admin-panel link audit**
-   - Grep every `<Link to=...>` and `navigate({ to })` targeting `/admin*`, `/premium*`, `/support*`.
-   - Replace any string-built hrefs with typed `<Link to="/_authenticated/...">`. Fix any that still point at removed/renamed routes.
-4. **Playwright E2E suite** (`tests/e2e/`)
-   - `auth-redirect.spec.ts` — unauthenticated click on `/admin` → `/auth?redirect=/admin` → login → lands on `/admin` (not `/`).
-   - `admin-routes.spec.ts` — authenticated admin user visits every admin sub-route via header + sidebar; asserts URL stays put and page renders heading.
-   - `premium-support.spec.ts` — same for `/premium` and `/support`.
-   - Uses the existing `LOVABLE_BROWSER_SUPABASE_*` env vars; one admin user seeded via migration helper.
-   - Wired into `package.json` as `test:e2e`.
+Changes:
+- In `src/routes/api/public/telegram/webhook.ts`, accept `channel_post` and `edited_channel_post` updates (not just DMs to the bot).
+- Verify the `chat.id` is in `telegram_channels` and active. If not, ignore.
+- Reuse the existing `telegram_ingest` pipeline (parser + matcher) — same idempotency key (`channel_id:message_id`).
+- Update the `setWebhook` registration call so `allowed_updates` includes `channel_post` and `edited_channel_post`.
+- Admin panel: when a channel is added, show a checklist ("Bot added as admin? ✓ Channel ID verified? ✓") and a "Test ingest" button that asks the bot to confirm it can read the channel via `getChat`.
+
+This covers all **future** posts to the channel automatically.
 
 ---
 
-## Phase 3 — Observability, admin tooling, dev-time checks
+### 2. Channel backfill — existing history (MTProto, out-of-Worker)
 
-Goal: when something does break, I see exactly what and why — fast.
+Bot API hard limitation: a bot cannot read messages posted before it joined, and cannot page channel history. Only a user account via MTProto can.
 
-1. **Centralized server logger** (`src/lib/server-logger.server.ts`)
-   - `logServerFnRequest({ requestId, fnExport, fileRef, userId?, status, durationMs, error? })`.
-   - Writes structured JSON to console (picked up by worker logs) and, for 5xx, inserts into a new `admin_error_log` table (admin-only RLS).
-2. **`/_serverFn` request middleware**
-   - Global `functionMiddleware` that wraps every server fn, generates `requestId` (ulid), times it, catches throws, logs via above, re-throws.
-   - Captures the full stack (not just message) for 500s.
-3. **Admin Health Check page** (`/admin/health`)
-   - Lists every registered server fn export with last-known status (last 24h) from `admin_error_log`.
-   - Live probes a small set of critical fns (`getAdminGate`, `getPremiumPlan`, `getTutorialConfig`) and shows ✓/✗.
-   - Shows current `buildId`, deployed worker version, DB connectivity, secret presence (names only).
-4. **Admin error log viewer** (`/admin/error-log`)
-   - Paginated table of recent serverFn failures with requestId, fnExport, userId, stack.
-5. **Manifest-sync dev check**
-   - Vite plugin (`vite/plugin-serverfn-manifest.ts`) emits `src/.serverfn-manifest.json` on every build with all serverFn IDs.
-   - Dev-only: client compares its baked-in manifest against `/api/public/health.serverFnIds` on boot; mismatch → warning in console + dev toast.
-6. **Playwright tests for admin-gating**
-   - `admin-gate.spec.ts` — non-admin authenticated user → `/admin` redirects to `/unauthorized` (not home); admin user gets through.
-   - `serverfn-mismatch.spec.ts` — simulates stale ID, asserts auto-reload kicks in.
+Since MTProto cannot run in workerd, the realistic options are:
+
+**Option A — External backfill worker (recommended).** Ship a small Node script (`scripts/telegram-backfill/`) that the admin runs once per channel from their own machine or a one-off container. It:
+  1. Uses `gramjs` with the admin's `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` / phone login (interactive first run, stores `STRING_SESSION` for reuse).
+  2. Iterates `channel.getHistory` in batches.
+  3. POSTs each historical message to a new `/api/public/telegram/backfill-ingest` route (HMAC-signed with a `BACKFILL_SECRET`) which runs it through the same ingest pipeline.
+  4. Reports progress + a resumable cursor stored in `telegram_channels.backfill_cursor`.
+
+Admin UI adds: per-channel "Backfill" panel showing cursor, last-run timestamp, count ingested, and copy-pastable command (`bun run backfill --channel <id>`).
+
+**Option B — Manual forward (fallback).** Admin forwards old messages to the bot in batches; existing DM-ingest path handles them. Documented as fallback for small channels.
+
+I'll build A as the primary path and keep B working.
+
+Secrets needed (I'll prompt via `add_secret` when we get there): `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `BACKFILL_SECRET`. Phone/session stays on the admin's machine — never uploaded.
 
 ---
 
-## Technical notes (for reference)
+### 3. Reliable delivery with cooldown-window idempotency + retries
 
-- **buildId source**: `vite.config.ts` defines `__BUILD_ID__` via `define`; both client and `/health` read the same constant.
-- **requestId**: ulid (sortable, no extra dep — 30-line impl in `server-logger.server.ts`).
-- **`admin_error_log` table**:
-  ```sql
-  CREATE TABLE public.admin_error_log (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    request_id text NOT NULL,
-    fn_export text,
-    fn_file text,
-    user_id uuid,
-    status int,
-    error_message text,
-    error_stack text,
-    duration_ms int,
-    created_at timestamptz NOT NULL DEFAULT now()
-  );
-  -- GRANT + RLS: admin role only via has_role
-  ```
-- **No new external deps** except `@playwright/test` (dev).
-- **Phase 1 ships even if Phases 2–3 stall** — each phase is self-contained.
+Current `src/lib/delivery.server.ts` uses a unique key per click. Change to: idempotency key = `sha256(user_id|file_id|floor(now / DOWNLOAD_RESEND_COOLDOWN_SECONDS))`.
+
+Behavior:
+- **Within cooldown window**: same key → return the prior `delivery_attempts` row's `message_id` (no re-send). Bot's previous message still exists in the user's chat.
+- **After cooldown elapses**: new key → fresh send. New `scheduled_message_deletes` row.
+- **Telegram API failures**: retry with exponential backoff (250ms, 1s, 3s) on 5xx and `429` (respecting `retry_after`). 4xx other than 429 → fail fast, log structured error, surface actionable message to user.
+- **Partial failure recovery**: if `sendDocument` succeeded but DB write failed, the next click within the cooldown window detects the orphan via a `delivery_attempts` lookup keyed on idempotency key + status = `in_flight` and reconciles.
+
+New columns on `delivery_attempts`: `idempotency_key text unique`, `attempt_count int default 0`, `last_error text`, `status text` (`in_flight` | `delivered` | `failed`).
 
 ---
 
-Reply **"go phase 1"** (or "go all") and I'll start. You can also tell me to drop/add items per phase before I begin.
+### Files I'll touch / create
+
+Created:
+- `src/routes/api/public/telegram/backfill-ingest.ts` (HMAC-verified ingest endpoint)
+- `scripts/telegram-backfill/` (Node MTProto script + README)
+- `supabase/migrations/<ts>_delivery_idempotency_and_backfill_cursor.sql`
+
+Edited:
+- `src/routes/api/public/telegram/webhook.ts` (accept channel_post)
+- `src/lib/telegram-ingest.server.ts` (channel_post normalization)
+- `src/lib/delivery.server.ts` (cooldown-window keying + retry loop + reconciliation)
+- `src/lib/telegram-api.server.ts` (retry helper, parse `retry_after`)
+- `src/routes/_authenticated/admin.telegram.tsx` (per-channel backfill panel, test-ingest button)
+- `src/lib/telegram.functions.ts` (test-ingest server fn, backfill status query)
+
+### Deferred to Phase 2 (next turn after this lands)
+- Ad placement validation + admin error messaging
+- Download resend / auto-delete analytics events + dashboard panel
+- Cron widget for `process-message-deletes`
+- DownloadButton cooldown countdown UI
+
+Approve and I'll start with the migration, then the webhook + delivery changes, then the backfill script + admin UI.
