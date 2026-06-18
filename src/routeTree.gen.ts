@@ -56,6 +56,7 @@ import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$toke
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksProcessMessageDeletesRouteImport } from './routes/api/public/hooks/process-message-deletes'
+import { Route as ApiPublicHooksProcessDownloadQueueRouteImport } from './routes/api/public/hooks/process-download-queue'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
 const TrustRoute = TrustRouteImport.update({
@@ -314,6 +315,12 @@ const ApiPublicHooksProcessMessageDeletesRoute =
     path: '/api/public/hooks/process-message-deletes',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProcessDownloadQueueRoute =
+  ApiPublicHooksProcessDownloadQueueRouteImport.update({
+    id: '/api/public/hooks/process-download-queue',
+    path: '/api/public/hooks/process-download-queue',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMaybeRebuildIndexesRoute =
   ApiPublicHooksMaybeRebuildIndexesRouteImport.update({
     id: '/api/public/hooks/maybe-rebuild-indexes',
@@ -360,6 +367,7 @@ export interface FileRoutesByFullPath {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -408,6 +416,7 @@ export interface FileRoutesByTo {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -459,6 +468,7 @@ export interface FileRoutesById {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -510,6 +520,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
@@ -558,6 +569,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
@@ -608,6 +620,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
@@ -635,6 +648,7 @@ export interface RootRouteChildren {
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  ApiPublicHooksProcessDownloadQueueRoute: typeof ApiPublicHooksProcessDownloadQueueRoute
   ApiPublicHooksProcessMessageDeletesRoute: typeof ApiPublicHooksProcessMessageDeletesRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -977,6 +991,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksProcessMessageDeletesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/process-download-queue': {
+      id: '/api/public/hooks/process-download-queue'
+      path: '/api/public/hooks/process-download-queue'
+      fullPath: '/api/public/hooks/process-download-queue'
+      preLoaderRoute: typeof ApiPublicHooksProcessDownloadQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/maybe-rebuild-indexes': {
       id: '/api/public/hooks/maybe-rebuild-indexes'
       path: '/api/public/hooks/maybe-rebuild-indexes'
@@ -1071,6 +1092,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,
+  ApiPublicHooksProcessDownloadQueueRoute:
+    ApiPublicHooksProcessDownloadQueueRoute,
   ApiPublicHooksProcessMessageDeletesRoute:
     ApiPublicHooksProcessMessageDeletesRoute,
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
