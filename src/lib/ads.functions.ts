@@ -161,7 +161,7 @@ export const adminAdStats = createServerFn({ method: "GET" })
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const [{ data: ads }, { data: events }] = await Promise.all([
       supabaseAdmin.from("ads").select("id,name,placement"),
-      supabaseAdmin
+      (supabaseAdmin as any)
         .from("ad_events")
         .select("ad_id,event_type")
         .gte("created_at", since)
