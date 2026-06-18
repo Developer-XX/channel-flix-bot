@@ -483,6 +483,19 @@ function TelegramAdmin() {
                 ingest.refetch();
                 router.invalidate();
               }}
+              onReparse={async () => {
+                try {
+                  const r = await reparseOne({ data: { ingestId: row.id, autoPromote: true } });
+                  const bits = [
+                    `title="${r.parsed.title}"`,
+                    r.parsed.season != null ? `S${String(r.parsed.season).padStart(2,"0")}${r.parsed.episode != null ? `E${String(r.parsed.episode).padStart(2,"0")}` : ""}` : null,
+                  ].filter(Boolean).join(" · ");
+                  if (r.match.matchedTitleId) toast.success(`Re-parsed · ${bits}${r.promoted ? " · promoted" : ""}${r.demoted ? " · demoted old" : ""}`);
+                  else toast.message(`Re-parsed · ${bits} · no match`);
+                  ingest.refetch();
+                  router.invalidate();
+                } catch (e: any) { toast.error(e?.message ?? "Re-parse failed"); }
+              }}
               onDiagnose={() => diagnose({ data: { ingestId: row.id } })}
               onForcePublish={async (assignTitleId) => {
                 try {
