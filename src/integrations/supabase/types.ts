@@ -97,6 +97,60 @@ export type Database = {
           },
         ]
       }
+      admin_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          created_at: string
+          details: Json
+          first_seen_at: string
+          id: string
+          kind: string
+          last_notified_at: string | null
+          last_seen_at: string
+          occurrences: number
+          resolved_at: string | null
+          severity: string
+          source: string | null
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          created_at?: string
+          details?: Json
+          first_seen_at?: string
+          id?: string
+          kind: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          occurrences?: number
+          resolved_at?: string | null
+          severity?: string
+          source?: string | null
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          created_at?: string
+          details?: Json
+          first_seen_at?: string
+          id?: string
+          kind?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          occurrences?: number
+          resolved_at?: string | null
+          severity?: string
+          source?: string | null
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string
@@ -484,6 +538,48 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_job_status: {
+        Row: {
+          consecutive_failures: number
+          created_at: string
+          expected_interval_seconds: number
+          job_name: string
+          last_error: string | null
+          last_ok_at: string | null
+          last_run_at: string | null
+          last_summary: Json | null
+          total_failures: number
+          total_runs: number
+          updated_at: string
+        }
+        Insert: {
+          consecutive_failures?: number
+          created_at?: string
+          expected_interval_seconds?: number
+          job_name: string
+          last_error?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+          last_summary?: Json | null
+          total_failures?: number
+          total_runs?: number
+          updated_at?: string
+        }
+        Update: {
+          consecutive_failures?: number
+          created_at?: string
+          expected_interval_seconds?: number
+          job_name?: string
+          last_error?: string | null
+          last_ok_at?: string | null
+          last_run_at?: string | null
+          last_summary?: Json | null
+          total_failures?: number
+          total_runs?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       delivery_attempts: {
         Row: {
           attempt_no: number
@@ -625,6 +721,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      download_send_queue: {
+        Row: {
+          attempts: number
+          bot_user_id: number | null
+          chat_id: number
+          created_at: string
+          file_id: string
+          idempotency_key: string
+          last_error: string | null
+          max_attempts: number
+          message_id: number | null
+          next_attempt_at: string
+          payload: Json
+          reused_from_cooldown: boolean
+          sent_at: string | null
+          status: string
+          title_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          bot_user_id?: number | null
+          chat_id: number
+          created_at?: string
+          file_id: string
+          idempotency_key: string
+          last_error?: string | null
+          max_attempts?: number
+          message_id?: number | null
+          next_attempt_at?: string
+          payload?: Json
+          reused_from_cooldown?: boolean
+          sent_at?: string | null
+          status?: string
+          title_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          bot_user_id?: number | null
+          chat_id?: number
+          created_at?: string
+          file_id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          max_attempts?: number
+          message_id?: number | null
+          next_attempt_at?: string
+          payload?: Json
+          reused_from_cooldown?: boolean
+          sent_at?: string | null
+          status?: string
+          title_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       episodes: {
         Row: {
@@ -1409,6 +1565,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      shortener_configs: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          notes: string | null
+          priority: number
+          provider: string
+          updated_at: string
+          updated_by: string | null
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          notes?: string | null
+          priority?: number
+          provider: string
+          updated_at?: string
+          updated_by?: string | null
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          notes?: string | null
+          priority?: number
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+          weight?: number
+        }
+        Relationships: []
       }
       shortener_health_log: {
         Row: {
