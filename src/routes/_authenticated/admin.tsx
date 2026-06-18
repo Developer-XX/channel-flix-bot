@@ -155,6 +155,9 @@ function AdminLayout() {
             <MobileNavItem to="/admin/diagnostics" label="Diagnostics" />
             <MobileNavItem to="/admin/health" label="Health" />
             <MobileNavItem to="/admin/error-log" label="Errors" />
+            <MobileNavItem to="/admin/alerts" label="Alerts" />
+            <MobileNavItem to="/admin/audit" label="Audit" />
+            <MobileNavItem to="/admin/shorteners" label="Shorteners" />
             <MobileNavItem to="/admin/tutorial" label="Tutorial" />
             <MobileNavItem to="/admin/premium" label="Premium" />
             <MobileNavItem to="/admin/users" label="Users" />
