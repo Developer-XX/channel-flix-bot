@@ -54,6 +54,7 @@ import { Route as ApiPublicSectionKeyRouteImport } from './routes/api/public/sec
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
+import { Route as ApiPublicHooksProcessMessageDeletesRouteImport } from './routes/api/public/hooks/process-message-deletes'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 
 const TrustRoute = TrustRouteImport.update({
@@ -300,6 +301,12 @@ const ApiPublicHooksShortenerAlertsRoute =
     path: '/api/public/hooks/shortener-alerts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksProcessMessageDeletesRoute =
+  ApiPublicHooksProcessMessageDeletesRouteImport.update({
+    id: '/api/public/hooks/process-message-deletes',
+    path: '/api/public/hooks/process-message-deletes',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksMaybeRebuildIndexesRoute =
   ApiPublicHooksMaybeRebuildIndexesRouteImport.update({
     id: '/api/public/hooks/maybe-rebuild-indexes',
@@ -346,6 +353,7 @@ export interface FileRoutesByFullPath {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
@@ -392,6 +400,7 @@ export interface FileRoutesByTo {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
@@ -441,6 +450,7 @@ export interface FileRoutesById {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
@@ -490,6 +500,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
@@ -536,6 +547,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
@@ -584,6 +596,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
+    | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
@@ -609,6 +622,7 @@ export interface RootRouteChildren {
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
+  ApiPublicHooksProcessMessageDeletesRoute: typeof ApiPublicHooksProcessMessageDeletesRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
@@ -935,6 +949,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksShortenerAlertsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/process-message-deletes': {
+      id: '/api/public/hooks/process-message-deletes'
+      path: '/api/public/hooks/process-message-deletes'
+      fullPath: '/api/public/hooks/process-message-deletes'
+      preLoaderRoute: typeof ApiPublicHooksProcessMessageDeletesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/maybe-rebuild-indexes': {
       id: '/api/public/hooks/maybe-rebuild-indexes'
       path: '/api/public/hooks/maybe-rebuild-indexes'
@@ -1029,6 +1050,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,
+  ApiPublicHooksProcessMessageDeletesRoute:
+    ApiPublicHooksProcessMessageDeletesRoute,
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,

@@ -10,7 +10,13 @@ import { getPublicBaseUrl, getPublicBaseUrlAsync } from "./site-url.server";
 import { getSetting, getSettingNumber } from "./runtime-settings.server";
 import { pickProviderForBucket, graceRemainingMs as graceRemainingPure } from "./shortener-rotation";
 
-export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+// Default 24h, but admin-configurable via SHORTENER_ROTATION_HOURS so the
+// account "verified for" countdown matches the rotation window the admin sets.
+export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // legacy fallback
+async function getVerificationTtlMs(): Promise<number> {
+  const hours = Math.max(1, await getSettingNumber("SHORTENER_ROTATION_HOURS", 24));
+  return hours * 60 * 60 * 1000;
+}
 
 export type Provider = "nanolinks" | "adrinolinks" | "arolinks" | "linkpays";
 
@@ -290,7 +296,7 @@ export async function consumeToken(args: {
   }
 
   const nowIso = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + VERIFICATION_TTL_MS).toISOString();
+  const expiresAt = new Date(Date.now() + (await getVerificationTtlMs())).toISOString();
 
   await supabase.from("verification_tokens").update({ consumed_at: nowIso }).eq("token", token);
   await supabase.from("user_verifications").upsert(

@@ -197,6 +197,11 @@ export function DownloadButton({
         setLinkOpen(true);
         return;
       }
+      if (r.reason === "cooldown") {
+        const s = (r as any).retryAfterSeconds ?? 5;
+        toast.message(`Please wait ${s}s before requesting the same file again.`);
+        return;
+      }
       const rr = r as any;
       const friendly =
         rr.reason === "source_missing"

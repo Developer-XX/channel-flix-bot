@@ -1318,6 +1318,45 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_message_deletes: {
+        Row: {
+          attempts: number
+          chat_id: number
+          created_at: string
+          delete_at: string
+          done_at: string | null
+          id: string
+          last_error: string | null
+          media_file_id: string | null
+          message_id: number
+          user_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          chat_id: number
+          created_at?: string
+          delete_at: string
+          done_at?: string | null
+          id?: string
+          last_error?: string | null
+          media_file_id?: string | null
+          message_id: number
+          user_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          chat_id?: number
+          created_at?: string
+          delete_at?: string
+          done_at?: string | null
+          id?: string
+          last_error?: string | null
+          media_file_id?: string | null
+          message_id?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       seasons: {
         Row: {
           air_date: string | null
@@ -2273,6 +2312,9 @@ export type Database = {
         | "between_rows"
         | "title_page"
         | "before_download"
+        | "interstitial_login"
+        | "interstitial_periodic"
+        | "interstitial_before_download"
       app_role: "admin" | "moderator" | "user"
       content_category:
         | "movie"
@@ -2417,6 +2459,9 @@ export const Constants = {
         "between_rows",
         "title_page",
         "before_download",
+        "interstitial_login",
+        "interstitial_periodic",
+        "interstitial_before_download",
       ],
       app_role: ["admin", "moderator", "user"],
       content_category: [
