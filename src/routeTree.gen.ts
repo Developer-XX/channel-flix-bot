@@ -36,6 +36,7 @@ import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
 import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
 import { Route as AuthenticatedAdminSlideshowRouteImport } from './routes/_authenticated/admin.slideshow'
+import { Route as AuthenticatedAdminShortenersRouteImport } from './routes/_authenticated/admin.shorteners'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
 import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authenticated/admin.premium'
@@ -201,6 +202,12 @@ const AuthenticatedAdminSlideshowRoute =
   AuthenticatedAdminSlideshowRouteImport.update({
     id: '/slideshow',
     path: '/slideshow',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminShortenersRoute =
+  AuthenticatedAdminShortenersRouteImport.update({
+    id: '/shorteners',
+    path: '/shorteners',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminSettingsRoute =
@@ -378,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
@@ -430,6 +438,7 @@ export interface FileRoutesByTo {
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
@@ -485,6 +494,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
+  '/_authenticated/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/_authenticated/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
   '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
@@ -540,6 +550,7 @@ export interface FileRouteTypes {
     | '/admin/premium'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/shorteners'
     | '/admin/slideshow'
     | '/admin/support'
     | '/admin/sync-trace'
@@ -592,6 +603,7 @@ export interface FileRouteTypes {
     | '/admin/premium'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/shorteners'
     | '/admin/slideshow'
     | '/admin/support'
     | '/admin/sync-trace'
@@ -646,6 +658,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/premium'
     | '/_authenticated/admin/requests'
     | '/_authenticated/admin/settings'
+    | '/_authenticated/admin/shorteners'
     | '/_authenticated/admin/slideshow'
     | '/_authenticated/admin/support'
     | '/_authenticated/admin/sync-trace'
@@ -889,6 +902,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminSlideshowRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/shorteners': {
+      id: '/_authenticated/admin/shorteners'
+      path: '/shorteners'
+      fullPath: '/admin/shorteners'
+      preLoaderRoute: typeof AuthenticatedAdminShortenersRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/settings': {
       id: '/_authenticated/admin/settings'
       path: '/settings'
@@ -1092,6 +1112,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPremiumRoute: typeof AuthenticatedAdminPremiumRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
+  AuthenticatedAdminShortenersRoute: typeof AuthenticatedAdminShortenersRoute
   AuthenticatedAdminSlideshowRoute: typeof AuthenticatedAdminSlideshowRoute
   AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
   AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
@@ -1117,6 +1138,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminPremiumRoute: AuthenticatedAdminPremiumRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
+  AuthenticatedAdminShortenersRoute: AuthenticatedAdminShortenersRoute,
   AuthenticatedAdminSlideshowRoute: AuthenticatedAdminSlideshowRoute,
   AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
   AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
