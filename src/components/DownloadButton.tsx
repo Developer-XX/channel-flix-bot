@@ -110,7 +110,8 @@ export function DownloadButton({
     try {
       const { data: session } = await supabase.auth.getSession();
       if (!session.session) {
-        toast.error("Please sign in to download.");
+        const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        navigate({ to: "/auth", search: { redirect: returnTo } });
         return;
       }
 
