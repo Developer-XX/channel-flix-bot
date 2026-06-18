@@ -237,6 +237,7 @@ export async function ingestTelegramUpdate(
   update: TgUpdate,
   source: "webhook" | "backfill",
 ): Promise<IngestOutcome> {
+  const isEdit = !!(update.edited_channel_post || update.edited_message);
   const message = update.channel_post ?? update.edited_channel_post ?? update.message ?? update.edited_message;
   if (!message?.chat?.id || typeof update.update_id !== "number") {
     return { ok: true, status: "ignored", reason: "no_message" };
@@ -282,10 +283,20 @@ export async function ingestTelegramUpdate(
     return { ok: true, status: "ignored", reason: "channel_inactive" };
   }
 
+  // Snapshot the prior ingest row (if any) so we can detect title changes on
+  // a caption edit and demote the previously-promoted media_files row.
+  const { data: priorIngest } = await supabase
+    .from("telegram_ingest")
+    .select("id, matched_title_id, promoted_media_file_id, caption")
+    .eq("telegram_channel_id", tgChannelId)
+    .eq("telegram_message_id", tgMessageId)
+    .maybeSingle();
+
   const parsed = parseMedia(caption, file.file_name);
   const settings = await loadMatchingSettings(supabase);
   const match = await runMatcher(supabase, parsed, settings);
   const status = match.matchedTitleId ? "matched" : "unmatched";
+
 
   const { data: ingestRow, error: ingestErr } = await supabase
     .from("telegram_ingest")
