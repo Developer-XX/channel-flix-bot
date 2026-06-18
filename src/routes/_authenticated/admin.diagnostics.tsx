@@ -1026,3 +1026,90 @@ function ChannelMatchBreakdownPanel() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Onboarding tutorial analytics (opens / completes / skips)
+// ---------------------------------------------------------------------------
+
+function OnboardingAnalyticsPanel() {
+  const get = useServerFn(getOnboardingSummary);
+  const q = useQuery({
+    queryKey: ["onboarding-summary"],
+    queryFn: () => get(),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
+  return (
+    <section className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Activity className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">Onboarding tutorial · last 24h</h2>
+        <div className="ml-auto">
+          <Button size="sm" variant="outline" onClick={() => q.refetch()} disabled={q.isFetching}>
+            <RefreshCw className={`h-3.5 w-3.5 sm:mr-1 ${q.isFetching ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+        </div>
+      </div>
+
+      {q.error && <p className="text-xs text-destructive">{(q.error as Error).message}</p>}
+
+      {q.data && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <Stat label="Opened" value={q.data.totals.opened} />
+            <Stat label="Completed" value={q.data.totals.completed} tone="ok" />
+            <Stat label="Skipped" value={q.data.totals.skipped} tone="warn" />
+            <div className="rounded-md border border-border/60 p-2.5">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Completion rate</div>
+              <div className="mt-0.5 font-mono text-base font-semibold">
+                {q.data.totals.opened > 0 ? `${Math.round(q.data.completionRate * 100)}%` : "—"}
+              </div>
+            </div>
+          </div>
+
+          {q.data.daily.length > 0 && (
+            <div className="text-[11px] text-muted-foreground">
+              <div className="mb-1">Daily (last 7d)</div>
+              <div className="space-y-0.5 font-mono">
+                {q.data.daily.slice(-7).map((d) => (
+                  <div key={d.day} className="flex items-center gap-2">
+                    <span className="w-20">{d.day}</span>
+                    <span className="text-emerald-500">▲{d.completed}</span>
+                    <span className="text-amber-500">×{d.skipped}</span>
+                    <span>opened {d.opened}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {q.data.recent.length > 0 ? (
+            <details className="rounded-md border border-border/60">
+              <summary className="cursor-pointer px-2.5 py-1.5 text-xs">Recent events ({q.data.recent.length})</summary>
+              <div className="max-h-64 overflow-auto text-[11px] divide-y divide-border/40">
+                {q.data.recent.map((r, i) => (
+                  <div key={i} className="px-2.5 py-1.5 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span>
+                    <span className={
+                      r.event === "completed" ? "text-emerald-500" :
+                      r.event === "skipped" ? "text-amber-500" :
+                      r.event === "opened" ? "text-primary" : ""
+                    }>{r.event}</span>
+                    {r.video_type && <span className="text-muted-foreground">· {r.video_type}</span>}
+                    {r.watched_ms != null && <span className="text-muted-foreground">· {Math.round(r.watched_ms / 1000)}s</span>}
+                    {r.user_id && <span className="font-mono text-[10px] text-muted-foreground">{r.user_id.slice(0, 8)}…</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : (
+            <p className="text-xs text-muted-foreground">No events yet — events appear as visitors open the tutorial.</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+
