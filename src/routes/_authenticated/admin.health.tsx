@@ -80,6 +80,39 @@ function AdminHealthPage() {
             </div>
           </Section>
 
+          <Section title="Auto-delete cron (process-message-deletes)">
+            <Row
+              label="Pending due now"
+              value={String(q.data.autoDeleteCron.dueCount)}
+              ok={q.data.autoDeleteCron.dueCount < 100}
+            />
+            <Row
+              label="Deleted (24h)"
+              value={String(q.data.autoDeleteCron.deleted24h)}
+            />
+            <Row
+              label="Exhausted/failed (24h)"
+              value={String(q.data.autoDeleteCron.failedExhausted24h)}
+              ok={q.data.autoDeleteCron.failedExhausted24h === 0}
+            />
+            <Row
+              label="Last run"
+              value={
+                q.data.autoDeleteCron.lastRunAt
+                  ? `${new Date(q.data.autoDeleteCron.lastRunAt).toLocaleString()} (${
+                      q.data.autoDeleteCron.lastRunAgoSec != null
+                        ? formatAgo(q.data.autoDeleteCron.lastRunAgoSec)
+                        : "—"
+                    } ago)`
+                  : "never"
+              }
+              ok={
+                q.data.autoDeleteCron.lastRunAgoSec != null &&
+                q.data.autoDeleteCron.lastRunAgoSec < 600
+              }
+            />
+          </Section>
+
           <Section title="Required secrets">
             {q.data.secrets.map((s) => (
               <Row key={s.name} label={s.name} value={s.present ? "Present" : "Missing"} ok={s.present} />
