@@ -13,6 +13,8 @@ import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { BuildSyncProvider } from "@/components/BuildSyncProvider";
+import { ServerFnErrorScreen, isServerFnError } from "@/components/ServerFnErrorScreen";
 
 function NotFoundComponent() {
   return (
@@ -42,6 +44,14 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  // Render the friendlier serverFn-specific screen when the failure came
+  // from a /_serverFn/* call instead of a generic "this page didn't load".
+  if (isServerFnError(error)) {
+    return <ServerFnErrorScreen error={error} reset={reset} />;
+  }
+
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -162,6 +172,7 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster richColors />
+      <BuildSyncProvider />
     </QueryClientProvider>
   );
 }
