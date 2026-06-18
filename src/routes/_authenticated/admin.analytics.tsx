@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   ArrowLeft,
   Users,
@@ -12,8 +13,11 @@ import {
   XCircle,
   FileText,
   ShieldAlert,
+  Gauge,
+  FileDown,
 } from "lucide-react";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
+import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/admin/analytics")({
