@@ -106,7 +106,7 @@ function detectCategory(text: string, season: number | null): CategorySlug | nul
   return null;
 }
 
-function parseSingleSource(raw: string): ParsedMedia {
+export function parseSingleSource(raw: string): ParsedMedia {
   const text = raw.replace(/\s+/g, " ").trim();
 
   const res = firstMatch(text, RES_PATTERNS);
