@@ -24,6 +24,8 @@ import { Route as AuthenticatedPremiumRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
+import { Route as ApiPublicClientErrorsRouteImport } from './routes/api/public/client-errors'
 import { Route as AuthenticatedAdminVerificationLimitsRouteImport } from './routes/_authenticated/admin.verification-limits'
 import { Route as AuthenticatedAdminTutorialRouteImport } from './routes/_authenticated/admin.tutorial'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
@@ -118,6 +120,16 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicClientErrorsRoute = ApiPublicClientErrorsRouteImport.update({
+  id: '/api/public/client-errors',
+  path: '/api/public/client-errors',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminVerificationLimitsRoute =
   AuthenticatedAdminVerificationLimitsRouteImport.update({
@@ -264,6 +276,8 @@ export interface FileRoutesByFullPath {
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
+  '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
@@ -299,6 +313,8 @@ export interface FileRoutesByTo {
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
+  '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
@@ -337,6 +353,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
+  '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
@@ -375,6 +393,8 @@ export interface FileRouteTypes {
     | '/admin/titles'
     | '/admin/tutorial'
     | '/admin/verification-limits'
+    | '/api/public/client-errors'
+    | '/api/public/health'
     | '/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/shortener-alerts'
@@ -410,6 +430,8 @@ export interface FileRouteTypes {
     | '/admin/titles'
     | '/admin/tutorial'
     | '/admin/verification-limits'
+    | '/api/public/client-errors'
+    | '/api/public/health'
     | '/admin'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/shortener-alerts'
@@ -447,6 +469,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/tutorial'
     | '/_authenticated/admin/verification-limits'
+    | '/api/public/client-errors'
+    | '/api/public/health'
     | '/_authenticated/admin/'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/shortener-alerts'
@@ -468,6 +492,8 @@ export interface RootRouteChildren {
   BrowseCategoryRoute: typeof BrowseCategoryRoute
   DebugAuthRoute: typeof DebugAuthRoute
   TitleSlugRoute: typeof TitleSlugRoute
+  ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
@@ -583,6 +609,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/client-errors': {
+      id: '/api/public/client-errors'
+      path: '/api/public/client-errors'
+      fullPath: '/api/public/client-errors'
+      preLoaderRoute: typeof ApiPublicClientErrorsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin/verification-limits': {
       id: '/_authenticated/admin/verification-limits'
@@ -793,6 +833,8 @@ const rootRouteChildren: RootRouteChildren = {
   BrowseCategoryRoute: BrowseCategoryRoute,
   DebugAuthRoute: DebugAuthRoute,
   TitleSlugRoute: TitleSlugRoute,
+  ApiPublicClientErrorsRoute: ApiPublicClientErrorsRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
