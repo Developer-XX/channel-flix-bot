@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Film } from "lucide-react";
 import { toast } from "sonner";
@@ -40,7 +40,8 @@ function safeRedirect(target: string | undefined): string {
 }
 
 function AuthPage() {
-  const navigate = useNavigate();
+  // navigate intentionally omitted — we use window.location.replace so the
+  // _authenticated guard re-evaluates with the freshly stored session.
   const search = Route.useSearch();
   const redirectTo = safeRedirect(search.redirect);
   const [mode, setMode] = useState<AuthMode>("signin");
