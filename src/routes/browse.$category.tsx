@@ -41,6 +41,18 @@ export const Route = createFileRoute("/browse/$category")({
 function BrowseCategory() {
   const { category } = Route.useParams();
   const label = CATEGORY_LABEL[category as keyof typeof CATEGORY_LABEL];
+  const isAuthed = useIsAuthed();
+  const publicBrowsing = usePublicBrowsing();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthed && !publicBrowsing) {
+      void logBlockedBrowsing("browse_category", category, `/browse/${category}`);
+      navigate({ to: "/auth", search: { redirect: `/browse/${category}` }, replace: true });
+    }
+  }, [isAuthed, publicBrowsing, navigate, category]);
+
+
 
   const { data, isLoading } = useQuery({
     queryKey: ["browse", category],
