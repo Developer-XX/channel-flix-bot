@@ -11,6 +11,9 @@ type AuthMode = "signin" | "signup" | "forgot";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — StreamVault" },
@@ -21,8 +24,25 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+// Only allow same-origin relative paths to prevent open redirects.
+function safeRedirect(target: string | undefined): string {
+  if (!target) return "/";
+  try {
+    // Allow simple relative paths starting with "/" but not "//".
+    if (target.startsWith("/") && !target.startsWith("//")) return target;
+    // Allow absolute URLs only when origin matches.
+    const url = new URL(target, window.location.origin);
+    if (url.origin === window.location.origin) return url.pathname + url.search + url.hash;
+  } catch {
+    /* fall through */
+  }
+  return "/";
+}
+
 function AuthPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  const redirectTo = safeRedirect(search.redirect);
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,9 +52,12 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+      if (data.session) {
+        // Already signed in — go to the originally requested URL.
+        window.location.replace(redirectTo);
+      }
     });
-  }, [navigate]);
+  }, [redirectTo]);
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
@@ -69,7 +92,8 @@ function AuthPage() {
       }
 
       toast.success(mode === "signup" ? "Account created. You're signed in." : "Welcome back.");
-      navigate({ to: "/" });
+      // Full reload guarantees the _authenticated gate re-evaluates with the fresh session.
+      window.location.replace(redirectTo);
     } catch (error) {
       toast.error(formatAuthError(error));
       logAuthError("[auth]", error);
