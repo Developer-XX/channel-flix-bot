@@ -45,6 +45,7 @@ import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
 import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
 import { Route as AuthenticatedAdminAnnouncementsRouteImport } from './routes/_authenticated/admin.announcements'
+import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
 import { Route as AuthenticatedAdminAdsRouteImport } from './routes/_authenticated/admin.ads'
 import { Route as ApiPublicVTokenRouteImport } from './routes/api/public/v/$token'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram/webhook'
@@ -248,6 +249,12 @@ const AuthenticatedAdminAnnouncementsRoute =
     path: '/announcements',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminAnalyticsRoute =
+  AuthenticatedAdminAnalyticsRouteImport.update({
+    id: '/analytics',
+    path: '/analytics',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminAdsRoute = AuthenticatedAdminAdsRouteImport.update({
   id: '/ads',
   path: '/ads',
@@ -311,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
@@ -355,6 +363,7 @@ export interface FileRoutesByTo {
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
@@ -402,6 +411,7 @@ export interface FileRoutesById {
   '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
   '/_authenticated/admin/ads': typeof AuthenticatedAdminAdsRoute
+  '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
   '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
@@ -449,6 +459,7 @@ export interface FileRouteTypes {
     | '/section/$key'
     | '/title/$slug'
     | '/admin/ads'
+    | '/admin/analytics'
     | '/admin/announcements'
     | '/admin/bulk'
     | '/admin/diagnostics'
@@ -493,6 +504,7 @@ export interface FileRouteTypes {
     | '/section/$key'
     | '/title/$slug'
     | '/admin/ads'
+    | '/admin/analytics'
     | '/admin/announcements'
     | '/admin/bulk'
     | '/admin/diagnostics'
@@ -539,6 +551,7 @@ export interface FileRouteTypes {
     | '/section/$key'
     | '/title/$slug'
     | '/_authenticated/admin/ads'
+    | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/announcements'
     | '/_authenticated/admin/bulk'
     | '/_authenticated/admin/diagnostics'
@@ -846,6 +859,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAnnouncementsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/analytics': {
+      id: '/_authenticated/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AuthenticatedAdminAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/ads': {
       id: '/_authenticated/admin/ads'
       path: '/ads'
@@ -907,6 +927,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAdsRoute: typeof AuthenticatedAdminAdsRoute
+  AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
   AuthenticatedAdminAnnouncementsRoute: typeof AuthenticatedAdminAnnouncementsRoute
   AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
@@ -929,6 +950,7 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAdsRoute: AuthenticatedAdminAdsRoute,
+  AuthenticatedAdminAnalyticsRoute: AuthenticatedAdminAnalyticsRoute,
   AuthenticatedAdminAnnouncementsRoute: AuthenticatedAdminAnnouncementsRoute,
   AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
