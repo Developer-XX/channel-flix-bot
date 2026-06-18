@@ -277,6 +277,15 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
         last30d: dl30d.count ?? 0,
         deliveredToday: deliveredToday.count ?? 0,
         failedToday: failedToday.count ?? 0,
+        resendsToday: resendsToday.count ?? 0,
+        resends7d: resends7d.count ?? 0,
+      },
+      autoDelete: {
+        pendingDue: autoPendingDue.count ?? 0,
+        completedToday: autoCompletedToday.count ?? 0,
+        completed7d: autoCompleted7d.count ?? 0,
+        exhaustedFailed24h: autoExhausted24h.count ?? 0,
+        lastRunAt: (lastRunRow.data as { done_at?: string } | null)?.done_at ?? null,
       },
       catalog: {
         titles: titlesTotal.count ?? 0,
