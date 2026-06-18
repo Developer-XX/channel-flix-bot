@@ -169,6 +169,28 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
       if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + 1);
     }
 
+    // Blocked browsing analytics
+    const [blockedToday, blocked7d, blocked30d, blockedAll, blockedRecent, browsingFlag] =
+      await Promise.all([
+        sb.from("blocked_browsing_log").select("id", { count: "exact", head: true }).gte("created_at", todayISO),
+        sb.from("blocked_browsing_log").select("id", { count: "exact", head: true }).gte("created_at", d7),
+        sb.from("blocked_browsing_log").select("id", { count: "exact", head: true }).gte("created_at", d30),
+        sb.from("blocked_browsing_log").select("reason").gte("created_at", d30).limit(5000),
+        sb
+          .from("blocked_browsing_log")
+          .select("id, created_at, reason, slug, path, toggle_on")
+          .order("created_at", { ascending: false })
+          .limit(25),
+        sb.rpc("is_public_browsing_enabled"),
+      ]);
+    const reasonCounts = new Map<string, number>();
+    for (const row of (blockedAll.data ?? []) as Array<{ reason: string }>) {
+      reasonCounts.set(row.reason, (reasonCounts.get(row.reason) ?? 0) + 1);
+    }
+    const byReason = Array.from(reasonCounts.entries())
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count);
+
     return {
       generatedAt: new Date().toISOString(),
       users: {
@@ -218,5 +240,21 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
         rank: Number(r.rank ?? 0),
       })),
       downloadsByDay: Array.from(buckets.entries()).map(([day, count]) => ({ day, count })),
+      blockedBrowsing: {
+        publicBrowsingEnabled: Boolean(browsingFlag.data ?? true),
+        today: blockedToday.count ?? 0,
+        last7d: blocked7d.count ?? 0,
+        last30d: blocked30d.count ?? 0,
+        byReason,
+        recent: ((blockedRecent.data ?? []) as Array<any>).map((r) => ({
+          id: r.id,
+          created_at: r.created_at,
+          reason: r.reason,
+          slug: r.slug,
+          path: r.path,
+          toggle_on: Boolean(r.toggle_on),
+        })),
+      },
     };
   });
+
