@@ -98,6 +98,48 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_error_log: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          error_stack: string | null
+          fn_export: string | null
+          fn_file: string | null
+          id: string
+          metadata: Json
+          request_id: string
+          status: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          error_stack?: string | null
+          fn_export?: string | null
+          fn_file?: string | null
+          id?: string
+          metadata?: Json
+          request_id: string
+          status?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          error_stack?: string | null
+          fn_export?: string | null
+          fn_file?: string | null
+          id?: string
+          metadata?: Json
+          request_id?: string
+          status?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           acknowledged_at: string | null
