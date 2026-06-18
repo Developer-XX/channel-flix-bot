@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+import { ArrowRight } from "lucide-react";
 import { TitleCard, TitleCardSkeleton, type TitleCardData } from "./title-card";
 
 interface Props {
@@ -5,15 +7,26 @@ interface Props {
   items: TitleCardData[] | undefined;
   loading?: boolean;
   emptyHint?: string;
+  viewAllHref?: string;
 }
 
-export function TitleRow({ title, items, loading, emptyHint }: Props) {
+export function TitleRow({ title, items, loading, emptyHint, viewAllHref }: Props) {
   const showEmpty = !loading && (!items || items.length === 0);
   return (
     <section className="py-4 sm:py-6">
-      <h2 className="px-4 md:px-6 mb-3 sm:mb-4 text-lg sm:text-xl md:text-2xl font-display font-bold tracking-tight">
-        {title}
-      </h2>
+      <div className="px-4 md:px-6 mb-3 sm:mb-4 flex items-center justify-between gap-3">
+        <h2 className="min-w-0 truncate text-lg sm:text-xl md:text-2xl font-display font-bold tracking-tight">
+          {title}
+        </h2>
+        {viewAllHref && !showEmpty && (
+          <Link
+            to={viewAllHref}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 px-3 py-1 text-xs sm:text-sm text-muted-foreground hover:text-foreground hover:border-ring transition-colors"
+          >
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        )}
+      </div>
       {showEmpty ? (
         <p className="px-4 md:px-6 text-sm text-muted-foreground">{emptyHint ?? "Nothing here yet."}</p>
       ) : (
