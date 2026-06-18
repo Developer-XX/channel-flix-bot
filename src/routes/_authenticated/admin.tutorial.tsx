@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { getTutorialConfig } from "@/lib/tutorial.functions";
 import { listAppSettings, updateAppSetting } from "@/lib/runtime-settings.functions";
+import { listTutorialAudit } from "@/lib/tutorial-audit.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/tutorial")({
   component: TutorialAdminPage,
@@ -249,6 +250,40 @@ function TutorialAdminPage() {
           </p>
         )}
       </section>
+
+      <TutorialAuditPanel />
     </div>
+  );
+}
+
+function TutorialAuditPanel() {
+  const list = useServerFn(listTutorialAudit);
+  const q = useQuery({ queryKey: ["tutorial-audit"], queryFn: () => list(), retry: false });
+  return (
+    <section className="rounded-md border border-border p-4 space-y-2">
+      <h2 className="font-semibold text-sm">Change history</h2>
+      <p className="text-xs text-muted-foreground">Every tutorial setting update is logged here.</p>
+      {q.error && <p className="text-xs text-destructive">{(q.error as Error).message}</p>}
+      <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <table className="w-full text-[11px] min-w-[560px]">
+          <thead className="text-muted-foreground"><tr className="text-left">
+            <th className="p-1.5">When</th><th className="p-1.5">Who</th><th className="p-1.5">Key</th><th className="p-1.5">Value</th>
+          </tr></thead>
+          <tbody>
+            {(q.data ?? []).map((r: any) => (
+              <tr key={r.id} className="border-t border-border/50">
+                <td className="p-1.5 whitespace-nowrap text-muted-foreground">{new Date(r.created_at).toLocaleString()}</td>
+                <td className="p-1.5">{r.actor_display_name ?? r.actor_email ?? r.actor_user_id?.slice(0,8) ?? "—"}</td>
+                <td className="p-1.5 font-mono">{r.metadata?.key}</td>
+                <td className="p-1.5">{r.metadata?.hasValue ? "set" : "cleared"}{r.metadata?.isSecret ? " (secret)" : ""}</td>
+              </tr>
+            ))}
+            {(q.data ?? []).length === 0 && (
+              <tr><td colSpan={4} className="p-3 text-center text-muted-foreground">No changes yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

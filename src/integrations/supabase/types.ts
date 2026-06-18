@@ -98,6 +98,84 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_notifications: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          body: string | null
+          created_at: string
+          dedupe_key: string | null
+          id: string
+          kind: string
+          metadata: Json
+          severity: string
+          title: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          body?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          id?: string
+          kind: string
+          metadata?: Json
+          severity?: string
+          title: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          body?: string | null
+          created_at?: string
+          dedupe_key?: string | null
+          id?: string
+          kind?: string
+          metadata?: Json
+          severity?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      announcements: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          link_url: string | null
+          starts_at: string | null
+          updated_at: string
+          variant: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          link_url?: string | null
+          starts_at?: string | null
+          updated_at?: string
+          variant?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          link_url?: string | null
+          starts_at?: string | null
+          updated_at?: string
+          variant?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           description: string | null
@@ -885,12 +963,111 @@ export type Database = {
         }
         Relationships: []
       }
+      premium_payments: {
+        Row: {
+          admin_note: string | null
+          amount_inr: number | null
+          created_at: string
+          duration_days: number | null
+          id: string
+          plan_id: string | null
+          plan_name: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          screenshot_url: string
+          status: string
+          updated_at: string
+          user_id: string
+          user_note: string | null
+        }
+        Insert: {
+          admin_note?: string | null
+          amount_inr?: number | null
+          created_at?: string
+          duration_days?: number | null
+          id?: string
+          plan_id?: string | null
+          plan_name?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          screenshot_url: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          user_note?: string | null
+        }
+        Update: {
+          admin_note?: string | null
+          amount_inr?: number | null
+          created_at?: string
+          duration_days?: number | null
+          id?: string
+          plan_id?: string | null
+          plan_name?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          screenshot_url?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          user_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "premium_payments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "premium_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      premium_plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          duration_days: number
+          id: string
+          is_active: boolean
+          name: string
+          price_inr: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          duration_days: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price_inr: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_inr?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           display_name: string | null
           id: string
+          is_premium: boolean
+          premium_note: string | null
+          premium_plan: string | null
+          premium_until: string | null
           updated_at: string
         }
         Insert: {
@@ -898,6 +1075,10 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id: string
+          is_premium?: boolean
+          premium_note?: string | null
+          premium_plan?: string | null
+          premium_until?: string | null
           updated_at?: string
         }
         Update: {
@@ -905,6 +1086,10 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          is_premium?: boolean
+          premium_note?: string | null
+          premium_plan?: string | null
+          premium_until?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -986,6 +1171,80 @@ export type Database = {
           ok?: boolean
           provider?: string
           source?: string | null
+        }
+        Relationships: []
+      }
+      support_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          sender_id: string | null
+          sender_role: string
+          ticket_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          sender_id?: string | null
+          sender_role: string
+          ticket_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          sender_id?: string | null
+          sender_role?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          last_message_by: string | null
+          status: string
+          subject: string
+          unread_for_admin: boolean
+          unread_for_user: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          last_message_by?: string | null
+          status?: string
+          subject: string
+          unread_for_admin?: boolean
+          unread_for_user?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          last_message_by?: string | null
+          status?: string
+          subject?: string
+          unread_for_admin?: boolean
+          unread_for_user?: boolean
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

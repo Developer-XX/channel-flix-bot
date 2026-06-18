@@ -111,14 +111,32 @@ export async function getGraceRemainingMs(
 export async function getVerificationState(
   supabase: SupabaseClient<any, any, any>,
   userId: string,
-): Promise<{ verified: boolean; expiresAt: string | null; lastProvider: string | null; graceRemainingMs?: number }> {
+): Promise<{ verified: boolean; expiresAt: string | null; lastProvider: string | null; graceRemainingMs?: number; premium?: boolean; premiumUntil?: string | null }> {
+  // Premium users skip token verification entirely.
+  try {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("is_premium, premium_until")
+      .eq("id", userId)
+      .maybeSingle();
+    if (prof?.is_premium && (!prof.premium_until || new Date(prof.premium_until).getTime() > Date.now())) {
+      return {
+        verified: true,
+        expiresAt: prof.premium_until ?? null,
+        lastProvider: "premium",
+        graceRemainingMs: 0,
+        premium: true,
+        premiumUntil: prof.premium_until ?? null,
+      };
+    }
+  } catch { /* ignore */ }
+
   const graceRemainingMs = await getGraceRemainingMs(supabase, userId);
   const { data } = await supabase
     .from("user_verifications")
     .select("expires_at, last_provider")
     .eq("user_id", userId)
     .maybeSingle();
-  // Grace period: treat user as verified for the duration of the grace window.
   if (graceRemainingMs > 0) {
     const graceExpires = new Date(Date.now() + graceRemainingMs).toISOString();
     return {

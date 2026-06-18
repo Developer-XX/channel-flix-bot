@@ -26,6 +26,15 @@ export const SETTING_KEYS = [
   { key: "TUTORIAL_VIDEO_URL",          group: "Tutorial",      isSecret: false, placeholder: "https://youtu.be/... or https://.../video.mp4" },
   { key: "TUTORIAL_TITLE",              group: "Tutorial",      isSecret: false, placeholder: "How to download (shown at bottom of every title)" },
   { key: "TUTORIAL_DESCRIPTION",        group: "Tutorial",      isSecret: false, placeholder: "Short description shown above the video" },
+  { key: "PREMIUM_ENABLED",             group: "Premium",       isSecret: false, placeholder: "true / false (default true)" },
+  { key: "PREMIUM_UPI_ID",              group: "Premium",       isSecret: false, placeholder: "yourname@upi" },
+  { key: "PREMIUM_UPI_NAME",            group: "Premium",       isSecret: false, placeholder: "Payee name shown to users" },
+  { key: "PREMIUM_QR_URL",              group: "Premium",       isSecret: false, placeholder: "https://.../qr.png" },
+  { key: "PREMIUM_INSTRUCTIONS",        group: "Premium",       isSecret: false, placeholder: "Short note shown above the QR code" },
+  { key: "SHORTENER_ALERT_THRESHOLD",   group: "Alerts",        isSecret: false, placeholder: "0.4 (failure rate 0-1)" },
+  { key: "SHORTENER_ALERT_MIN_SAMPLES", group: "Alerts",        isSecret: false, placeholder: "5 (min samples before alerting)" },
+  { key: "SHORTENER_ALERT_WINDOW_MIN",  group: "Alerts",        isSecret: false, placeholder: "30 (freshness window minutes)" },
+  { key: "ALERT_TELEGRAM_CHAT_ID",      group: "Alerts",        isSecret: false, placeholder: "Telegram chat id for admin alerts" },
 ] as const;
 
 const KEYS: Set<string> = new Set(SETTING_KEYS.map((s) => s.key));
