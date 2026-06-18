@@ -18,6 +18,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TitleSlugRouteImport } from './routes/title.$slug'
+import { Route as SectionKeyRouteImport } from './routes/section.$key'
 import { Route as DebugAuthRouteImport } from './routes/debug.auth'
 import { Route as BrowseCategoryRouteImport } from './routes/browse.$category'
 import { Route as AuthenticatedSupportRouteImport } from './routes/_authenticated/support'
@@ -95,6 +96,11 @@ const IndexRoute = IndexRouteImport.update({
 const TitleSlugRoute = TitleSlugRouteImport.update({
   id: '/title/$slug',
   path: '/title/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SectionKeyRoute = SectionKeyRouteImport.update({
+  id: '/section/$key',
+  path: '/section/$key',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DebugAuthRoute = DebugAuthRouteImport.update({
@@ -302,6 +308,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
+  '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
@@ -345,6 +352,7 @@ export interface FileRoutesByTo {
   '/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
+  '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
   '/admin/ads': typeof AuthenticatedAdminAdsRoute
   '/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
@@ -391,6 +399,7 @@ export interface FileRoutesById {
   '/_authenticated/support': typeof AuthenticatedSupportRoute
   '/browse/$category': typeof BrowseCategoryRoute
   '/debug/auth': typeof DebugAuthRoute
+  '/section/$key': typeof SectionKeyRoute
   '/title/$slug': typeof TitleSlugRoute
   '/_authenticated/admin/ads': typeof AuthenticatedAdminAdsRoute
   '/_authenticated/admin/announcements': typeof AuthenticatedAdminAnnouncementsRoute
@@ -437,6 +446,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/browse/$category'
     | '/debug/auth'
+    | '/section/$key'
     | '/title/$slug'
     | '/admin/ads'
     | '/admin/announcements'
@@ -480,6 +490,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/browse/$category'
     | '/debug/auth'
+    | '/section/$key'
     | '/title/$slug'
     | '/admin/ads'
     | '/admin/announcements'
@@ -525,6 +536,7 @@ export interface FileRouteTypes {
     | '/_authenticated/support'
     | '/browse/$category'
     | '/debug/auth'
+    | '/section/$key'
     | '/title/$slug'
     | '/_authenticated/admin/ads'
     | '/_authenticated/admin/announcements'
@@ -567,6 +579,7 @@ export interface RootRouteChildren {
   TrustRoute: typeof TrustRoute
   BrowseCategoryRoute: typeof BrowseCategoryRoute
   DebugAuthRoute: typeof DebugAuthRoute
+  SectionKeyRoute: typeof SectionKeyRoute
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
@@ -642,6 +655,13 @@ declare module '@tanstack/react-router' {
       path: '/title/$slug'
       fullPath: '/title/$slug'
       preLoaderRoute: typeof TitleSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/section/$key': {
+      id: '/section/$key'
+      path: '/section/$key'
+      fullPath: '/section/$key'
+      preLoaderRoute: typeof SectionKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/debug/auth': {
@@ -961,6 +981,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrustRoute: TrustRoute,
   BrowseCategoryRoute: BrowseCategoryRoute,
   DebugAuthRoute: DebugAuthRoute,
+  SectionKeyRoute: SectionKeyRoute,
   TitleSlugRoute: TitleSlugRoute,
   ApiPublicClientErrorsRoute: ApiPublicClientErrorsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
