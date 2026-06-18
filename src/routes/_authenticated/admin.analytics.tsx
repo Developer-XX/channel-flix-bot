@@ -85,9 +85,28 @@ function AnalyticsPage() {
             value={a?.downloads.failedToday}
             icon={<XCircle className="h-4 w-4 text-red-500" />}
           />
+          <Stat label="Resends today" value={a?.downloads.resendsToday} />
+          <Stat label="Resends 7d" value={a?.downloads.resends7d} />
         </StatGrid>
         {a?.downloadsByDay && <DailyBars data={a.downloadsByDay} />}
       </Section>
+
+      {/* Auto-delete cron (process-message-deletes) */}
+      <Section title="Auto-delete (delivered messages)" icon={<XCircle className="h-4 w-4" />}>
+        <StatGrid>
+          <Stat label="Pending (due)" value={a?.autoDelete.pendingDue} accent />
+          <Stat label="Completed today" value={a?.autoDelete.completedToday} />
+          <Stat label="Completed 7d" value={a?.autoDelete.completed7d} />
+          <Stat label="Exhausted (24h)" value={a?.autoDelete.exhaustedFailed24h} />
+        </StatGrid>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Last cron run:{" "}
+          <span className="font-mono">
+            {a?.autoDelete.lastRunAt ? new Date(a.autoDelete.lastRunAt).toLocaleString() : "never"}
+          </span>
+        </p>
+      </Section>
+
 
       {/* Catalog */}
       <Section title="Catalog" icon={<Film className="h-4 w-4" />}>
