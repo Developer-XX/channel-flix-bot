@@ -20,7 +20,15 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminGateLayout() {
   const gate = useServerFn(getAdminGate);
   const claim = useServerFn(claimFirstAdmin);
-  const q = useQuery({ queryKey: ["admin-gate"], queryFn: () => gate(), retry: false });
+  const q = useQuery({
+    queryKey: ["admin-gate"],
+    queryFn: () => gate(),
+    // Transient 401s can happen on the very first call if the bearer token
+    // hasn't been attached yet (session still hydrating). Retry a couple of
+    // times with backoff before showing the error UI.
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 3000),
+  });
 
   if (q.isLoading) {
     return <div className="p-8 text-sm text-muted-foreground">Checking admin access…</div>;
