@@ -60,6 +60,13 @@ export const Route = createFileRoute("/api/public/telegram/backfill-ingest")({
               backfill_status: String(payload.status ?? "running").slice(0, 32),
             })
             .eq("channel_id", channelId);
+          try {
+            const { writeAudit } = await import("@/lib/audit.server");
+            await writeAudit(supabaseAdmin, {
+              action: `channel_sync.backfill_${String(payload.status ?? "progress")}`.slice(0, 64),
+              metadata: { channelId, cursor: Number(payload.cursor) || null, ingested: Number(payload.ingested) || 0 },
+            });
+          } catch {}
           return Response.json({ ok: true });
         }
 
