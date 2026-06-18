@@ -30,6 +30,7 @@ export function DownloadButton({
   season,
   episode,
 }: Props) {
+  const navigate = useNavigate();
   const reqDownload = useServerFn(requestDownload);
   const reqCode = useServerFn(requestLinkCode);
   const resolveEp = useServerFn(resolveEpisodeFile);
