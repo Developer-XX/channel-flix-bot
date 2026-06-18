@@ -42,6 +42,14 @@ export type AdminAnalytics = {
     rank: number;
   }>;
   downloadsByDay: Array<{ day: string; count: number }>;
+  blockedBrowsing: {
+    publicBrowsingEnabled: boolean;
+    today: number;
+    last7d: number;
+    last30d: number;
+    byReason: Array<{ reason: string; count: number }>;
+    recent: Array<{ id: string; created_at: string; reason: string; slug: string | null; path: string | null; toggle_on: boolean }>;
+  };
 };
 
 function isoDaysAgo(days: number): string {
