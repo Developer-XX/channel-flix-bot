@@ -114,3 +114,68 @@ export const adminDeleteSlide = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+// Adds (or reactivates) a homepage slide built from an existing master_titles row.
+// Idempotent: keyed off link_url = `/title/${slug}` so repeated clicks won't duplicate.
+export const adminAddTitleToSlideshow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ titleId: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: t, error: tErr } = await supabaseAdmin
+      .from("master_titles")
+      .select("id, slug, title, overview, poster_url, backdrop_url")
+      .eq("id", data.titleId)
+      .maybeSingle();
+    if (tErr) throw tErr;
+    if (!t) throw new Error("Title not found");
+
+    const linkUrl = `/title/${t.slug}`;
+    const image = (t.backdrop_url as string | null) || (t.poster_url as string | null);
+    if (!image) throw new Error("Title has no poster or backdrop image to use for the slide");
+    const subtitle = typeof t.overview === "string" ? t.overview.slice(0, 400) : null;
+
+    // Idempotency: re-activate / refresh the existing slide if one already points at this title.
+    const { data: existing } = await supabaseAdmin
+      .from("homepage_slides")
+      .select("id")
+      .eq("link_url", linkUrl)
+      .maybeSingle();
+
+    if (existing?.id) {
+      const { error } = await supabaseAdmin
+        .from("homepage_slides")
+        .update({ is_active: true, title: t.title, subtitle, image_url: image })
+        .eq("id", existing.id);
+      if (error) throw error;
+      return { ok: true, slideId: existing.id, reactivated: true };
+    }
+
+    const { data: maxRow } = await supabaseAdmin
+      .from("homepage_slides")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextSort = ((maxRow?.sort_order as number | undefined) ?? 0) + 10;
+
+    const { data: ins, error } = await supabaseAdmin
+      .from("homepage_slides")
+      .insert({
+        title: t.title,
+        subtitle,
+        image_url: image,
+        link_url: linkUrl,
+        cta_label: "Watch now",
+        sort_order: nextSort,
+        is_active: true,
+        duration_ms: 5000,
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, slideId: ins.id, reactivated: false };
+  });
