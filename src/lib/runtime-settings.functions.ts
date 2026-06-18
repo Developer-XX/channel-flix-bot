@@ -38,6 +38,7 @@ export const SETTING_KEYS = [
   { key: "ALERT_TELEGRAM_CHAT_ID",      group: "Alerts",        isSecret: false, placeholder: "Telegram chat id for admin alerts" },
   { key: "HOMEPAGE_SLIDESHOW_ENABLED",  group: "Homepage",      isSecret: false, placeholder: "true / false (default true)" },
   { key: "HOMEPAGE_SECTION_ORDER",      group: "Homepage",      isSecret: false, placeholder: "trending,latest,movies,series,anime,kdrama" },
+  { key: "PUBLIC_BROWSING_ENABLED",     group: "Browsing",      isSecret: false, placeholder: "true (anyone can browse titles) / false (sign-in required to view titles)" },
   { key: "ADS_ENABLED",                 group: "Ads",           isSecret: false, placeholder: "true / false (premium users never see ads)" },
   { key: "AD_INTERSTITIAL_ENABLED",     group: "Ads",           isSecret: false, placeholder: "true / false — show full-screen video interstitials" },
   { key: "AD_INTERSTITIAL_ON_LOGIN",    group: "Ads",           isSecret: false, placeholder: "true / false — show one right after sign-in / register" },
