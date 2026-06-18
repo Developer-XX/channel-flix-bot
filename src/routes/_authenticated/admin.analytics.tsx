@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
+  ShieldAlert,
 } from "lucide-react";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,46 @@ function AnalyticsPage() {
           }))}
         />
       </div>
+
+      {/* Blocked browsing (auth-only mode redirects) */}
+      <Section title="Blocked browsing attempts" icon={<ShieldAlert className="h-4 w-4" />}>
+        <div className="mb-3 text-xs text-muted-foreground">
+          Public browsing is currently{" "}
+          <span className={a?.blockedBrowsing.publicBrowsingEnabled ? "text-emerald-500 font-semibold" : "text-red-500 font-semibold"}>
+            {a?.blockedBrowsing.publicBrowsingEnabled ? "ON (anyone can browse titles)" : "OFF (sign-in required)"}
+          </span>
+          . Counts below are anonymous visitors who were redirected to sign-in.
+        </div>
+        <StatGrid>
+          <Stat label="Today" value={a?.blockedBrowsing.today} icon={<ShieldAlert className="h-4 w-4" />} accent />
+          <Stat label="Last 7d" value={a?.blockedBrowsing.last7d} />
+          <Stat label="Last 30d" value={a?.blockedBrowsing.last30d} />
+          {(a?.blockedBrowsing.byReason ?? []).slice(0, 3).map((r) => (
+            <Stat key={r.reason} label={r.reason} value={r.count} />
+          ))}
+        </StatGrid>
+        {a?.blockedBrowsing.recent && a.blockedBrowsing.recent.length > 0 && (
+          <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Recent attempts
+            </div>
+            <div className="divide-y divide-border">
+              {a.blockedBrowsing.recent.map((r) => (
+                <div key={r.id} className="px-3 py-2 text-xs flex items-center gap-3">
+                  <span className="text-muted-foreground tabular-nums">
+                    {new Date(r.created_at).toLocaleString()}
+                  </span>
+                  <span className="font-mono text-primary">{r.reason}</span>
+                  <span className="truncate flex-1 text-muted-foreground">{r.path ?? r.slug ?? "—"}</span>
+                  <span className={`text-[10px] uppercase tracking-wider ${r.toggle_on ? "text-emerald-500" : "text-red-500"}`}>
+                    toggle {r.toggle_on ? "on" : "off"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

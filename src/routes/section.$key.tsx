@@ -1,4 +1,5 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,6 +7,9 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { TitleGrid } from "@/components/title-row";
 import type { TitleCardData } from "@/components/title-card";
+import { useIsAuthed } from "@/hooks/use-session-flag";
+import { usePublicBrowsing } from "@/hooks/use-public-browsing";
+import { logBlockedBrowsing } from "@/lib/blocked-access";
 
 const SECTIONS: Record<string, { title: string; build: () => Promise<TitleCardData[]> }> = {
   trending: {
@@ -74,10 +78,22 @@ export const Route = createFileRoute("/section/$key")({
 function SectionPage() {
   const { key } = Route.useParams();
   const section = SECTIONS[key]!;
+  const isAuthed = useIsAuthed();
+  const publicBrowsing = usePublicBrowsing();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthed && !publicBrowsing) {
+      void logBlockedBrowsing("section", key, `/section/${key}`);
+      navigate({ to: "/auth", search: { redirect: `/section/${key}` }, replace: true });
+    }
+  }, [isAuthed, publicBrowsing, navigate, key]);
+
   const q = useQuery({
     queryKey: ["section", key],
     queryFn: section.build,
   });
+
 
   return (
     <div className="min-h-screen flex flex-col">

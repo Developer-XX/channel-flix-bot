@@ -15,6 +15,7 @@ import { OnboardingTutorial } from "@/components/OnboardingTutorial";
 import { AdSlot } from "@/components/AdSlot";
 import { useIsAuthed } from "@/hooks/use-session-flag";
 import { usePublicBrowsing } from "@/hooks/use-public-browsing";
+import { logBlockedBrowsing } from "@/lib/blocked-access";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
@@ -44,6 +45,7 @@ function TitlePage() {
 
   useEffect(() => {
     if (!isAuthed && !publicBrowsing) {
+      void logBlockedBrowsing("title_detail", slug, `/title/${slug}`);
       navigate({ to: "/auth", search: { redirect: `/title/${slug}` }, replace: true });
     }
   }, [isAuthed, publicBrowsing, navigate, slug]);

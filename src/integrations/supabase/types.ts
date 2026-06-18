@@ -361,6 +361,36 @@ export type Database = {
         }
         Relationships: []
       }
+      blocked_browsing_log: {
+        Row: {
+          created_at: string
+          id: string
+          path: string | null
+          reason: string
+          slug: string | null
+          toggle_on: boolean
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          path?: string | null
+          reason: string
+          slug?: string | null
+          toggle_on?: boolean
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          path?: string | null
+          reason?: string
+          slug?: string | null
+          toggle_on?: boolean
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       bulk_job_runs: {
         Row: {
           created_at: string
@@ -2216,6 +2246,15 @@ export type Database = {
         Returns: boolean
       }
       is_public_browsing_enabled: { Args: never; Returns: boolean }
+      log_blocked_browsing: {
+        Args: {
+          _path?: string
+          _reason: string
+          _slug?: string
+          _user_agent?: string
+        }
+        Returns: undefined
+      }
       rl_hit: {
         Args: { _key: string; _limit: number; _window_sec: number }
         Returns: {
