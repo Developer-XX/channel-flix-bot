@@ -1,8 +1,8 @@
-// 24h token-verification gate. Alternates providers per cycle.
-// Providers: nanolinks → adrinolinks → nanolinks → ...
-// When the secret for a provider is missing, we fall back to a "passthrough"
-// stub that redirects directly to /api/public/v/<token> — handy for local
-// testing and for the first run before keys are added.
+// 24h token-verification gate. Rotates through admin-enabled providers using
+// a per-user time window. Providers: adrinolinks, nanolinks, arolinks, linkpays.
+// When the secret for a provider is missing OR no providers are enabled, we
+// fall back to a "passthrough" stub that redirects directly to
+// /api/public/v/<token>.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
@@ -11,14 +11,63 @@ import { getSetting, getSettingNumber } from "./runtime-settings.server";
 
 export const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
-export type Provider = "nanolinks" | "adrinolinks";
+export type Provider = "nanolinks" | "adrinolinks" | "arolinks" | "linkpays";
 
+type ProviderConfig = {
+  name: Provider;
+  host: string;
+  enabledKey: string;
+  apiKeyKey: string;
+  defaultEnabled: boolean;
+};
+
+const PROVIDER_REGISTRY: ProviderConfig[] = [
+  { name: "adrinolinks", host: "adrinolinks.in", enabledKey: "SHORTENER_ENABLED_ADRINOLINKS", apiKeyKey: "ADRINOLINKS_API_KEY", defaultEnabled: true },
+  { name: "nanolinks",   host: "nanolinks.in",   enabledKey: "SHORTENER_ENABLED_NANOLINKS",   apiKeyKey: "NANOLINKS_API_KEY",   defaultEnabled: true },
+  { name: "arolinks",    host: "arolinks.com",   enabledKey: "SHORTENER_ENABLED_AROLINKS",    apiKeyKey: "AROLINKS_API_KEY",    defaultEnabled: false },
+  { name: "linkpays",    host: "linkpays.in",    enabledKey: "SHORTENER_ENABLED_LINKPAYS",    apiKeyKey: "LINKPAYS_API_KEY",    defaultEnabled: false },
+];
+
+async function isTruthySetting(key: string, fallback: boolean): Promise<boolean> {
+  const v = await getSetting(key);
+  if (v == null) return fallback;
+  return /^(1|true|yes|on)$/i.test(v.trim());
+}
+
+async function getEnabledProviders(): Promise<ProviderConfig[]> {
+  const out: ProviderConfig[] = [];
+  for (const p of PROVIDER_REGISTRY) {
+    if (await isTruthySetting(p.enabledKey, p.defaultEnabled)) out.push(p);
+  }
+  return out;
+}
+
+// Pick the active provider for this rotation window. We bucket time into
+// SHORTENER_ROTATION_HOURS-wide slots and offset by user id so different
+// users don't all rotate at the same instant.
+async function pickRotatedProvider(userId: string, lastProvider: string | null): Promise<Provider | null> {
+  const enabled = await getEnabledProviders();
+  if (enabled.length === 0) return null;
+  if (enabled.length === 1) return enabled[0].name;
+  const hours = Math.max(1, await getSettingNumber("SHORTENER_ROTATION_HOURS", 12));
+  const slotMs = hours * 60 * 60 * 1000;
+  // Stable per-user offset
+  let h = 0;
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0;
+  const slot = Math.floor((Date.now() + (h % slotMs)) / slotMs);
+  const candidate = enabled[slot % enabled.length].name;
+  // Don't repeat the immediately previous one if possible
+  if (candidate === lastProvider && enabled.length > 1) {
+    return enabled[(slot + 1) % enabled.length].name;
+  }
+  return candidate;
+}
+
+// Back-compat helper used by some callers.
 export function nextProvider(last: string | null | undefined): Provider {
   return last === "nanolinks" ? "adrinolinks" : "nanolinks";
 }
 
-// Re-exported so existing imports keep working. Single source of truth lives
-// in `./site-url.server`.
 export function siteOrigin(): string {
   return getPublicBaseUrl();
 }
@@ -32,25 +81,61 @@ export function hashIp(ip: string | null | undefined): string | null {
   return createHash("sha256").update(ip).digest("base64url").slice(0, 32);
 }
 
+async function getUserCreatedAt(
+  supabase: SupabaseClient<any, any, any>,
+  userId: string,
+): Promise<Date | null> {
+  // profiles table is created on signup via handle_new_user trigger.
+  const { data } = await supabase
+    .from("profiles")
+    .select("created_at")
+    .eq("id", userId)
+    .maybeSingle();
+  return data?.created_at ? new Date(data.created_at) : null;
+}
+
+// Returns ms remaining in grace window, or 0 if no grace / already expired.
+export async function getGraceRemainingMs(
+  supabase: SupabaseClient<any, any, any>,
+  userId: string,
+): Promise<number> {
+  const days = await getSettingNumber("VERIFICATION_GRACE_DAYS", 0);
+  if (days <= 0) return 0;
+  const createdAt = await getUserCreatedAt(supabase, userId);
+  if (!createdAt) return 0;
+  const expiresAt = createdAt.getTime() + days * 24 * 60 * 60 * 1000;
+  return Math.max(0, expiresAt - Date.now());
+}
+
 export async function getVerificationState(
   supabase: SupabaseClient<any, any, any>,
   userId: string,
-): Promise<{ verified: boolean; expiresAt: string | null; lastProvider: string | null }> {
+): Promise<{ verified: boolean; expiresAt: string | null; lastProvider: string | null; graceRemainingMs?: number }> {
+  const graceRemainingMs = await getGraceRemainingMs(supabase, userId);
   const { data } = await supabase
     .from("user_verifications")
     .select("expires_at, last_provider")
     .eq("user_id", userId)
     .maybeSingle();
-  if (!data?.expires_at) return { verified: false, expiresAt: null, lastProvider: data?.last_provider ?? null };
+  // Grace period: treat user as verified for the duration of the grace window.
+  if (graceRemainingMs > 0) {
+    const graceExpires = new Date(Date.now() + graceRemainingMs).toISOString();
+    return {
+      verified: true,
+      expiresAt: data?.expires_at ?? graceExpires,
+      lastProvider: data?.last_provider ?? null,
+      graceRemainingMs,
+    };
+  }
+  if (!data?.expires_at) return { verified: false, expiresAt: null, lastProvider: data?.last_provider ?? null, graceRemainingMs: 0 };
   const verified = new Date(data.expires_at).getTime() > Date.now();
-  return { verified, expiresAt: data.expires_at, lastProvider: data.last_provider ?? null };
+  return { verified, expiresAt: data.expires_at, lastProvider: data.last_provider ?? null, graceRemainingMs: 0 };
 }
 
-// Read shortener API keys ONLY from server env. Never logged, never returned
-// to the client. We expose a stable, non-reversible fingerprint for audit.
 async function readKey(provider: Provider): Promise<string | null> {
-  const settingKey = provider === "nanolinks" ? "NANOLINKS_API_KEY" : "ADRINOLINKS_API_KEY";
-  const raw = await getSetting(settingKey);
+  const cfg = PROVIDER_REGISTRY.find((p) => p.name === provider);
+  if (!cfg) return null;
+  const raw = await getSetting(cfg.apiKeyKey);
   if (!raw || raw.length < 8) return null;
   return raw;
 }
@@ -59,8 +144,6 @@ function keyFingerprint(key: string): string {
   return "sha256:" + createHash("sha256").update(key).digest("hex").slice(0, 12);
 }
 
-// Shorten a URL through a provider. Returns the original URL if no key is
-// configured (passthrough stub) so end-to-end flow still works.
 async function shorten(
   supabase: SupabaseClient<any, any, any>,
   userId: string,
@@ -70,7 +153,6 @@ async function shorten(
   const key = await readKey(provider);
   const startedAt = Date.now();
   if (!key) {
-    // Audit no-key path (passthrough)
     await supabase.from("verification_provider_calls").insert({
       user_id: userId,
       provider,
@@ -81,8 +163,8 @@ async function shorten(
     return longUrl;
   }
   const fingerprint = keyFingerprint(key);
-  const host = provider === "nanolinks" ? "nanolinks.in" : "adrinolinks.in";
-  const u = new URL(`https://${host}/api`);
+  const cfg = PROVIDER_REGISTRY.find((p) => p.name === provider)!;
+  const u = new URL(`https://${cfg.host}/api`);
   u.searchParams.set("api", key);
   u.searchParams.set("url", longUrl);
   let httpStatus: number | null = null;
@@ -101,7 +183,6 @@ async function shorten(
         key_fingerprint: fingerprint,
         short_url_returned: true,
       });
-      // Never log the key or full URL with the key embedded.
       console.info(`[verification] ${provider} ok (${fingerprint})`);
       return short;
     }
@@ -141,9 +222,9 @@ export async function startVerificationForUser(args: {
 }): Promise<{ provider: Provider; redirectUrl: string; token: string; expiresAt: string }> {
   const { supabase, userId, mediaFileId, ip } = args;
   const current = await getVerificationState(supabase, userId);
-  const provider = nextProvider(current.lastProvider);
+  const rotated = await pickRotatedProvider(userId, current.lastProvider);
+  const provider: Provider = rotated ?? nextProvider(current.lastProvider);
 
-  // Invalidate any outstanding unconsumed tokens for this user
   await supabase
     .from("verification_tokens")
     .update({ consumed_at: new Date().toISOString() })
@@ -168,7 +249,6 @@ export async function startVerificationForUser(args: {
   return { provider, redirectUrl, token, expiresAt };
 }
 
-// Token consume — called by GET /api/public/v/:token.
 export async function consumeToken(args: {
   supabase: SupabaseClient<any, any, any>;
   token: string;
@@ -186,9 +266,7 @@ export async function consumeToken(args: {
   if (!row) return { ok: false, reason: "not_found" };
   if (row.consumed_at) return { ok: false, reason: "already_used" };
   if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false, reason: "expired" };
-  // Soft IP check — only enforce if both are present
   if (row.ip_hash && ip && hashIp(ip) !== row.ip_hash) {
-    // Don't hard-fail; mobile carriers rotate IPs. Log for debugging.
     console.warn(`[verification] ip mismatch for token (soft-allow)`);
   }
 
@@ -206,7 +284,6 @@ export async function consumeToken(args: {
     },
     { onConflict: "user_id" },
   );
-  // Best-effort count bump
   try {
     await (supabase.rpc as any)("increment_verification_count", { _user_id: row.user_id });
   } catch { /* optional RPC */ }

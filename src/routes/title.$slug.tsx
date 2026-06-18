@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { DownloadButton } from "@/components/DownloadButton";
 import { SeasonAccordion } from "@/components/SeasonAccordion";
 import { TitleDebugPanel } from "@/components/TitleDebugPanel";
+import { HowToDownload } from "@/components/HowToDownload";
+import { OnboardingTutorial } from "@/components/OnboardingTutorial";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
@@ -249,7 +251,10 @@ function TitlePage() {
             </Link>
           </div>
         </section>
+
+        <HowToDownload />
       </main>
+      <OnboardingTutorial />
       <SiteFooter />
     </div>
   );

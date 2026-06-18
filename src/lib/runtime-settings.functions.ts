@@ -10,9 +10,22 @@ export const SETTING_KEYS = [
   { key: "TMDB_API_KEY",                group: "TMDB",          isSecret: true,  placeholder: "v3 API key" },
   { key: "ADRINOLINKS_API_KEY",         group: "Shorteners",    isSecret: true,  placeholder: "adrinolinks.in API key" },
   { key: "NANOLINKS_API_KEY",           group: "Shorteners",    isSecret: true,  placeholder: "nanolinks.in API key" },
+  { key: "AROLINKS_API_KEY",            group: "Shorteners",    isSecret: true,  placeholder: "arolinks.com API key" },
+  { key: "LINKPAYS_API_KEY",            group: "Shorteners",    isSecret: true,  placeholder: "linkpays.in API key" },
+  { key: "SHORTENER_ENABLED_ADRINOLINKS", group: "Shorteners",  isSecret: false, placeholder: "true / false (default true)" },
+  { key: "SHORTENER_ENABLED_NANOLINKS",   group: "Shorteners",  isSecret: false, placeholder: "true / false (default true)" },
+  { key: "SHORTENER_ENABLED_AROLINKS",    group: "Shorteners",  isSecret: false, placeholder: "true / false (default false)" },
+  { key: "SHORTENER_ENABLED_LINKPAYS",    group: "Shorteners",  isSecret: false, placeholder: "true / false (default false)" },
+  { key: "SHORTENER_ROTATION_HOURS",      group: "Shorteners",  isSecret: false, placeholder: "12 (hours each provider stays active per user)" },
   { key: "VERIFICATION_WINDOW_MINUTES", group: "Verification",  isSecret: false, placeholder: "60" },
   { key: "VERIFICATION_MAX_PER_HOUR",   group: "Verification",  isSecret: false, placeholder: "10" },
   { key: "SHORTENER_TOKEN_TTL_SECONDS", group: "Verification",  isSecret: false, placeholder: "1800" },
+  { key: "VERIFICATION_GRACE_DAYS",     group: "Verification",  isSecret: false, placeholder: "2 (days new users skip token verification, 0 to disable)" },
+  { key: "TUTORIAL_ENABLED",            group: "Tutorial",      isSecret: false, placeholder: "true / false" },
+  { key: "TUTORIAL_VIDEO_TYPE",         group: "Tutorial",      isSecret: false, placeholder: "youtube | mp4 | storage" },
+  { key: "TUTORIAL_VIDEO_URL",          group: "Tutorial",      isSecret: false, placeholder: "https://youtu.be/... or https://.../video.mp4" },
+  { key: "TUTORIAL_TITLE",              group: "Tutorial",      isSecret: false, placeholder: "How to download (shown at bottom of every title)" },
+  { key: "TUTORIAL_DESCRIPTION",        group: "Tutorial",      isSecret: false, placeholder: "Short description shown above the video" },
 ] as const;
 
 const KEYS: Set<string> = new Set(SETTING_KEYS.map((s) => s.key));
