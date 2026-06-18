@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images } from "lucide-react";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -125,6 +125,7 @@ function AdminLayout() {
           <NavItem to="/admin/support" icon={<MessageCircle className="h-4 w-4" />} label="Support chat" />
           <NavItem to="/admin/announcements" icon={<Megaphone className="h-4 w-4" />} label="Announcements" />
           <NavItem to="/admin/slideshow" icon={<Images className="h-4 w-4" />} label="Homepage slideshow" />
+          <NavItem to="/admin/ads" icon={<BadgeDollarSign className="h-4 w-4" />} label="Ads" />
           <NavItem to="/admin/notifications" icon={<Bell className="h-4 w-4" />} label="Notifications" />
           <NavItem to="/admin/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
         </nav>
@@ -155,6 +156,7 @@ function AdminLayout() {
             <MobileNavItem to="/admin/support" label="Support" />
             <MobileNavItem to="/admin/announcements" label="Announce" />
             <MobileNavItem to="/admin/slideshow" label="Slides" />
+            <MobileNavItem to="/admin/ads" label="Ads" />
             <MobileNavItem to="/admin/notifications" label="Alerts" />
             <MobileNavItem to="/admin/settings" label="Settings" />
           </nav>
