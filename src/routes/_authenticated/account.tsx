@@ -80,6 +80,17 @@ function AccountPage() {
           <TelegramLinkCard />
           <VerificationCard />
 
+          <Link to="/account/downloads" className="block rounded-xl border border-border bg-surface/40 p-4 hover:bg-surface/60 transition-colors">
+            <div className="flex items-center gap-3">
+              <Send className="h-5 w-5 text-primary" />
+              <div className="flex-1">
+                <div className="font-medium text-sm">Download history</div>
+                <div className="text-xs text-muted-foreground">See your sent files, resend with cooldown protection</div>
+              </div>
+              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </Link>
+
           <section className="rounded-xl border border-border bg-surface/40 p-5">
             <h2 className="font-display text-lg font-semibold">Profile</h2>
             <form onSubmit={save} className="mt-4 space-y-4">
