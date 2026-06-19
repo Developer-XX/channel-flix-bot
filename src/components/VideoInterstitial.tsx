@@ -65,6 +65,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const listFn = useServerFn(listActiveAds);
   const trackFn = useServerFn(recordAdEvent);
   const perfFn = useServerFn(recordAdPerfEvent);
+  const issueFn = useServerFn(issueInterstitialRequest);
 
   const [ad, setAd] = useState<Ad | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -83,6 +84,8 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const mountTimeRef = useRef<number>(0);
   const bufferStartRef = useRef<number | null>(null);
   const bufferTotalRef = useRef<number>(0);
+  const requestIdRef = useRef<string | null>(null);
+  const firstByteSentRef = useRef(false);
 
   // Best-effort perf send. Bounded by RLS WITH CHECK on the server.
   const sendPerf = useCallback(
@@ -96,6 +99,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             metric,
             value: Math.max(0, Math.min(600000, Math.round(value))),
             user_agent: ua,
+            request_id: requestIdRef.current,
           },
         }).catch(() => {});
       } catch {
