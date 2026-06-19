@@ -480,8 +480,15 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           controls={false}
           onCanPlay={tryPlay}
           onLoadedMetadata={tryPlay}
+          onLoadedData={() => {
+            if (!firstByteSentRef.current) {
+              firstByteSentRef.current = true;
+              sendBeacon(requestIdRef.current, "first_byte");
+            }
+          }}
           onWaiting={() => {
             if (bufferStartRef.current == null) bufferStartRef.current = performance.now();
+            sendBeacon(requestIdRef.current, "buffer_start");
           }}
           onPlaying={() => {
             if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
@@ -489,14 +496,22 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             if (bufferStartRef.current != null) {
               bufferTotalRef.current += performance.now() - bufferStartRef.current;
               bufferStartRef.current = null;
+              sendBeacon(requestIdRef.current, "buffer_end");
             }
             if (!ttffLogged.current && mountTimeRef.current > 0) {
               ttffLogged.current = true;
               sendPerf("ttff_ms", performance.now() - mountTimeRef.current);
+              sendBeacon(requestIdRef.current, "first_frame");
             }
           }}
-          onError={handleVideoError}
-          onEnded={() => close("completed")}
+          onError={() => {
+            sendBeacon(requestIdRef.current, "error");
+            handleVideoError();
+          }}
+          onEnded={() => {
+            sendBeacon(requestIdRef.current, "end");
+            close("completed");
+          }}
           className="absolute inset-0 h-full w-full object-contain"
         />
 
