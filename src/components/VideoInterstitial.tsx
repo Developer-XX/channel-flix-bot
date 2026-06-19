@@ -286,7 +286,29 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const close = (reason: "completed" | "cancelled") => {
     if (closedRef.current) return;
     closedRef.current = true;
+    // Hard-stop the underlying media element so a cancelled ad cannot keep
+    // decoding frames or replay the opening clip while the controller is
+    // unmounting. We pause + detach the source + load() to abort any in-
+    // flight network fetch, which also prevents `onCanPlay`/`onLoadedMetadata`
+    // from firing after the close.
+    const v = videoRef.current;
+    if (v) {
+      try {
+        v.pause();
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        /* noop */
+      }
+    }
     flushPlaybackMetrics();
+    emitClientAdEvent(reason === "completed" ? "ad_complete" : "ad_cancel", {
+      placement,
+      ad_id: ad?.id,
+      request_id: requestIdRef.current,
+      current_time: v?.currentTime ?? null,
+      duration: v?.duration ?? null,
+    });
     if (ad) {
       trackFn({
         data: { ad_id: ad.id, placement, event_type: reason === "completed" ? "complete" : "dismiss" },
@@ -294,6 +316,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     }
     onClose(reason);
   };
+
 
   const openLink = () => {
     if (!ad?.link_url) return;
