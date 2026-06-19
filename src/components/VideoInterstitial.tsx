@@ -181,6 +181,30 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     };
   }, []);
 
+  // Track viewport size so the player recalculates on resize / orientation
+  // change / virtual-keyboard toggles. Uses visualViewport when available
+  // (handles iOS Safari's URL-bar collapse correctly) and falls back to
+  // window resize + orientationchange.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const measure = () => {
+      const vv = window.visualViewport;
+      setViewport({
+        w: Math.round(vv?.width ?? window.innerWidth),
+        h: Math.round(vv?.height ?? window.innerHeight),
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, []);
+
   // Load a video ad for this placement (with retry).
   const loadAd = useCallback(async () => {
     setLoadState("loading");
