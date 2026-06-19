@@ -216,6 +216,45 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     };
   }, []);
 
+  // Telemetry: record the chosen aspect-ratio mode and the final rendered
+  // dimensions whenever they change. Helps debug clipping reports — we can
+  // see exactly which viewport/AR pairing produced a complaint.
+  const sizingLoggedRef = useRef<string>("");
+  useEffect(() => {
+    if (loadState !== "ready" || !ad) return;
+    const v = videoRef.current;
+    const vw = v?.videoWidth ?? 0;
+    const vh = v?.videoHeight ?? 0;
+    const mode: "intrinsic" | "fallback-viewport" =
+      hasIntrinsicSize && aspectRatio > 0 ? "intrinsic" : "fallback-viewport";
+    const ar = mode === "intrinsic" ? aspectRatio : viewport.w / Math.max(1, viewport.h);
+    const renderedW = Math.min(viewport.w, Math.round(viewport.h * ar));
+    const renderedH = Math.min(viewport.h, Math.round(viewport.w / Math.max(0.0001, ar)));
+    const key = `${mode}|${vw}x${vh}|${renderedW}x${renderedH}|${viewport.w}x${viewport.h}`;
+    if (sizingLoggedRef.current === key) return;
+    sizingLoggedRef.current = key;
+    emitClientAdEvent("ad_lifecycle_start", {
+      placement,
+      ad_id: ad.id,
+      request_id: requestIdRef.current,
+      sizing: {
+        mode,
+        video_width: vw,
+        video_height: vh,
+        intrinsic_available: vw > 0 && vh > 0,
+        chosen_aspect_ratio: Number(ar.toFixed(4)),
+        rendered_width: renderedW,
+        rendered_height: renderedH,
+        viewport_width: viewport.w,
+        viewport_height: viewport.h,
+        dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+        orientation: viewport.w >= viewport.h ? "landscape" : "portrait",
+      },
+    });
+    sendBeacon(requestIdRef.current, "sizing", renderedW * 1000 + renderedH);
+  }, [loadState, ad, hasIntrinsicSize, aspectRatio, viewport, placement]);
+
+
   // Load a video ad for this placement (with retry).
   const loadAd = useCallback(async () => {
     setLoadState("loading");
