@@ -43,8 +43,8 @@ function lsSetNum(key: string, value: number) {
 export function InterstitialController() {
   const configFn = useServerFn(getInterstitialConfig);
   const premiumFn = useServerFn(getMyPremiumStatus);
-  const eligibilityFn = useServerFn(getInterstitialEligibility);
-  const recordViewFn = useServerFn(recordInterstitialView);
+  const eligibilityFn = useServerFn(previewInterstitialEligibility);
+  const claimFn = useServerFn(claimInterstitialView);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [request, setRequest] = useState<Request>(null);
   const justSignedInRef = useRef(false);
