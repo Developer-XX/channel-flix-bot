@@ -1,9 +1,11 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Search, Menu, X, Film, Shield, User as UserIcon, LogOut, MessageCircle, Crown } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CATEGORIES } from "@/lib/categories";
 import { useAuth, useIsAdmin } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { logAuthEvent } from "@/lib/auth-events.functions";
 import { Button } from "@/components/ui/button";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 
