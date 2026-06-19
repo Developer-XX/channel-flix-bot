@@ -182,26 +182,37 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   }, []);
 
   // Track viewport size so the player recalculates on resize / orientation
-  // change / virtual-keyboard toggles. Uses visualViewport when available
-  // (handles iOS Safari's URL-bar collapse correctly) and falls back to
-  // window resize + orientationchange.
+  // change / virtual-keyboard toggles. iOS Safari changes window.innerHeight
+  // when the URL bar collapses/expands, but only `visualViewport` reports
+  // the correct usable rect during that transition — so we listen to both
+  // `resize` AND `scroll` on visualViewport, plus the legacy
+  // `orientationchange` event (still fired before resize on some iOS
+  // versions). A short rAF debounce coalesces the burst of events iOS
+  // dispatches during rotation.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let raf = 0;
     const measure = () => {
-      const vv = window.visualViewport;
-      setViewport({
-        w: Math.round(vv?.width ?? window.innerWidth),
-        h: Math.round(vv?.height ?? window.innerHeight),
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const vv = window.visualViewport;
+        setViewport({
+          w: Math.round(vv?.width ?? window.innerWidth),
+          h: Math.round(vv?.height ?? window.innerHeight),
+        });
       });
     };
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("orientationchange", measure);
     window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("resize", measure);
       window.removeEventListener("orientationchange", measure);
       window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
     };
   }, []);
 
