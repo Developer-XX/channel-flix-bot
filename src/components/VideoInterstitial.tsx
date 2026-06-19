@@ -25,6 +25,8 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const [ad, setAd] = useState<Ad | null>(null);
   const [remaining, setRemaining] = useState<number>(cancelSeconds);
   const [ready, setReady] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [needsTap, setNeedsTap] = useState(false);
   const impressionLogged = useRef(false);
   const closedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
