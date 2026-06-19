@@ -240,12 +240,15 @@ function Chart({
 }) {
   // Reshape: one row per ts, one column per placement
   const byTs = new Map<string, Record<string, number | string | null>>();
-  for (const p of data) {
+  for (const raw of data) {
+    const p = raw as { ts: string; placement: string } & Record<string, number | null>;
     const row = byTs.get(p.ts) ?? { ts: p.ts };
-    row[p.placement] = (p as Record<string, number | null>)[dataKey] ?? null;
+    row[p.placement] = (p[dataKey] as number | null) ?? null;
     byTs.set(p.ts, row);
   }
-  const rows = [...byTs.values()].sort((a, b) => (a.ts < b.ts ? -1 : 1));
+  const rows = [...byTs.values()].sort((a, b) =>
+    String(a.ts) < String(b.ts) ? -1 : 1,
+  );
   const colors = ["#3b82f6", "#ef4444", "#22c55e", "#a855f7"];
   return (
     <section className="mb-6">
