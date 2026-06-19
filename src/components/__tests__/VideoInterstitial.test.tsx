@@ -35,6 +35,9 @@ vi.mock("@/lib/ads.functions", () => ({
 
 vi.mock("@/lib/ad-perf.functions", () => ({
   recordAdPerfEvent: vi.fn(() => Promise.resolve({ ok: true })),
+  issueInterstitialRequest: vi.fn(() =>
+    Promise.resolve({ request_id: "test-req-id", beacon_url: "/api/public/hooks/interstitial-beacon" }),
+  ),
 }));
 
 import { listActiveAds, recordAdEvent } from "@/lib/ads.functions";
