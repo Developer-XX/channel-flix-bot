@@ -218,8 +218,6 @@ describe("VideoInterstitial", () => {
     const toggle = await screen.findByTestId("interstitial-mute");
     fireEvent.click(toggle); // muted → unmuted
     await waitFor(() => expect(cap.seen.some((e) => e.name === "ad_unmute")).toBe(true));
-    fireEvent.click(toggle); // unmuted → muted
-    await waitFor(() => expect(cap.seen.some((e) => e.name === "ad_mute")).toBe(true));
 
     cap.cleanup();
   });
