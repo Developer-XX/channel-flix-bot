@@ -123,6 +123,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const [needsTap, setNeedsTap] = useState(false);
   const [retries, setRetries] = useState(0);
   const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
+  const [hasIntrinsicSize, setHasIntrinsicSize] = useState<boolean>(false);
+  const [viewport, setViewport] = useState<{ w: number; h: number }>(() => ({
+    w: typeof window === "undefined" ? 1280 : window.innerWidth,
+    h: typeof window === "undefined" ? 720 : window.innerHeight,
+  }));
 
   const impressionLogged = useRef(false);
   const playLogged = useRef(false);
