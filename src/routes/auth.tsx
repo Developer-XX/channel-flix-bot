@@ -194,6 +194,24 @@ function AuthPage() {
           <h1 className="font-display text-2xl font-bold">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
 
+          {sessionError && (
+            <div
+              role="alert"
+              className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              <p className="font-medium">Session not saved</p>
+              <p className="mt-1 text-destructive/90">{sessionError}</p>
+              <button
+                type="button"
+                onClick={() => { setSessionError(null); void signInWithGoogle(); }}
+                className="mt-2 inline-flex items-center rounded-md border border-destructive/40 px-2 py-1 text-xs font-medium hover:bg-destructive/20"
+              >
+                Retry Google sign-in
+              </button>
+            </div>
+          )}
+
+
           <Button
             type="button"
             onClick={signInWithGoogle}
