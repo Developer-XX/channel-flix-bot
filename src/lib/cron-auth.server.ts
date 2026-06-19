@@ -4,8 +4,9 @@
 // SUPABASE service-role key is also accepted as a fallback so trusted
 // server-to-server callers (pg_cron with service_role) keep working.
 //
-// NEVER use SUPABASE_PUBLISHABLE_KEY / VITE_SUPABASE_PUBLISHABLE_KEY as
-// an auth token — it is shipped to every browser.
+// NEVER accept SUPABASE_PUBLISHABLE_KEY / VITE_SUPABASE_PUBLISHABLE_KEY /
+// SUPABASE_ANON_KEY as an auth token — those are shipped to every browser
+// and would let any visitor trigger internal cron hooks.
 
 function timingSafeEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -17,17 +18,6 @@ function timingSafeEq(a: string, b: string): boolean {
 export function checkCronAuth(request: Request): { ok: true } | { ok: false; response: Response } {
   const cronSecret = process.env.CRON_SECRET ?? "";
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-  // Lovable Cloud pg_cron jobs send the publishable/anon key in the
-  // `apikey` header (canonical pattern). Accept it so cron jobs don't 401
-  // after a CRON_SECRET rotation or env drift.
-  const publishable =
-    process.env.SUPABASE_PUBLISHABLE_KEY ??
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.SUPABASE_ANON_KEY ??
-    "";
-
-  const apiKeyHeader = request.headers.get("apikey") ?? "";
-  if (apiKeyHeader && publishable && timingSafeEq(apiKeyHeader, publishable)) return { ok: true };
 
   const headerSecret =
     request.headers.get("x-cron-secret") ??
@@ -38,7 +28,6 @@ export function checkCronAuth(request: Request): { ok: true } | { ok: false; res
   }
   if (cronSecret && timingSafeEq(headerSecret, cronSecret)) return { ok: true };
   if (serviceRole && timingSafeEq(headerSecret, serviceRole)) return { ok: true };
-  if (publishable && timingSafeEq(headerSecret, publishable)) return { ok: true };
 
   return { ok: false, response: new Response("Unauthorized", { status: 401 }) };
 }
