@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Crown, Send, RefreshCw, Copy, ExternalLink, ShieldCheck, Clock, AlertTriangle } from "lucide-react";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/downloads.functions";
 import { getMyPremiumStatus } from "@/lib/premium.functions";
 import { getVerificationStatus } from "@/lib/verification.functions";
+import { logAuthEvent } from "@/lib/auth-events.functions";
 
 export const Route = createFileRoute("/_authenticated/account")({
   component: AccountPage,
@@ -44,6 +45,7 @@ function formatRemaining(ms: number): string {
 
 function AccountPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -115,8 +117,15 @@ function AccountPage() {
                   type="button"
                   variant="outline"
                   onClick={async () => {
-                    await supabase.auth.signOut();
-                    navigate({ to: "/" });
+                    const currentEmail = email || undefined;
+                    try {
+                      await queryClient.cancelQueries();
+                      queryClient.clear();
+                      await supabase.auth.signOut();
+                      await logAuthEvent({ data: { action: "auth.signout", email: currentEmail } }).catch(() => undefined);
+                    } finally {
+                      navigate({ to: "/auth", replace: true });
+                    }
                   }}
                 >
                   Sign out

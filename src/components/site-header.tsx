@@ -1,9 +1,11 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Search, Menu, X, Film, Shield, User as UserIcon, LogOut, MessageCircle, Crown } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CATEGORIES } from "@/lib/categories";
 import { useAuth, useIsAdmin } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { logAuthEvent } from "@/lib/auth-events.functions";
 import { Button } from "@/components/ui/button";
 import { AnnouncementBar } from "@/components/AnnouncementBar";
 
@@ -15,6 +17,19 @@ export function SiteHeader() {
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
   const { location } = useRouterState();
+  const queryClient = useQueryClient();
+
+  const handleSignOut = async () => {
+    const email = user?.email ?? undefined;
+    try {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      await supabase.auth.signOut();
+      await logAuthEvent({ data: { action: "auth.signout", email } }).catch(() => undefined);
+    } finally {
+      navigate({ to: "/auth", replace: true });
+    }
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
@@ -154,7 +169,7 @@ export function SiteHeader() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/" }); }}
+                onClick={handleSignOut}
               >
                 <LogOut className="h-4 w-4 mr-1.5" />Sign out
               </Button>
@@ -226,10 +241,7 @@ export function SiteHeader() {
                   </Link>
                   <button
                     type="button"
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      navigate({ to: "/" });
-                    }}
+                    onClick={handleSignOut}
                     className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-surface text-left"
                   >
                     <LogOut className="h-4 w-4" /> Sign out

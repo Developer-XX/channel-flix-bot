@@ -143,21 +143,52 @@ function serializeError(error: unknown, fallback: string) {
   };
 }
 
+async function recordAuthAudit(action: string, email: string, status: "success" | "failed", extra: Record<string, unknown> = {}) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const ip =
+      getRequestIP({ xForwardedFor: true }) ??
+      getRequestHeader("x-forwarded-for")?.split(",")[0]?.trim() ??
+      null;
+    const userAgent = getRequestHeader("user-agent")?.slice(0, 256) ?? null;
+    await (supabaseAdmin as any).from("admin_audit_log").insert({
+      action,
+      status,
+      actor_email: email,
+      ip,
+      user_agent: userAgent,
+      metadata: { provider: "email", ...extra },
+    });
+  } catch (e) {
+    console.warn("[auth-audit] insert failed", (e as Error).message);
+  }
+}
+
 export const signInWithBotCheck = createServerFn({ method: "POST" })
   .inputValidator((input) => AuthActionSchema.extend({ password: z.string().min(6).max(128) }).parse(input))
   .handler(async ({ data }) => {
     const throttle = await enforceRateLimit("signin", data.email);
-    if (throttle) return { ok: false as const, error: throttle };
+    if (throttle) {
+      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: throttle.code });
+      return { ok: false as const, error: throttle };
+    }
     const botError = botProtection(data);
-    if (botError) return { ok: false as const, error: botError };
+    if (botError) {
+      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: botError.code });
+      return { ok: false as const, error: botError };
+    }
 
     const { data: result, error } = await createAuthClient().auth.signInWithPassword({
       email: data.email,
       password: data.password,
     });
 
-    if (error) return { ok: false as const, error: serializeError(error, "Sign in failed") };
+    if (error) {
+      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: (error as any).code, message: error.message });
+      return { ok: false as const, error: serializeError(error, "Sign in failed") };
+    }
     await clearRateLimit("signin", data.email);
+    await recordAuthAudit("auth.signin.success", data.email, "success");
     return { ok: true as const, session: serializeSession(result.session) };
   });
 
@@ -165,9 +196,15 @@ export const signUpWithBotCheck = createServerFn({ method: "POST" })
   .inputValidator((input) => AuthActionSchema.extend({ password: z.string().min(6).max(128) }).parse(input))
   .handler(async ({ data }) => {
     const throttle = await enforceRateLimit("signup", data.email);
-    if (throttle) return { ok: false as const, error: throttle };
+    if (throttle) {
+      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: throttle.code });
+      return { ok: false as const, error: throttle };
+    }
     const botError = botProtection(data);
-    if (botError) return { ok: false as const, error: botError };
+    if (botError) {
+      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: botError.code });
+      return { ok: false as const, error: botError };
+    }
 
     const { data: result, error } = await createAuthClient().auth.signUp({
       email: data.email,
@@ -175,10 +212,15 @@ export const signUpWithBotCheck = createServerFn({ method: "POST" })
       options: { emailRedirectTo: `${redirectOrigin(data.origin)}/` },
     });
 
-    if (error) return { ok: false as const, error: serializeError(error, "Account creation failed") };
+    if (error) {
+      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: (error as any).code, message: error.message });
+      return { ok: false as const, error: serializeError(error, "Account creation failed") };
+    }
     await clearRateLimit("signup", data.email);
+    await recordAuthAudit("auth.signup.success", data.email, "success");
     return { ok: true as const, session: serializeSession(result.session) };
   });
+
 
 export const requestPasswordReset = createServerFn({ method: "POST" })
   .inputValidator((input) => AuthActionSchema.omit({ password: true }).parse(input))
