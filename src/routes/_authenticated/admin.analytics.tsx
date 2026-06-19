@@ -69,6 +69,10 @@ function AnalyticsPage() {
         </StatGrid>
       </Section>
 
+      <AuthEventsWidget />
+
+
+
       {/* Downloads */}
       <Section title="Downloads" icon={<Download className="h-4 w-4" />}>
         <StatGrid>
