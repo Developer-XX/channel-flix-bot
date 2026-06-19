@@ -102,8 +102,11 @@ export type Database = {
           ad_id: string | null
           created_at: string
           id: string
+          is_server_validated: boolean
           metric: string
           placement: string
+          request_id: string | null
+          server_received_at: string | null
           user_agent: string | null
           value: number
         }
@@ -111,8 +114,11 @@ export type Database = {
           ad_id?: string | null
           created_at?: string
           id?: string
+          is_server_validated?: boolean
           metric: string
           placement: string
+          request_id?: string | null
+          server_received_at?: string | null
           user_agent?: string | null
           value?: number
         }
@@ -120,10 +126,64 @@ export type Database = {
           ad_id?: string | null
           created_at?: string
           id?: string
+          is_server_validated?: boolean
           metric?: string
           placement?: string
+          request_id?: string | null
+          server_received_at?: string | null
           user_agent?: string | null
           value?: number
+        }
+        Relationships: []
+      }
+      ad_perf_requests: {
+        Row: {
+          ad_id: string | null
+          buffer_open_at: string | null
+          buffer_total_ms: number
+          dropped_frames: number
+          ended_at: string | null
+          error_code: string | null
+          first_byte_at: string | null
+          first_frame_at: string | null
+          issued_at: string
+          placement: string
+          request_id: string
+          session_id: string | null
+          ua_class: string | null
+          user_id: string | null
+        }
+        Insert: {
+          ad_id?: string | null
+          buffer_open_at?: string | null
+          buffer_total_ms?: number
+          dropped_frames?: number
+          ended_at?: string | null
+          error_code?: string | null
+          first_byte_at?: string | null
+          first_frame_at?: string | null
+          issued_at?: string
+          placement: string
+          request_id?: string
+          session_id?: string | null
+          ua_class?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          ad_id?: string | null
+          buffer_open_at?: string | null
+          buffer_total_ms?: number
+          dropped_frames?: number
+          ended_at?: string | null
+          error_code?: string | null
+          first_byte_at?: string | null
+          first_frame_at?: string | null
+          issued_at?: string
+          placement?: string
+          request_id?: string
+          session_id?: string | null
+          ua_class?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -2599,7 +2659,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      interstitial_baselines: { Args: { _placement?: string }; Returns: Json }
       is_public_browsing_enabled: { Args: never; Returns: boolean }
+      issue_interstitial_request: {
+        Args: {
+          _ad_id: string
+          _placement: string
+          _session_id: string
+          _ua: string
+          _user_id: string
+        }
+        Returns: string
+      }
       log_blocked_browsing: {
         Args: {
           _path?: string
@@ -2607,6 +2678,11 @@ export type Database = {
           _slug?: string
           _user_agent?: string
         }
+        Returns: undefined
+      }
+      reconcile_ad_perf_events: { Args: never; Returns: number }
+      record_interstitial_beacon: {
+        Args: { _phase: string; _request_id: string; _value: number }
         Returns: undefined
       }
       rl_hit: {
