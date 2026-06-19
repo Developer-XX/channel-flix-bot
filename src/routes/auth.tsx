@@ -98,52 +98,35 @@ function AuthPage() {
     }
   };
 
-  // Polls supabase.auth.getSession() for up to ~3s after Google OAuth so the
-  // setSession() write inside the lovable module has a chance to propagate
-  // to localStorage before we redirect through the _authenticated gate.
-  const waitForSession = async (timeoutMs = 3000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) return { session: null, error: error as Error };
-      if (data.session) return { session: data.session, error: null };
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    return { session: null, error: null };
-  };
-
   const signInWithGoogle = async () => {
     setBusy(true);
     setSessionError(null);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+      const outcome = await handleGoogleSignIn({
+        signInWithOAuth: () =>
+          lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin }) as Promise<{
+            error?: { message?: string } | null;
+            redirected?: boolean;
+          }>,
+        getSession: () => supabase.auth.getSession() as ReturnType<Parameters<typeof handleGoogleSignIn>[0]["getSession"]>,
       });
-      if (result.error) {
-        const msg = (result.error as Error)?.message ?? String(result.error);
-        const failure_reason =
-          /network|fetch/i.test(msg) ? "network_error" :
-          /token/i.test(msg) ? "invalid_token" :
-          "provider_error";
+
+      if (outcome.kind === "redirected") return;
+
+      if (outcome.kind === "providerError") {
         await logAuthEvent({
-          data: { action: "auth.google.failed", message: msg, failure_reason },
+          data: { action: "auth.google.failed", message: outcome.message, failure_reason: outcome.failureReason },
         }).catch(() => undefined);
-        setSessionError(`Google sign-in failed: ${msg}`);
-        toast.error(formatAuthError(result.error));
-        logAuthError("[auth:google]", result.error);
+        setSessionError(`Google sign-in failed: ${outcome.message}`);
+        toast.error(formatAuthError(outcome.message));
+        logAuthError("[auth:google]", outcome.message);
         setBusy(false);
         return;
       }
-      if (result.redirected) return;
 
-      // Session-persistence check: poll briefly, then surface a clear error
-      // if the session never landed in browser storage.
-      const { session, error: sessionLookupError } = await waitForSession();
-      if (sessionLookupError || !session) {
-        const reason = sessionLookupError ? "provider_error" : "session_missing";
-        const msg = sessionLookupError?.message ?? "Session was not persisted after OAuth";
+      if (outcome.kind === "sessionMissing") {
         await logAuthEvent({
-          data: { action: "auth.google.failed", message: msg, failure_reason: reason },
+          data: { action: "auth.google.failed", message: outcome.message, failure_reason: outcome.failureReason },
         }).catch(() => undefined);
         setSessionError(
           "Google sign-in completed but no session was saved in this browser. " +
@@ -155,18 +138,15 @@ function AuthPage() {
         return;
       }
 
-      const userEmail = session.user.email ?? undefined;
-      await logAuthEvent({ data: { action: "auth.google.success", email: userEmail } }).catch(() => undefined);
-      // Best-effort account linking for users who previously signed up with email/password.
+      await logAuthEvent({ data: { action: "auth.google.success", email: outcome.email } }).catch(() => undefined);
       linkGoogleAccountByEmail().catch((e) => logAuthError("[auth:google-link]", e));
 
       toast.success("Signed in with Google.");
       window.location.replace(redirectTo);
     } catch (error) {
       const msg = (error as Error)?.message ?? String(error);
-      const failure_reason = /network|fetch/i.test(msg) ? "network_error" : "provider_error";
       await logAuthEvent({
-        data: { action: "auth.google.failed", message: msg, failure_reason },
+        data: { action: "auth.google.failed", message: msg, failure_reason: "provider_error" },
       }).catch(() => undefined);
       setSessionError(`Google sign-in error: ${msg}`);
       toast.error(formatAuthError(error));
@@ -174,6 +154,7 @@ function AuthPage() {
       setBusy(false);
     }
   };
+
 
 
 
