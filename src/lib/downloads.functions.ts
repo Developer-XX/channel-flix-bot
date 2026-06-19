@@ -17,7 +17,8 @@ function randomCode(): string {
 export const getMyTelegramLink = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data } = await supabaseAdmin
       .from("telegram_user_links")
       .select("telegram_user_id, telegram_username, telegram_first_name, linked_at, link_code, link_code_expires_at")
       .eq("user_id", context.userId)
