@@ -454,7 +454,18 @@ function InterstitialPerfWidget() {
   });
   const rows = q.data?.rows ?? [];
   return (
-    <Section title="Interstitial performance (24h)" icon={<Activity className="h-4 w-4" />}>
+    <Section
+      title="Interstitial performance (24h)"
+      icon={<Activity className="h-4 w-4" />}
+      action={
+        <Link
+          to="/admin/interstitial-performance"
+          className="text-xs text-primary underline-offset-4 hover:underline"
+        >
+          Open drilldown →
+        </Link>
+      }
+    >
       {q.error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
           {(q.error as Error).message}
