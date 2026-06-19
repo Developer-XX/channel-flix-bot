@@ -241,10 +241,7 @@ export function SiteHeader() {
                   </Link>
                   <button
                     type="button"
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      navigate({ to: "/" });
-                    }}
+                    onClick={handleSignOut}
                     className="w-full flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-foreground hover:bg-surface text-left"
                   >
                     <LogOut className="h-4 w-4" /> Sign out
