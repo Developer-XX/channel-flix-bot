@@ -117,8 +117,15 @@ function AccountPage() {
                   type="button"
                   variant="outline"
                   onClick={async () => {
-                    await supabase.auth.signOut();
-                    navigate({ to: "/" });
+                    const currentEmail = email || undefined;
+                    try {
+                      await queryClient.cancelQueries();
+                      queryClient.clear();
+                      await supabase.auth.signOut();
+                      await logAuthEvent({ data: { action: "auth.signout", email: currentEmail } }).catch(() => undefined);
+                    } finally {
+                      navigate({ to: "/auth", replace: true });
+                    }
                   }}
                 >
                   Sign out
