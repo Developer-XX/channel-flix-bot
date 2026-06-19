@@ -169,7 +169,7 @@ export function SiteHeader() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/" }); }}
+                onClick={handleSignOut}
               >
                 <LogOut className="h-4 w-4 mr-1.5" />Sign out
               </Button>
