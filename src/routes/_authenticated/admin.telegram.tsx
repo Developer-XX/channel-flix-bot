@@ -43,6 +43,7 @@ import {
   reparseIngest,
   reparseChannelFromCaptions,
 } from "@/lib/telegram.functions";
+import { IngestErrorBanner, PermissionDiagnostic } from "@/components/PermissionDiagnostic";
 import { Switch } from "@/components/ui/switch";
 
 
@@ -503,8 +504,22 @@ function TelegramAdmin() {
           </div>
         </div>
 
+        <details className="rounded-md border p-2 text-sm">
+          <summary className="cursor-pointer text-muted-foreground">
+            Permission diagnostic (grants &amp; RLS for <code>telegram_ingest</code>)
+          </summary>
+          <div className="mt-2">
+            <PermissionDiagnostic table="telegram_ingest" onRetry={() => ingest.refetch()} />
+          </div>
+        </details>
+
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {ingest.error && <p className="text-sm text-destructive">{(ingest.error as Error).message}</p>}
+        {ingest.error && (
+          <IngestErrorBanner
+            error={ingest.error as Error}
+            onRetry={() => ingest.refetch()}
+          />
+        )}
 
         <div className="space-y-2">
           {pageRows.map((row) => (

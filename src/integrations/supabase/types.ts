@@ -2484,6 +2484,8 @@ export type Database = {
       }
     }
     Functions: {
+      check_telegram_ingest_grants: { Args: never; Returns: Json }
+      diagnose_table_permissions: { Args: { _table: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

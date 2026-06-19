@@ -98,7 +98,19 @@ export const listTelegramIngest = createServerFn({ method: "GET" })
       );
     }
     const { data: rows, error } = await q;
-    if (error) throw error;
+    if (error) {
+      const msg = String((error as { message?: string }).message ?? error);
+      if (/permission denied/i.test(msg) && /telegram_ingest/i.test(msg)) {
+        await writeAdminAudit(
+          { userId: context.userId, claims: context.claims },
+          "security.telegram_ingest.access_denied",
+          "failed",
+          { error: msg, role: "authenticated", target: "telegram_ingest" },
+        );
+        throw new Error("PERMISSION_DENIED:telegram_ingest — " + msg);
+      }
+      throw error;
+    }
     return rows ?? [];
   });
 
