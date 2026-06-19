@@ -170,10 +170,11 @@ export function InterstitialController() {
         if (req?.placement === "interstitial_before_download") {
           lsSetNum(LS_LAST_BEFORE_DOWNLOAD, Date.now());
         }
-        // Record the per-user 24h cap entry only for login placement and
-        // only when the ad actually rendered (not "no-ad").
-        if (req?.placement === "interstitial_login" && reason !== "no-ad" && authed === true) {
-          recordViewFn({ data: { placement: req.placement, ad_id: null } }).catch(() => {});
+        // Atomically claim the frequency-cap slot for every interstitial
+        // placement when the ad actually rendered. Handles both signed-in
+        // users (ad_view_log) and anon visitors (ad_view_log_anon).
+        if (req && reason !== "no-ad") {
+          claimFn({ data: { placement: req.placement, ad_id: null } }).catch(() => {});
         }
         req?.resolve(reason !== "no-ad");
       }}
