@@ -98,7 +98,10 @@ describe("VideoInterstitial", () => {
     expect(skeleton.className).toContain("w-full");
 
     resolve!({ ads: [VIDEO_AD] });
-    await waitFor(() => expect(screen.getByTestId(/^interstitial-/)).toBeTruthy());
+    await waitFor(() => {
+      const v = document.querySelector("video");
+      if (!v) throw new Error("video not yet rendered");
+    });
   });
 
   it("emits load_start + load_success and records server impression", async () => {
