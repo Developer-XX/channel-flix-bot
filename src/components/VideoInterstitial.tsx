@@ -107,10 +107,37 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   }
 
   const canCancel = remaining <= 0;
-  const onVideoClick = () => {
+  const openLink = () => {
     if (!ad.link_url) return;
     trackFn({ data: { ad_id: ad.id, placement, event_type: "click" } }).catch(() => {});
     window.open(ad.link_url, "_blank", "noopener,noreferrer");
+  };
+
+  const tryPlay = async () => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      await v.play();
+      setNeedsTap(false);
+    } catch {
+      setNeedsTap(true);
+    }
+  };
+
+  const unmuteAndPlay = async () => {
+    const v = videoRef.current;
+    if (!v) return;
+    setMuted(false);
+    v.muted = false;
+    try {
+      await v.play();
+      setNeedsTap(false);
+    } catch {
+      // fallback to muted playback
+      setMuted(true);
+      v.muted = true;
+      void v.play().catch(() => {});
+    }
   };
 
   return (
@@ -146,23 +173,48 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           </div>
         )}
 
-        <video
-          ref={videoRef}
-          src={ad.video_url!}
-          autoPlay
-          playsInline
-          controls={false}
-          onClick={onVideoClick}
-          onEnded={() => close("completed")}
-          className="block w-full max-h-[80vh] rounded-lg bg-black object-contain cursor-pointer"
-        />
+        <div className="relative">
+          <video
+            ref={videoRef}
+            src={ad.video_url!}
+            autoPlay
+            muted={muted}
+            playsInline
+            preload="auto"
+            controls={false}
+            onCanPlay={tryPlay}
+            onLoadedMetadata={tryPlay}
+            onEnded={() => close("completed")}
+            className="block w-full max-h-[80vh] rounded-lg bg-black object-contain"
+          />
+
+          {needsTap && (
+            <button
+              type="button"
+              onClick={() => void tryPlay()}
+              className="absolute inset-0 grid place-items-center bg-black/40 text-white text-sm font-medium rounded-lg"
+            >
+              Tap to play ad
+            </button>
+          )}
+
+          {!needsTap && muted && (
+            <button
+              type="button"
+              onClick={() => void unmuteAndPlay()}
+              className="absolute bottom-2 left-2 rounded-md bg-black/70 hover:bg-black/85 text-white text-xs px-2 py-1"
+            >
+              Tap for sound
+            </button>
+          )}
+        </div>
 
         <div className="mt-2 flex items-center justify-between text-[11px] text-white/60">
           <span className="truncate">{ad.name}</span>
           {ad.link_url && (
             <button
               type="button"
-              onClick={onVideoClick}
+              onClick={openLink}
               className="rounded-md bg-white/10 hover:bg-white/20 text-white px-2 py-1 transition-colors"
             >
               Learn more
