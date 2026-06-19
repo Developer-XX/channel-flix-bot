@@ -148,11 +148,28 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     void loadAd();
   }, [loadAd]);
 
-  // Start TTFF clock the moment the player mounts.
+  // Start TTFF clock the moment the player mounts, and issue a server-side
+  // correlation request_id so beacons can reconcile the true TTFF/buffering.
   useEffect(() => {
     if (loadState !== "ready" || !ad) return;
     mountTimeRef.current = performance.now();
-  }, [loadState, ad]);
+    let cancelled = false;
+    void issueFn({
+      data: {
+        ad_id: ad.id,
+        placement,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 256) : undefined,
+      },
+    })
+      .then((r) => {
+        if (cancelled) return;
+        requestIdRef.current = r?.request_id ?? null;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [loadState, ad, issueFn, placement]);
 
   // Watchdog: if the video never reaches a playable state within
   // LOAD_TIMEOUT_MS after the ad metadata loads, treat it as a timeout.
