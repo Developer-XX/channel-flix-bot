@@ -41,15 +41,26 @@ export type ClientAdEventName =
   | "ad_unmute"
   | "ad_video_error"
   | "ad_timeout"
-  | "ad_retry";
+  | "ad_retry"
+  | "ad_lifecycle_start"
+  | "ad_first_frame"
+  | "ad_loop_detected"
+  | "ad_cancel"
+  | "ad_complete";
 
 /**
- * Lightweight client-side analytics beacon for interstitial events. Fires a
- * CustomEvent so any listener (debug overlay, e2e tests, GA wrapper) can pick
- * it up. Server-side events use the closed allow-list on `recordAdEvent` and
- * `recordAdPerfEvent`.
+ * Lightweight client-side analytics beacon for interstitial lifecycle events.
+ * Every event carries the server-issued `request_id` (when available) so
+ * production logs can correlate a single playback session end-to-end.
+ *
+ * Fires a CustomEvent so any listener (debug overlay, e2e tests, GA wrapper)
+ * can pick it up. Server-side metrics use the closed allow-list on
+ * `recordAdEvent` and `recordAdPerfEvent`.
  */
-function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unknown>) {
+function emitClientAdEvent(
+  name: ClientAdEventName,
+  detail: Record<string, unknown> & { request_id?: string | null },
+) {
   try {
     window.dispatchEvent(new CustomEvent(`interstitial:${name}`, { detail }));
     if (import.meta.env.DEV) console.debug(`[interstitial] ${name}`, detail);
@@ -57,6 +68,7 @@ function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unkno
     /* noop */
   }
 }
+
 
 const LOAD_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;
