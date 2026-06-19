@@ -541,14 +541,23 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
   const canCancel = remaining <= 0;
 
+  // Compute player box dimensions from the tracked viewport. When intrinsic
+  // video size is not yet known (videoWidth/videoHeight = 0 on first paint,
+  // codec error, or some Android WebViews) we fall back to filling the
+  // viewport entirely so the ad still covers the screen and overlays stay
+  // anchored to real edges. Once metadata loads, we switch to the true
+  // aspect ratio and letterbox to preserve framing across portrait/landscape.
+  const effectiveAR = hasIntrinsicSize && aspectRatio > 0 ? aspectRatio : viewport.w / Math.max(1, viewport.h);
+  const fitW = Math.min(viewport.w, Math.round(viewport.h * effectiveAR));
+  const fitH = Math.min(viewport.h, Math.round(viewport.w / Math.max(0.0001, effectiveAR)));
+
   return (
     <Frame placement={placement} label="Sponsored video">
       <div
         className="relative bg-black overflow-hidden shadow-2xl"
         style={{
-          aspectRatio: String(aspectRatio),
-          width: `min(100vw, calc(100dvh * ${aspectRatio}))`,
-          height: `min(100dvh, calc(100vw / ${aspectRatio}))`,
+          width: `${fitW}px`,
+          height: `${fitH}px`,
           maxWidth: "100vw",
           maxHeight: "100dvh",
         }}
@@ -597,6 +606,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             if (v.videoWidth > 0 && v.videoHeight > 0) {
               const ar = v.videoWidth / v.videoHeight;
               if (Math.abs(ar - aspectRatio) > 0.001) setAspectRatio(ar);
+              if (!hasIntrinsicSize) setHasIntrinsicSize(true);
             }
             void tryPlay();
           }}
@@ -655,7 +665,8 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             sendBeacon(requestIdRef.current, "end");
             close("completed");
           }}
-          className="absolute inset-0 h-full w-full object-contain"
+          className="absolute inset-0 block h-full w-full max-h-full max-w-full object-contain"
+          style={{ objectFit: "contain", overflow: "hidden" }}
         />
 
 
@@ -688,24 +699,26 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             aria-label={muted ? "Unmute ad" : "Mute ad"}
             data-testid="interstitial-mute"
             onClick={() => void toggleMute()}
-            className="absolute bottom-2 left-2 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
+            className="absolute bottom-2 left-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
         )}
-      </div>
 
-      <div className="mt-2 flex items-center justify-between text-[11px] text-white/60">
-        <span className="truncate">{ad.name}</span>
-        {ad.link_url && (
-          <button
-            type="button"
-            onClick={openLink}
-            className="rounded-md bg-white/10 hover:bg-white/20 text-white px-2 py-1 transition-colors"
-          >
-            Learn more
-          </button>
-        )}
+        {/* Sponsor strip pinned to the bottom of the player box so it scales
+            with the viewport instead of pushing the video out of 100dvh. */}
+        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2 text-[11px] text-white/80">
+          <span className="truncate max-w-[40vw] rounded bg-black/60 px-1.5 py-0.5">{ad.name}</span>
+          {ad.link_url && (
+            <button
+              type="button"
+              onClick={openLink}
+              className="rounded-md bg-white/15 hover:bg-white/25 text-white px-2 py-1 transition-colors"
+            >
+              Learn more
+            </button>
+          )}
+        </div>
       </div>
     </Frame>
   );
