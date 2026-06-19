@@ -89,9 +89,9 @@ const Frame: React.FC<{ children: React.ReactNode; label: string; placement: AdP
     aria-modal="true"
     aria-label={label}
     data-testid={`interstitial-${placement}`}
-    className="fixed inset-0 z-[100] grid place-items-center bg-black/95 backdrop-blur-sm p-3 sm:p-6"
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm"
   >
-    <div className="relative w-full max-w-[min(100vw,1100px)]">{children}</div>
+    <div className="relative w-screen h-[100dvh] flex items-center justify-center">{children}</div>
   </div>
 );
 
@@ -120,6 +120,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const [muted, setMuted] = useState(true);
   const [needsTap, setNeedsTap] = useState(false);
   const [retries, setRetries] = useState(0);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
 
   const impressionLogged = useRef(false);
   const playLogged = useRef(false);
@@ -511,31 +512,40 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
   return (
     <Frame placement={placement} label="Sponsored video">
-      <div className="absolute -top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
-        Ad
-      </div>
-
-      {canCancel ? (
-        <button
-          type="button"
-          aria-label="Close advertisement"
-          data-testid="interstitial-close"
-          onClick={() => close("cancelled")}
-          className="absolute -top-2 -right-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:scale-105 transition-transform"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      ) : (
-        <div
-          aria-live="polite"
-          data-testid="interstitial-countdown"
-          className="absolute -top-2 -right-2 z-10 grid h-9 min-w-9 px-2 place-items-center rounded-full bg-white/15 text-white text-xs font-medium border border-white/20"
-        >
-          {remaining}s
+      <div
+        className="relative bg-black overflow-hidden shadow-2xl"
+        style={{
+          aspectRatio: String(aspectRatio),
+          width: `min(100vw, calc(100dvh * ${aspectRatio}))`,
+          height: `min(100dvh, calc(100vw / ${aspectRatio}))`,
+          maxWidth: "100vw",
+          maxHeight: "100dvh",
+        }}
+      >
+        <div className="absolute top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
+          Ad
         </div>
-      )}
 
-      <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
+        {canCancel ? (
+          <button
+            type="button"
+            aria-label="Close advertisement"
+            data-testid="interstitial-close"
+            onClick={() => close("cancelled")}
+            className="absolute top-2 right-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:scale-105 transition-transform"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        ) : (
+          <div
+            aria-live="polite"
+            data-testid="interstitial-countdown"
+            className="absolute top-2 right-2 z-10 grid h-9 min-w-9 px-2 place-items-center rounded-full bg-white/15 text-white text-xs font-medium border border-white/20"
+          >
+            {remaining}s
+          </div>
+        )}
+
         <video
           ref={videoRef}
           src={ad.video_url!}
@@ -551,7 +561,14 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           preload="auto"
           controls={false}
           onCanPlay={tryPlay}
-          onLoadedMetadata={tryPlay}
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget as HTMLVideoElement;
+            if (v.videoWidth > 0 && v.videoHeight > 0) {
+              const ar = v.videoWidth / v.videoHeight;
+              if (Math.abs(ar - aspectRatio) > 0.001) setAspectRatio(ar);
+            }
+            void tryPlay();
+          }}
           onLoadedData={() => {
             if (!firstByteSentRef.current) {
               firstByteSentRef.current = true;
@@ -584,11 +601,6 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           }}
           onTimeUpdate={(e) => {
             const t = (e.currentTarget as HTMLVideoElement).currentTime;
-            // Loop / remount detection: after the first frame fires, a
-            // backwards jump of more than 0.5s to near-zero means the media
-            // element has been reset — either by a remount (the class of bug
-            // we fixed) or by an external src reload. Emit once per detected
-            // loop so production analytics surfaces regressions immediately.
             if (ttffLogged.current && t + 0.5 < peakTimeRef.current && t < 0.8) {
               loopCountRef.current += 1;
               emitClientAdEvent("ad_loop_detected", {
@@ -603,7 +615,6 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
               return;
             }
             if (t > peakTimeRef.current) peakTimeRef.current = t;
-
           }}
           onError={() => {
             sendBeacon(requestIdRef.current, "error");
@@ -615,6 +626,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           }}
           className="absolute inset-0 h-full w-full object-contain"
         />
+
 
         {needsTap && (
           <button
