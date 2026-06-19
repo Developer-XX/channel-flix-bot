@@ -331,12 +331,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           playsInline
           // iOS Safari + WeChat / X5 (Android) hints to keep playback inline
           // and avoid the OS-level fullscreen takeover.
-          // @ts-expect-error vendor-prefixed attrs
-          webkit-playsinline="true"
-          // @ts-expect-error vendor-prefixed attrs
-          x5-playsinline="true"
-          // @ts-expect-error vendor-prefixed attrs
-          x5-video-player-type="h5-page"
+          {...({
+            "webkit-playsinline": "true",
+            "x5-playsinline": "true",
+            "x5-video-player-type": "h5-page",
+          } as Record<string, string>)}
           preload="auto"
           controls={false}
           onCanPlay={tryPlay}
