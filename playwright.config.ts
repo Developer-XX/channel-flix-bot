@@ -1,35 +1,41 @@
-import { defineConfig, devices } from "@playwright/test";
-
-// E2E suite covering admin gating, post-login redirect-back, and admin link
-// integrity. Run with: bun playwright test
-// Requires the dev server on http://localhost:8080 (auto-reuses if running).
+// Playwright E2E config — covers desktop Chromium, iOS WebKit (which
+// blocks autoplay natively), and Android Chromium with
+// `--autoplay-policy=user-gesture-required`.
 //
-// Auth: tests sign in via the credentials in TEST_USER / TEST_PASS, falling
-// back to a 'skip' tagged spec when those env vars are missing.
+// Run locally with:
+//   bun add -D @playwright/test
+//   bunx playwright install --with-deps chromium webkit
+//   bunx playwright test
+import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 30_000,
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
   fullyParallel: false,
-  retries: 0,
-  workers: 1,
   reporter: [["list"]],
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:8080",
-    viewport: { width: 1280, height: 900 },
     trace: "retain-on-failure",
     video: "retain-on-failure",
-    headless: true,
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-  ],
-  webServer: process.env.E2E_BASE_URL
-    ? undefined
-    : {
-        command: "echo 'Reusing existing dev server on :8080'",
-        url: "http://localhost:8080",
-        reuseExistingServer: true,
-        timeout: 5_000,
+    {
+      name: "chromium-desktop",
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "chromium-android",
+      use: {
+        ...devices["Pixel 7"],
+        launchOptions: {
+          args: ["--autoplay-policy=user-gesture-required"],
+        },
       },
+    },
+    {
+      name: "webkit-ios",
+      use: { ...devices["iPhone 13"] },
+    },
+  ],
 });
