@@ -1,110 +1,156 @@
-# Phase 3 — Reliability, Visibility & Self-Serve
+# Interstitial Hardening Plan
 
-Five features grouped into one phase. Each lands as a small vertical slice (migration → server fn → UI) so we can ship and verify incrementally.
+Four work items, sequenced so each one is independently verifiable.
 
-## 1. User download history page (`/account/downloads`)
+---
 
-New authenticated route. Lists the signed-in user's downloads from `download_logs` joined with `media_files` / `master_titles`.
+## 1. Per-user 24h frequency cap
 
-For each row:
-- Title + episode label, requested time
-- Resend count (sum of `delivery_attempts` for that user+file)
-- Cooldown status: `Ready` / `Wait Ns` using the same `DOWNLOAD_RESEND_COOLDOWN_SECONDS` logic the button uses
-- Last delivery outcome (sent / reused / failed) + Telegram message link when present
-- "Resend to Telegram" inline button (reuses `requestDownload`, honors cooldown countdown)
+**Goal:** the login-style interstitial (`interstitial_login`) shows at most once per 24h per signed-in user, surviving reloads, tab close, and device switches.
 
-Server fn: `getMyDownloadHistory({ limit, cursor })` with `requireSupabaseAuth`, RLS-scoped.
+- New table `public.ad_view_log`
+  - Columns: `id uuid pk`, `user_id uuid not null`, `placement text not null`, `ad_id uuid null`, `created_at timestamptz default now()`.
+  - Indexes: `(user_id, placement, created_at desc)`.
+  - RLS: users `SELECT` their own rows; `service_role` full; no anon.
+  - Grants per project policy.
+- New server fn `getInterstitialEligibility({ placement })`
+  - Auth via `requireSupabaseAuth`.
+  - Returns `{ eligible: boolean, nextAllowedAt: string | null }`.
+  - For `interstitial_login`: looks up last row in last 24h.
+- New server fn `recordInterstitialView({ placement, ad_id })` (auth required) → inserts row.
+- Wire into `InterstitialController`:
+  - Before resolving `show("interstitial_login")`, await eligibility check; if not eligible, resolve `false`.
+  - After a successful play (reason !== "no-ad"), call `recordInterstitialView`.
+- Keep existing `localStorage` cooldown for `interstitial_periodic` and `interstitial_before_download` (anonymous-safe; lighter weight). 24h cap applies only to the user-anchored login placement.
 
-Adds a link in the user account menu.
+## 2. Perf metrics — `ad_perf_events` + admin tile
 
-## 2. Admin audit log (unified feed)
+**Goal:** capture TTFF (time-to-first-frame), buffering duration, dropped-frame count for served interstitials, and show 24h aggregates in the admin analytics dashboard.
 
-Reuses existing `admin_audit_log` table. New event types written from existing code paths:
-- `channel_sync.upsert` / `channel_sync.delete` / `channel_sync.backfill_started` / `channel_sync.backfill_completed`
-- `token_verification.success` / `token_verification.failure` (from verification flow)
-- `cron.auto_delete.run` (count, failures) / `cron.resend.run`
-- `download.resend_manual` (admin-initiated resends)
+- New table `public.ad_perf_events`
+  - Columns: `id uuid pk`, `ad_id uuid null`, `placement text not null`, `metric text not null check (metric in ('ttff_ms','buffer_ms','dropped_frames','autoplay_blocked','video_error'))`, `value numeric not null default 0`, `user_agent text`, `created_at timestamptz default now()`.
+  - Indexes: `(placement, metric, created_at desc)`, `(ad_id, created_at desc)`.
+  - RLS: `service_role` full; admins `SELECT` via `has_role(auth.uid(),'admin')`; `INSERT` allowed for `authenticated` and `anon` with bounded zod validation (so anonymous interstitial impressions are still measurable). No `SELECT` for anon.
+  - Grants accordingly.
+- New server fn `recordAdPerfEvent({ ad_id, placement, metric, value })`
+  - Public (no auth middleware) so login-page anon hits work.
+  - Zod-validated: metric is a fixed enum, value clamped 0..600000 numeric, user_agent truncated to 256.
+  - Uses server publishable client; relies on RLS `INSERT` policy.
+- New server fn `getAdPerfSummary({ windowHours })` (admin-only)
+  - Returns `{ ttff_p50, ttff_p95, buffer_avg_ms, dropped_frames_total, autoplay_blocked_count, error_count, samples }` per placement.
+- `VideoInterstitial` integration:
+  - Record `performance.now()` at video element mount; on first `onPlaying`, post `ttff_ms`.
+  - Sum `waiting`→`playing` gaps for `buffer_ms`; flush once on close.
+  - On close, read `video.getVideoPlaybackQuality?.()` and post `dropped_frames`.
+  - Post `autoplay_blocked` / `video_error` once per occurrence.
+- Admin dashboard: add a "Interstitial performance (24h)" card to `src/routes/_authenticated/admin.analytics.tsx` showing the 6 summary numbers per placement.
 
-New route `/admin/audit` with:
-- Filterable list (event type, actor, date range, search by target)
-- Pagination, JSON detail drawer
-- Server fn `getAdminAuditLog(filters)` with admin-role check
+## 3. iOS Safari / Android Chrome fallback UI
 
-Existing places that should log (small inserts inside their handlers, no behavior change):
-- `src/lib/telegram-api.server.ts` channel CRUD
-- `src/routes/api/public/telegram/backfill-ingest.ts`
-- Verification provider call site
-- `process-message-deletes` cron route
-- `requestDownload` resend branch (cooldown reuse and fresh sends)
+**Goal:** when autoplay is blocked or first-frame never lands, swap inline player for a full-screen player chrome with a static thumbnail (poster) and a clear "Play video" button. Single tap starts playback with sound and counts as the impression.
 
-## 3. Idempotent queued retry for downloads
+- Extend `VideoInterstitial`:
+  - Detect blocked autoplay either from caught `play()` rejection or from the existing 8s timeout watchdog.
+  - Render a full-bleed `<div>` covering the dialog frame with: ad poster (`ad.poster_url ?? first-frame screenshot via `preload="metadata"` snapshot fallback), centered large `Play` button, advertiser name, "Sponsored" badge.
+  - Button onClick: unmute + `video.play()` from the gesture; on success, transition back to normal player; on failure, retry once muted then degrade to skippable static thumbnail (countdown still runs, `Continue` button appears at cancel-time).
+- No schema change. `ad.poster_url` already exists on the `ads` row; falls back to a black rectangle when missing.
 
-Goal: a flurry of clicks never produces duplicate Telegram sends, and transient Telegram failures eventually succeed without user re-clicking.
+## 4. Tests
 
-New table `download_send_queue`:
-- `idempotency_key` (PK) — same scheme as today: `sha256(user|file|cooldown_window)`
-- `user_id`, `file_id`, `chat_id`, `payload jsonb`
-- `status` enum: `queued | sending | sent | failed | deduped`
-- `attempts int`, `last_error text`, `next_attempt_at timestamptz`
-- `message_id bigint` (on success), timestamps
+Vitest + React Testing Library where possible; one Playwright spec for cross-browser autoplay behaviour.
 
-Flow:
-1. `requestDownload` upserts into the queue with `ON CONFLICT (idempotency_key) DO NOTHING`. If an existing row is `sent`, return its `message_id` with `reused:true` (current cooldown UX preserved). If `queued/sending`, return `queued:true` with ETA.
-2. Inline attempt #1 happens immediately (current code path), result written to queue row.
-3. On Telegram failure that's retryable (5xx, network, 429 after `retry_after`), mark `queued` with backoff `next_attempt_at = now() + min(60s * 2^attempts, 15min)`.
-4. New pg_cron job `process-download-send-queue` every minute calls `/api/public/hooks/process-download-queue`, which locks due rows with `FOR UPDATE SKIP LOCKED`, sends, updates status. Cap 5 attempts → `failed` + admin alert.
+- **`src/components/__tests__/VideoInterstitial.test.tsx`** (jsdom)
+  - Mocks `useServerFn` for `listActiveAds` + `recordAdEvent` + `recordAdPerfEvent`.
+  - Mocks `HTMLMediaElement.prototype.play` returning resolved / rejected promises.
+  - Cases:
+    - Skeleton renders before ad resolves; container preserves `aspect-video` (no layout shift).
+    - Error state renders with Retry; clicking Retry calls `listActiveAds` again.
+    - Autoplay-blocked path renders the fallback "Play video" thumbnail and unblocks on click.
+    - Timeout watchdog fires `interstitial:ad_timeout` CustomEvent after 8s (fake timers).
+    - Successful play emits `interstitial:ad_play_success` + records `view` server event.
+    - Mute toggle emits `interstitial:ad_mute` / `:ad_unmute`.
+- **`src/lib/__tests__/interstitial-eligibility.test.ts`**
+  - Pure server-fn unit: mocks `context.supabase.from('ad_view_log')`; asserts eligibility window math.
+- **`tests/e2e/interstitial-autoplay.spec.ts`** (Playwright)
+  - Chromium with autoplay policy `no-user-gesture-required` → expects video to play automatically.
+  - Chromium with autoplay policy `user-gesture-required` → expects fallback "Play video" thumbnail, click starts playback.
 
-The existing `delivery_attempts` table keeps its per-attempt log; the queue is the durable intent + dedupe key.
+## 5. Verification pass
 
-## 4. Shortener performance report + rotation controls
+After implementation:
+- `bunx vitest run` (component + lib tests).
+- Playwright spec for autoplay.
+- `invoke-server-function` smoke test for `getInterstitialEligibility` + `recordAdPerfEvent`.
+- Drive the live preview with Playwright headless on the auth page to confirm the fallback renders end-to-end and the impression / view server events fire.
+- Visit `/_authenticated/admin/analytics` and screenshot the new perf tile with seeded events.
 
-Uses existing `shortener_health_log` plus new `shortener_configs` table:
-- `provider` (PK: `adrinolinks`, `nanolinks`, …)
-- `enabled bool`, `priority int`, `weight int`, `notes text`
-- `updated_by`, timestamps
+---
 
-New admin route `/admin/shorteners`:
-- Per-provider cards: success rate (7d / 30d), avg time-to-verify (ms), total attempts, last failure
-- Toggle enable, set priority (drag or number input), edit weight
-- "Test" button → sends a one-off probe link, records result
+## Technical details
 
-`src/lib/shortener-rotation.ts` reads from `shortener_configs` (falling back to current hardcoded order) so admin changes take effect without a deploy.
+### Migrations
 
-Server fns: `getShortenerReport()`, `updateShortenerConfig(provider, patch)`, `probeShortener(provider)`.
+```sql
+-- ad_view_log
+CREATE TABLE public.ad_view_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  placement text NOT NULL,
+  ad_id uuid NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX ad_view_log_user_placement_idx
+  ON public.ad_view_log (user_id, placement, created_at DESC);
+GRANT SELECT, INSERT ON public.ad_view_log TO authenticated;
+GRANT ALL ON public.ad_view_log TO service_role;
+ALTER TABLE public.ad_view_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users read own ad views" ON public.ad_view_log
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "users insert own ad views" ON public.ad_view_log
+  FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
 
-## 5. Cron failure alerts (UI banner + Telegram DM)
+-- ad_perf_events
+CREATE TABLE public.ad_perf_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ad_id uuid NULL,
+  placement text NOT NULL,
+  metric text NOT NULL CHECK (metric IN
+    ('ttff_ms','buffer_ms','dropped_frames','autoplay_blocked','video_error')),
+  value numeric NOT NULL DEFAULT 0,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX ad_perf_events_lookup_idx
+  ON public.ad_perf_events (placement, metric, created_at DESC);
+GRANT INSERT ON public.ad_perf_events TO anon, authenticated;
+GRANT SELECT ON public.ad_perf_events TO authenticated;
+GRANT ALL ON public.ad_perf_events TO service_role;
+ALTER TABLE public.ad_perf_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "perf insert open" ON public.ad_perf_events
+  FOR INSERT TO anon, authenticated WITH CHECK (
+    length(placement) <= 64 AND
+    (user_agent IS NULL OR length(user_agent) <= 256) AND
+    value >= 0 AND value <= 600000
+  );
+CREATE POLICY "admins read perf" ON public.ad_perf_events
+  FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(), 'admin'));
+```
 
-Builds on `cron-metrics.functions.ts` / `getAdminHealth`.
+### File touch list
 
-New table `admin_alerts`:
-- `kind` (`cron_lag`, `cron_failure`, `download_queue_stuck`, `shortener_down`)
-- `severity` (`warn|error`), `subject`, `details jsonb`
-- `first_seen_at`, `last_seen_at`, `acknowledged_at`, `acknowledged_by`
+- new: `supabase/migrations/<ts>_ad_view_log_and_perf.sql`
+- new: `src/lib/interstitial-eligibility.functions.ts`
+- new: `src/lib/ad-perf.functions.ts`
+- edit: `src/components/InterstitialController.tsx` (eligibility gate + recordView call)
+- edit: `src/components/VideoInterstitial.tsx` (perf events + fallback thumbnail UI)
+- edit: `src/routes/_authenticated/admin.analytics.tsx` (perf summary tile)
+- new: `src/components/__tests__/VideoInterstitial.test.tsx`
+- new: `src/lib/__tests__/interstitial-eligibility.test.ts`
+- new: `tests/e2e/interstitial-autoplay.spec.ts`
 
-Generation: each cron handler, at the end of its run, calls `recordCronRun(job_name, ok, summary)` which:
-- Writes to `admin_audit_log` (item 2)
-- Updates a `cron_job_status` row (last_run_at, last_ok_at, last_error, consecutive_failures)
-- Opens an `admin_alerts` row when consecutive failures ≥ 2 OR the job hasn't run in 2× its expected interval (configurable per job)
+### Out of scope
 
-Surfaces:
-- Persistent banner in admin shell when any unacknowledged `error`-severity alert exists; click → `/admin/health` (now also lists per-job last-run + last-error + due lag)
-- New `/admin/alerts` page with ack / dismiss
-- Telegram DM to all users in `user_roles` with role `admin` who have a linked `telegram_user_links` row, on the transition `consecutive_failures: 1 → 2` (no spam loop; throttled to 1 message / kind / hour). DM uses the existing bot token.
-
-## Technical notes
-
-- All migrations follow the GRANT-then-RLS pattern; user-facing tables (`download_send_queue`, `admin_alerts` reads) use `auth.uid()` policies; admin-only tables use `has_role(auth.uid(), 'admin')`.
-- New server fns under `src/lib/*.functions.ts`; cron handlers under `src/routes/api/public/hooks/`.
-- pg_cron jobs added once (download queue every 1 min). Existing auto-delete cron just gains the `recordCronRun` call.
-- No changes to public published UX besides the user-facing download history link.
-
-## Build order
-
-1. Migration: `download_send_queue`, `shortener_configs`, `cron_job_status`, `admin_alerts` (single migration).
-2. Item 3 (queue) — highest reliability win, unblocks item 5 alerts on the queue.
-3. Item 2 (audit log) — instrumentation hooks used by items 3 & 5.
-4. Item 5 (alerts + Telegram DM).
-5. Item 1 (user download history).
-6. Item 4 (shortener report + rotation).
-
-I'll ship in that order and check in after items 1-3 land so you can sanity-check before the rest.
+- Backend rate limiting on `recordAdPerfEvent` beyond the RLS WITH CHECK bounds (project policy).
+- Cross-device dedup for anon users (no stable id).
+- Per-placement cap UI in admin settings — current admin `cancelSeconds` / cooldown controls stay as-is.
