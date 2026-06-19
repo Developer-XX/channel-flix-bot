@@ -29,7 +29,7 @@ describe("waitForSession polling", () => {
 
   it("polls multiple times until a session appears", async () => {
     const getSession = vi
-      .fn<[], Promise<GetSessionResult>>()
+      .fn(() => Promise.resolve(ok(null) as GetSessionResult))
       .mockResolvedValueOnce(ok(null))
       .mockResolvedValueOnce(ok(null))
       .mockResolvedValueOnce(ok(session));
