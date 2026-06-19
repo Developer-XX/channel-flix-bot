@@ -366,19 +366,8 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     void loadAd();
   };
 
-  const canCancel = remaining <= 0;
 
-  if (loadState === "loading") {
-    return (
-      <Frame placement={placement} label="Loading advertisement">
-        <div className="absolute -top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
-          Ad
-        </div>
-        <PlayerSkeleton />
-        <div className="mt-2 h-4 w-32 rounded bg-white/10 animate-pulse" />
-      </Frame>
-    );
-  }
+
 
 
   if (loadState === "loading") {
