@@ -45,6 +45,7 @@ function formatRemaining(ms: number): string {
 
 function AccountPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
