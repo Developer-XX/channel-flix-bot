@@ -15,9 +15,11 @@ import {
   ShieldAlert,
   Gauge,
   FileDown,
+  Activity,
 } from "lucide-react";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
+import { getAdPerfSummary } from "@/lib/ad-perf.functions";
 import { Button } from "@/components/ui/button";
 import { AuthEventsWidget } from "@/components/AuthEventsWidget";
 
@@ -70,6 +72,10 @@ function AnalyticsPage() {
       </Section>
 
       <AuthEventsWidget />
+
+      <InterstitialPerfWidget />
+
+
 
 
 
