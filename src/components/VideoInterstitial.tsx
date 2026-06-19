@@ -219,12 +219,21 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
       .then((r) => {
         if (cancelled) return;
         requestIdRef.current = r?.request_id ?? null;
+        if (!lifecycleStartedRef.current) {
+          lifecycleStartedRef.current = true;
+          emitClientAdEvent("ad_lifecycle_start", {
+            placement,
+            ad_id: ad.id,
+            request_id: requestIdRef.current,
+          });
+        }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [loadState, ad, issueFn, placement]);
+
 
   // Watchdog: if the video never reaches a playable state within
   // LOAD_TIMEOUT_MS after the ad metadata loads, treat it as a timeout.
