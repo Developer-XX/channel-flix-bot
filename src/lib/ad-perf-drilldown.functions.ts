@@ -265,3 +265,105 @@ export const listRecentInterstitialAds = createServerFn({ method: "GET" })
     const { data: ads } = await context.supabase.from("ads").select("id,name,placement").in("id", ids);
     return { ads: (ads ?? []) as { id: string; name: string; placement: string }[] };
   });
+
+// 7/14/30-day baseline comparison for the admin "Baselines & Regressions"
+// panel. Returns current 24h window vs rolling baselines and flags
+// regressions using the same conservative thresholds as the cron alerter.
+const TTFF_HARD_MS = 3500;
+const TTFF_RATIO = 1.5;
+const ERR_HARD = 0.10;
+const ERR_DELTA = 0.05;
+const BLOCK_HARD = 0.40;
+const BLOCK_DELTA = 0.15;
+
+export type BaselineMetric = {
+  current: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  regressed: boolean;
+};
+
+export type BaselinesResult = {
+  generated_at: string;
+  placement: string | null;
+  metrics: {
+    ttff_p75: Record<"7d" | "14d" | "30d", BaselineMetric>;
+    video_error_rate: Record<"7d" | "14d" | "30d", BaselineMetric>;
+    autoplay_blocked_rate: Record<"7d" | "14d" | "30d", BaselineMetric>;
+  };
+  regressions: Array<{ metric: string; window: string; current: number; baseline: number | null }>;
+};
+
+function evalBaseline(
+  metric: "ttff_p75" | "video_error_rate" | "autoplay_blocked_rate",
+  current: number | null,
+  baseline: number | null,
+): BaselineMetric {
+  const delta_pct =
+    current != null && baseline != null && baseline > 0
+      ? Math.round(((current - baseline) / baseline) * 1000) / 10
+      : null;
+  let regressed = false;
+  if (current != null) {
+    if (metric === "ttff_p75") {
+      regressed = current > TTFF_HARD_MS || (baseline != null && baseline > 0 && current / baseline >= TTFF_RATIO);
+    } else if (metric === "video_error_rate") {
+      regressed = current > ERR_HARD || (baseline != null && current - baseline >= ERR_DELTA);
+    } else {
+      regressed = current > BLOCK_HARD || (baseline != null && current - baseline >= BLOCK_DELTA);
+    }
+  }
+  return { current, baseline, delta_pct, regressed };
+}
+
+export const getInterstitialBaselines = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ placement: z.enum(AD_PLACEMENTS).nullable().optional() }).parse(d),
+  )
+  .handler(async ({ data, context }): Promise<BaselinesResult> => {
+    await requireAdminAccess(context);
+    const sb = context.supabase as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+    };
+    const { data: raw, error } = await sb.rpc("interstitial_baselines", {
+      _placement: data.placement ?? null,
+    });
+    if (error) throw error;
+    const payload = (raw ?? {}) as {
+      generated_at?: string;
+      placement?: string | null;
+      current?: { ttff_p75: number | null; video_error_rate: number | null; autoplay_blocked_rate: number | null };
+      baselines?: Record<
+        "7d" | "14d" | "30d",
+        { ttff_p75: number | null; video_error_rate: number | null; autoplay_blocked_rate: number | null }
+      >;
+    };
+    const current = payload.current ?? { ttff_p75: null, video_error_rate: null, autoplay_blocked_rate: null };
+    const baselines = payload.baselines ?? ({} as NonNullable<typeof payload.baselines>);
+    const windows: Array<"7d" | "14d" | "30d"> = ["7d", "14d", "30d"];
+    const buildRow = (m: "ttff_p75" | "video_error_rate" | "autoplay_blocked_rate") =>
+      Object.fromEntries(
+        windows.map((w) => [w, evalBaseline(m, current[m], baselines[w]?.[m] ?? null)]),
+      ) as Record<"7d" | "14d" | "30d", BaselineMetric>;
+    const metrics = {
+      ttff_p75: buildRow("ttff_p75"),
+      video_error_rate: buildRow("video_error_rate"),
+      autoplay_blocked_rate: buildRow("autoplay_blocked_rate"),
+    };
+    const regressions: BaselinesResult["regressions"] = [];
+    (Object.keys(metrics) as Array<keyof typeof metrics>).forEach((k) => {
+      windows.forEach((w) => {
+        const r = metrics[k][w];
+        if (r.regressed && r.current != null) {
+          regressions.push({ metric: k, window: w, current: r.current, baseline: r.baseline });
+        }
+      });
+    });
+    return {
+      generated_at: payload.generated_at ?? new Date().toISOString(),
+      placement: data.placement ?? null,
+      metrics,
+      regressions,
+    };
+  });

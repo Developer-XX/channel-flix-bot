@@ -64,6 +64,7 @@ import { Route as ApiPublicHooksProcessMessageDeletesRouteImport } from './route
 import { Route as ApiPublicHooksProcessDownloadQueueRouteImport } from './routes/api/public/hooks/process-download-queue'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 import { Route as ApiPublicHooksInterstitialHealthRouteImport } from './routes/api/public/hooks/interstitial-health'
+import { Route as ApiPublicHooksInterstitialBeaconRouteImport } from './routes/api/public/hooks/interstitial-beacon'
 
 const TrustRoute = TrustRouteImport.update({
   id: '/trust',
@@ -368,6 +369,12 @@ const ApiPublicHooksInterstitialHealthRoute =
     path: '/api/public/hooks/interstitial-health',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksInterstitialBeaconRoute =
+  ApiPublicHooksInterstitialBeaconRouteImport.update({
+    id: '/api/public/hooks/interstitial-beacon',
+    path: '/api/public/hooks/interstitial-beacon',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -412,6 +419,7 @@ export interface FileRoutesByFullPath {
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
@@ -467,6 +475,7 @@ export interface FileRoutesByTo {
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
@@ -525,6 +534,7 @@ export interface FileRoutesById {
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
@@ -583,6 +593,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/admin/'
+    | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/process-download-queue'
@@ -638,6 +649,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/admin'
+    | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/process-download-queue'
@@ -695,6 +707,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/_authenticated/admin/'
+    | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/process-download-queue'
@@ -724,6 +737,7 @@ export interface RootRouteChildren {
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
+  ApiPublicHooksInterstitialBeaconRoute: typeof ApiPublicHooksInterstitialBeaconRoute
   ApiPublicHooksInterstitialHealthRoute: typeof ApiPublicHooksInterstitialHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
   ApiPublicHooksProcessDownloadQueueRoute: typeof ApiPublicHooksProcessDownloadQueueRoute
@@ -1125,6 +1139,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksInterstitialHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/interstitial-beacon': {
+      id: '/api/public/hooks/interstitial-beacon'
+      path: '/api/public/hooks/interstitial-beacon'
+      fullPath: '/api/public/hooks/interstitial-beacon'
+      preLoaderRoute: typeof ApiPublicHooksInterstitialBeaconRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1230,6 +1251,7 @@ const rootRouteChildren: RootRouteChildren = {
   TitleSlugRoute: TitleSlugRoute,
   ApiPublicClientErrorsRoute: ApiPublicClientErrorsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
+  ApiPublicHooksInterstitialBeaconRoute: ApiPublicHooksInterstitialBeaconRoute,
   ApiPublicHooksInterstitialHealthRoute: ApiPublicHooksInterstitialHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
     ApiPublicHooksMaybeRebuildIndexesRoute,

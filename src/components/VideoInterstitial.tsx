@@ -2,8 +2,26 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { X, AlertTriangle, Volume2, VolumeX, Play } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { listActiveAds, recordAdEvent, type Ad, type AdPlacement } from "@/lib/ads.functions";
-import { recordAdPerfEvent, type AdPerfMetric } from "@/lib/ad-perf.functions";
+import { recordAdPerfEvent, issueInterstitialRequest, type AdPerfMetric } from "@/lib/ad-perf.functions";
 import { pickAd as pickAdPure } from "@/lib/ad-rotation";
+
+// Fire-and-forget beacon to the server-validated perf endpoint. Uses
+// sendBeacon when available so it survives tab close / navigation; falls
+// back to fetch keepalive.
+function sendBeacon(requestId: string | null, phase: string, value?: number) {
+  if (!requestId || typeof window === "undefined") return;
+  try {
+    const payload = JSON.stringify({ request_id: requestId, phase, value });
+    const url = "/api/public/hooks/interstitial-beacon";
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+      return;
+    }
+    void fetch(url, { method: "POST", body: payload, keepalive: true, headers: { "content-type": "application/json" } }).catch(() => {});
+  } catch {
+    /* noop */
+  }
+}
 
 interface Props {
   placement: AdPlacement;
@@ -47,6 +65,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const listFn = useServerFn(listActiveAds);
   const trackFn = useServerFn(recordAdEvent);
   const perfFn = useServerFn(recordAdPerfEvent);
+  const issueFn = useServerFn(issueInterstitialRequest);
 
   const [ad, setAd] = useState<Ad | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -65,6 +84,8 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const mountTimeRef = useRef<number>(0);
   const bufferStartRef = useRef<number | null>(null);
   const bufferTotalRef = useRef<number>(0);
+  const requestIdRef = useRef<string | null>(null);
+  const firstByteSentRef = useRef(false);
 
   // Best-effort perf send. Bounded by RLS WITH CHECK on the server.
   const sendPerf = useCallback(
@@ -78,6 +99,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             metric,
             value: Math.max(0, Math.min(600000, Math.round(value))),
             user_agent: ua,
+            request_id: requestIdRef.current,
           },
         }).catch(() => {});
       } catch {
@@ -126,11 +148,28 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     void loadAd();
   }, [loadAd]);
 
-  // Start TTFF clock the moment the player mounts.
+  // Start TTFF clock the moment the player mounts, and issue a server-side
+  // correlation request_id so beacons can reconcile the true TTFF/buffering.
   useEffect(() => {
     if (loadState !== "ready" || !ad) return;
     mountTimeRef.current = performance.now();
-  }, [loadState, ad]);
+    let cancelled = false;
+    void issueFn({
+      data: {
+        ad_id: ad.id,
+        placement,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 256) : undefined,
+      },
+    })
+      .then((r) => {
+        if (cancelled) return;
+        requestIdRef.current = r?.request_id ?? null;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [loadState, ad, issueFn, placement]);
 
   // Watchdog: if the video never reaches a playable state within
   // LOAD_TIMEOUT_MS after the ad metadata loads, treat it as a timeout.
@@ -190,8 +229,12 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
       } else if (typeof v.webkitDroppedFrameCount === "number") {
         dropped = v.webkitDroppedFrameCount;
       }
-      if (dropped > 0) sendPerf("dropped_frames", dropped);
+      if (dropped > 0) {
+        sendPerf("dropped_frames", dropped);
+        sendBeacon(requestIdRef.current, "dropped_frame", dropped);
+      }
     }
+    sendBeacon(requestIdRef.current, "end");
   }, [sendPerf]);
 
   const close = (reason: "completed" | "cancelled") => {
@@ -441,8 +484,15 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           controls={false}
           onCanPlay={tryPlay}
           onLoadedMetadata={tryPlay}
+          onLoadedData={() => {
+            if (!firstByteSentRef.current) {
+              firstByteSentRef.current = true;
+              sendBeacon(requestIdRef.current, "first_byte");
+            }
+          }}
           onWaiting={() => {
             if (bufferStartRef.current == null) bufferStartRef.current = performance.now();
+            sendBeacon(requestIdRef.current, "buffer_start");
           }}
           onPlaying={() => {
             if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
@@ -450,14 +500,22 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             if (bufferStartRef.current != null) {
               bufferTotalRef.current += performance.now() - bufferStartRef.current;
               bufferStartRef.current = null;
+              sendBeacon(requestIdRef.current, "buffer_end");
             }
             if (!ttffLogged.current && mountTimeRef.current > 0) {
               ttffLogged.current = true;
               sendPerf("ttff_ms", performance.now() - mountTimeRef.current);
+              sendBeacon(requestIdRef.current, "first_frame");
             }
           }}
-          onError={handleVideoError}
-          onEnded={() => close("completed")}
+          onError={() => {
+            sendBeacon(requestIdRef.current, "error");
+            handleVideoError();
+          }}
+          onEnded={() => {
+            sendBeacon(requestIdRef.current, "end");
+            close("completed");
+          }}
           className="absolute inset-0 h-full w-full object-contain"
         />
 

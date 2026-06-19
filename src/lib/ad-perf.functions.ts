@@ -32,6 +32,7 @@ export const recordAdPerfEvent = createServerFn({ method: "POST" })
         metric: z.enum(AD_PERF_METRICS),
         value: z.number().min(0).max(600000),
         user_agent: z.string().max(256).optional(),
+        request_id: z.string().uuid().nullable().optional(),
       })
       .parse(d),
   )
@@ -46,11 +47,43 @@ export const recordAdPerfEvent = createServerFn({ method: "POST" })
           metric: data.metric,
           value: data.value,
           user_agent: data.user_agent ?? null,
+          request_id: data.request_id ?? null,
         });
     } catch {
       /* swallow — telemetry must never break rendering */
     }
     return { ok: true };
+  });
+
+// Issue a server-side correlation id for a single interstitial play.
+// Anon-callable; the request_id is opaque and auto-expires after 15 minutes
+// inside record_interstitial_beacon.
+export const issueInterstitialRequest = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        ad_id: z.string().uuid().nullable().optional(),
+        placement: z.enum(AD_PLACEMENTS),
+        user_agent: z.string().max(256).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }): Promise<{ request_id: string | null }> => {
+    try {
+      const sb = publicClient() as unknown as {
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+      };
+      const { data: rid } = await sb.rpc("issue_interstitial_request", {
+        _ad_id: data.ad_id ?? null,
+        _placement: data.placement,
+        _user_id: null,
+        _session_id: "",
+        _ua: data.user_agent ?? "",
+      });
+      return { request_id: (rid as string | null) ?? null };
+    } catch {
+      return { request_id: null };
+    }
   });
 
 export type AdPerfSummaryRow = {

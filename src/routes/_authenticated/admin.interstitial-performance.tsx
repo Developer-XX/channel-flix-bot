@@ -20,6 +20,8 @@ import {
   getInterstitialDrilldown,
   exportInterstitialPerfCSV,
   listRecentInterstitialAds,
+  getInterstitialBaselines,
+  type BaselinesResult,
 } from "@/lib/ad-perf-drilldown.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/interstitial-performance")({
@@ -56,6 +58,16 @@ function Page() {
     queryFn: () => getInterstitialDrilldown({ data: filter }),
     retry: false,
     refetchInterval: 60_000,
+  });
+
+  const baselinesQ = useQuery({
+    queryKey: ["interstitial-baselines", placements.length === 1 ? placements[0] : null],
+    queryFn: () =>
+      getInterstitialBaselines({
+        data: { placement: placements.length === 1 ? placements[0] : null },
+      }),
+    retry: false,
+    staleTime: 60_000,
   });
 
   const adListQ = useQuery({
@@ -178,6 +190,8 @@ function Page() {
           {(drilldownQ.error as Error).message}
         </div>
       )}
+
+      {baselinesQ.data && <BaselinesPanel data={baselinesQ.data} />}
 
       {data && (
         <>
@@ -373,6 +387,91 @@ function PivotTable({
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+function BaselinesPanel({ data }: { data: BaselinesResult }) {
+  const windows: Array<"7d" | "14d" | "30d"> = ["7d", "14d", "30d"];
+  const rows: Array<{
+    key: keyof BaselinesResult["metrics"];
+    label: string;
+    format: (n: number | null) => string;
+  }> = [
+    { key: "ttff_p75", label: "TTFF p75", format: (n) => (n == null ? "—" : `${Math.round(n)} ms`) },
+    { key: "video_error_rate", label: "Video error rate", format: (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`) },
+    { key: "autoplay_blocked_rate", label: "Autoplay blocked rate", format: (n) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`) },
+  ];
+  return (
+    <section className="mb-6" data-testid="baselines-panel">
+      <h2 className="text-sm font-semibold mb-2">Baselines & regressions</h2>
+      {data.regressions.length > 0 ? (
+        <div
+          role="alert"
+          data-testid="baselines-regression-banner"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive mb-3"
+        >
+          <strong className="font-semibold">{data.regressions.length} regression(s) detected.</strong>{" "}
+          {data.regressions
+            .map((r) => `${r.metric} vs ${r.window}`)
+            .join(", ")}
+        </div>
+      ) : (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-400 mb-3">
+          No regressions vs 7/14/30-day baselines.
+        </div>
+      )}
+      <div className="rounded-xl border bg-card overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-muted/40">
+            <tr className="text-left">
+              <th className="px-3 py-2">Metric</th>
+              <th className="px-3 py-2 text-right">Current (24h)</th>
+              {windows.map((w) => (
+                <th key={w} className="px-3 py-2 text-right">
+                  vs {w}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const m = data.metrics[r.key];
+              const current = m["7d"].current;
+              return (
+                <tr key={r.key} className="border-t">
+                  <td className="px-3 py-2 font-medium">{r.label}</td>
+                  <td className="px-3 py-2 text-right font-mono">{r.format(current)}</td>
+                  {windows.map((w) => {
+                    const cell = m[w];
+                    const arrow = cell.delta_pct == null ? "" : cell.delta_pct > 0 ? "▲" : cell.delta_pct < 0 ? "▼" : "·";
+                    return (
+                      <td
+                        key={w}
+                        aria-label={cell.regressed ? `${r.label} ${w} regressed` : undefined}
+                        className={`px-3 py-2 text-right font-mono ${
+                          cell.regressed ? "bg-destructive/15 text-destructive font-semibold" : ""
+                        }`}
+                      >
+                        <div>{r.format(cell.baseline)}</div>
+                        {cell.delta_pct != null && (
+                          <div className="text-[10px] opacity-70">
+                            {arrow} {cell.delta_pct > 0 ? "+" : ""}
+                            {cell.delta_pct.toFixed(1)}%
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-1">
+        Regression rules: TTFF p75 &gt; 3500 ms or ≥1.5× baseline · error rate &gt; 10% or +5pp · autoplay blocked &gt; 40% or +15pp.
+      </p>
     </section>
   );
 }
