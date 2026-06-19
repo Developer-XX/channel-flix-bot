@@ -14,6 +14,9 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   reporter: [["list"]],
+  // Default run excludes @load specs (network-throttle + parallel-nav stress
+  // tests). Run those explicitly with `bunx playwright test --grep @load`.
+  grepInvert: process.env.E2E_INCLUDE_LOAD ? undefined : /@load/,
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:8080",
     trace: "retain-on-failure",
@@ -36,6 +39,11 @@ export default defineConfig({
     {
       name: "webkit-ios",
       use: { ...devices["iPhone 13"] },
+    },
+    {
+      name: "chromium-throttled",
+      testMatch: /interstitial-load\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
 });
