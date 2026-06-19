@@ -15,6 +15,7 @@ import {
 } from "@/lib/downloads.functions";
 import { getMyPremiumStatus } from "@/lib/premium.functions";
 import { getVerificationStatus } from "@/lib/verification.functions";
+import { logAuthEvent } from "@/lib/auth-events.functions";
 
 export const Route = createFileRoute("/_authenticated/account")({
   component: AccountPage,
