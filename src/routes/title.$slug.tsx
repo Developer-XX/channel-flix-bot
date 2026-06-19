@@ -72,7 +72,7 @@ function TitlePage() {
   useEffect(() => {
     const id = titleQ.data?.id;
     if (!id) return;
-    const key = `viewed:${id}`;
+    const key = `viewed:v2:${id}`;
     try {
       if (sessionStorage.getItem(key)) return;
     } catch {
