@@ -353,6 +353,11 @@ export const requestDownload = createServerFn({ method: "POST" })
       attempt_history: history,
     });
 
+    // Bump per-title download counter so admin "Most downloaded" reflects reality.
+    if (result.ok && file.title_id) {
+      await supabaseAdmin.rpc("increment_title_download", { _title_id: file.title_id });
+    }
+
     // Update queue row.
     if (result.ok) {
       await markQueueSent(supabaseAdmin, idemKey, result.messageId, botUserId);
