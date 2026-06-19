@@ -151,6 +151,44 @@ export type Database = {
         }
         Relationships: []
       }
+      ad_view_log_anon: {
+        Row: {
+          ad_id: string | null
+          created_at: string
+          id: string
+          ip_hash: string
+          placement: string
+          session_id: string
+          user_agent_class: string | null
+        }
+        Insert: {
+          ad_id?: string | null
+          created_at?: string
+          id?: string
+          ip_hash: string
+          placement: string
+          session_id: string
+          user_agent_class?: string | null
+        }
+        Update: {
+          ad_id?: string | null
+          created_at?: string
+          id?: string
+          ip_hash?: string
+          placement?: string
+          session_id?: string
+          user_agent_class?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_view_log_anon_ad_id_fkey"
+            columns: ["ad_id"]
+            isOneToOne: false
+            referencedRelation: "ads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_alerts: {
         Row: {
           acknowledged_at: string | null
@@ -2539,6 +2577,20 @@ export type Database = {
     }
     Functions: {
       check_telegram_ingest_grants: { Args: never; Returns: Json }
+      claim_interstitial_view_anon: {
+        Args: {
+          _ad_id: string
+          _ip_hash: string
+          _placement: string
+          _session_id: string
+          _ua: string
+        }
+        Returns: Json
+      }
+      claim_interstitial_view_user: {
+        Args: { _ad_id: string; _placement: string; _user_id: string }
+        Returns: Json
+      }
       diagnose_table_permissions: { Args: { _table: string }; Returns: Json }
       has_role: {
         Args: {
