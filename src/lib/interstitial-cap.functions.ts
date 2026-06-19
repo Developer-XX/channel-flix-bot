@@ -163,7 +163,9 @@ export const claimInterstitialView = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }): Promise<ClaimResult> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin: sbAdmin } = await import("@/integrations/supabase/client.server");
+    // Generated types don't know about the new RPC functions yet; cast for now.
+    const supabaseAdmin = sbAdmin as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown }> };
     const userId = await getCurrentUserId();
     try {
       if (userId) {
