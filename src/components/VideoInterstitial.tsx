@@ -61,6 +61,40 @@ function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unkno
 const LOAD_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;
 
+// Hoisted to module scope so the component identity is stable across renders.
+// If defined inside VideoInterstitial, every state update (e.g. the cancel
+// countdown ticking once a second) would create a new component type and
+// force React to unmount + remount the entire subtree — including the
+// <video> element — which restarts playback from 0 and produces a looping
+// 2-second clip until the countdown reaches 0.
+const Frame: React.FC<{ children: React.ReactNode; label: string; placement: AdPlacement }> = ({
+  children,
+  label,
+  placement,
+}) => (
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-label={label}
+    data-testid={`interstitial-${placement}`}
+    className="fixed inset-0 z-[100] grid place-items-center bg-black/95 backdrop-blur-sm p-3 sm:p-6"
+  >
+    <div className="relative w-full max-w-[min(100vw,1100px)]">{children}</div>
+  </div>
+);
+
+const PlayerSkeleton: React.FC = () => (
+  <div
+    data-testid="interstitial-skeleton"
+    className="relative w-full aspect-video rounded-lg bg-white/5 overflow-hidden"
+  >
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-white/0 via-white/10 to-white/0" />
+    <div className="absolute inset-0 grid place-items-center text-xs text-white/70">Loading ad…</div>
+  </div>
+);
+
+
+
 export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) {
   const listFn = useServerFn(listActiveAds);
   const trackFn = useServerFn(recordAdEvent);
