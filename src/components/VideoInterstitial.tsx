@@ -406,7 +406,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
   if (loadState === "loading") {
     return (
-      <Frame label="Loading advertisement">
+      <Frame placement={placement} label="Loading advertisement">
         <div className="absolute -top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
           Ad
         </div>
@@ -418,7 +418,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
   if (loadState === "error" || !ad) {
     return (
-      <Frame label="Advertisement failed to load">
+      <Frame placement={placement} label="Advertisement failed to load">
         <div
           data-testid="interstitial-error"
           className="w-full aspect-video rounded-lg bg-black/80 border border-white/10 grid place-items-center p-6 text-center"
@@ -457,7 +457,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const canCancel = remaining <= 0;
 
   return (
-    <Frame label="Sponsored video">
+    <Frame placement={placement} label="Sponsored video">
       <div className="absolute -top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
         Ad
       </div>
