@@ -2659,6 +2659,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_title_download: {
+        Args: { _title_id: string }
+        Returns: undefined
+      }
+      increment_title_view: { Args: { _title_id: string }; Returns: undefined }
       interstitial_baselines: { Args: { _placement?: string }; Returns: Json }
       is_public_browsing_enabled: { Args: never; Returns: boolean }
       issue_interstitial_request: {
