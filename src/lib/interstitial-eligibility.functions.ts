@@ -11,36 +11,57 @@ const PLACEMENT_WINDOW_HOURS: Partial<Record<AdPlacement, number>> = {
   interstitial_login: 24,
 };
 
+export type EligibilityResult = { eligible: boolean; nextAllowedAt: string | null };
+
+// Pure helper extracted from the createServerFn handler so it is unit-testable
+// with a stubbed Supabase client.
+export async function evaluateInterstitialEligibility(
+  supabase: { from: (table: string) => unknown },
+  userId: string,
+  placement: AdPlacement,
+  now: number = Date.now(),
+): Promise<EligibilityResult> {
+  const windowHours = PLACEMENT_WINDOW_HOURS[placement];
+  if (!windowHours) return { eligible: true, nextAllowedAt: null };
+  const cutoff = new Date(now - windowHours * 3600_000).toISOString();
+  const q = supabase.from("ad_view_log") as {
+    select: (cols: string) => {
+      eq: (k: string, v: string) => {
+        eq: (k: string, v: string) => {
+          gte: (k: string, v: string) => {
+            order: (c: string, o: { ascending: boolean }) => {
+              limit: (n: number) => Promise<{ data: { created_at: string }[] | null; error: unknown }>;
+            };
+          };
+        };
+      };
+    };
+  };
+  const { data: rows, error } = await q
+    .select("created_at")
+    .eq("user_id", userId)
+    .eq("placement", placement)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !rows || rows.length === 0) {
+    return { eligible: !error, nextAllowedAt: null };
+  }
+  const last = new Date(rows[0].created_at).getTime();
+  return {
+    eligible: false,
+    nextAllowedAt: new Date(last + windowHours * 3600_000).toISOString(),
+  };
+}
+
 export const getInterstitialEligibility = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z.object({ placement: z.enum(AD_PLACEMENTS) }).parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const windowHours = PLACEMENT_WINDOW_HOURS[data.placement];
-    if (!windowHours) {
-      return { eligible: true, nextAllowedAt: null as string | null };
-    }
-    const cutoff = new Date(Date.now() - windowHours * 3600_000).toISOString();
-    const { data: rows, error } = await context.supabase
-      .from("ad_view_log")
-      .select("created_at")
-      .eq("user_id", context.userId)
-      .eq("placement", data.placement)
-      .gte("created_at", cutoff)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    if (error) {
-      // Fail-open: don't block the user if telemetry breaks.
-      return { eligible: true, nextAllowedAt: null as string | null };
-    }
-    if (!rows || rows.length === 0) {
-      return { eligible: true, nextAllowedAt: null as string | null };
-    }
-    const last = new Date(rows[0].created_at).getTime();
-    const next = new Date(last + windowHours * 3600_000).toISOString();
-    return { eligible: false, nextAllowedAt: next };
-  });
+  .handler(async ({ data, context }) =>
+    evaluateInterstitialEligibility(context.supabase, context.userId, data.placement),
+  );
 
 export const recordInterstitialView = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -58,9 +79,6 @@ export const recordInterstitialView = createServerFn({ method: "POST" })
       placement: data.placement,
       ad_id: data.ad_id ?? null,
     });
-    if (error) {
-      // Don't surface errors to the UI; this is best-effort telemetry.
-      return { ok: false as const };
-    }
+    if (error) return { ok: false as const };
     return { ok: true as const };
   });
