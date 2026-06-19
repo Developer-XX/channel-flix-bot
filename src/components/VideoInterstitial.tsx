@@ -61,6 +61,40 @@ function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unkno
 const LOAD_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;
 
+// Hoisted to module scope so the component identity is stable across renders.
+// If defined inside VideoInterstitial, every state update (e.g. the cancel
+// countdown ticking once a second) would create a new component type and
+// force React to unmount + remount the entire subtree — including the
+// <video> element — which restarts playback from 0 and produces a looping
+// 2-second clip until the countdown reaches 0.
+const Frame: React.FC<{ children: React.ReactNode; label: string; placement: AdPlacement }> = ({
+  children,
+  label,
+  placement,
+}) => (
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-label={label}
+    data-testid={`interstitial-${placement}`}
+    className="fixed inset-0 z-[100] grid place-items-center bg-black/95 backdrop-blur-sm p-3 sm:p-6"
+  >
+    <div className="relative w-full max-w-[min(100vw,1100px)]">{children}</div>
+  </div>
+);
+
+const PlayerSkeleton: React.FC = () => (
+  <div
+    data-testid="interstitial-skeleton"
+    className="relative w-full aspect-video rounded-lg bg-white/5 overflow-hidden"
+  >
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-white/0 via-white/10 to-white/0" />
+    <div className="absolute inset-0 grid place-items-center text-xs text-white/70">Loading ad…</div>
+  </div>
+);
+
+
+
 export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) {
   const listFn = useServerFn(listActiveAds);
   const trackFn = useServerFn(recordAdEvent);
@@ -366,32 +400,13 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     void loadAd();
   };
 
-  // Consistent dialog frame used by every state to prevent layout shift.
-  const Frame: React.FC<{ children: React.ReactNode; label: string }> = ({ children, label }) => (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      data-testid={`interstitial-${placement}`}
-      className="fixed inset-0 z-[100] grid place-items-center bg-black/95 backdrop-blur-sm p-3 sm:p-6"
-    >
-      <div className="relative w-full max-w-[min(100vw,1100px)]">{children}</div>
-    </div>
-  );
 
-  const PlayerSkeleton = () => (
-    <div
-      data-testid="interstitial-skeleton"
-      className="relative w-full aspect-video rounded-lg bg-white/5 overflow-hidden"
-    >
-      <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-white/0 via-white/10 to-white/0" />
-      <div className="absolute inset-0 grid place-items-center text-xs text-white/70">Loading ad…</div>
-    </div>
-  );
+
+
 
   if (loadState === "loading") {
     return (
-      <Frame label="Loading advertisement">
+      <Frame placement={placement} label="Loading advertisement">
         <div className="absolute -top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
           Ad
         </div>
@@ -403,7 +418,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
   if (loadState === "error" || !ad) {
     return (
-      <Frame label="Advertisement failed to load">
+      <Frame placement={placement} label="Advertisement failed to load">
         <div
           data-testid="interstitial-error"
           className="w-full aspect-video rounded-lg bg-black/80 border border-white/10 grid place-items-center p-6 text-center"
@@ -442,7 +457,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const canCancel = remaining <= 0;
 
   return (
-    <Frame label="Sponsored video">
+    <Frame placement={placement} label="Sponsored video">
       <div className="absolute -top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
         Ad
       </div>
