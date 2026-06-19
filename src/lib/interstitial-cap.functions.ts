@@ -95,14 +95,47 @@ async function getCurrentUserId(): Promise<string | null> {
   }
 }
 
+async function windowMinutesFor(placement: AdPlacement): Promise<number> {
+  try {
+    const { getSetting } = await import("@/lib/runtime-settings.server");
+    if (placement === "interstitial_periodic") {
+      const v = await getSetting("AD_INTERSTITIAL_PERIODIC_MINUTES");
+      const n = v ? parseInt(v, 10) : NaN;
+      return Number.isFinite(n) ? Math.max(0, n) : 120;
+    }
+    if (placement === "interstitial_before_download") {
+      const v = await getSetting("AD_INTERSTITIAL_BEFORE_DOWNLOAD_COOLDOWN_MINUTES");
+      const n = v ? parseInt(v, 10) : NaN;
+      return Number.isFinite(n) ? Math.max(0, n) : 120;
+    }
+    // interstitial_login keeps a 24h cap (login is infrequent)
+    return 24 * 60;
+  } catch {
+    return 24 * 60;
+  }
+}
+
+function ipWindowMinutesFor(placement: AdPlacement, sessionWindow: number): number {
+  // Never let the soft per-IP fallback exceed the session cap.
+  return Math.max(0, Math.min(60, sessionWindow));
+}
+
 // -- Preview eligibility (does NOT consume the slot) -----------------------
 export const previewInterstitialEligibility = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ placement: INTERSTITIAL_ENUM }).parse(d))
   .handler(async ({ data }): Promise<{ eligible: boolean; nextAllowedAt: string | null }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const userId = await getCurrentUserId();
-    const sinceDay = new Date(Date.now() - 24 * 3600_000).toISOString();
-    const sinceHour = new Date(Date.now() - 3600_000).toISOString();
+    const windowMin = await windowMinutesFor(data.placement);
+    const ipWindowMin = ipWindowMinutesFor(data.placement, windowMin);
+
+    if (windowMin <= 0) {
+      // No cap configured for this placement → always eligible.
+      return { eligible: true, nextAllowedAt: null };
+    }
+
+    const sinceWindow = new Date(Date.now() - windowMin * 60_000).toISOString();
+    const sinceIp = new Date(Date.now() - ipWindowMin * 60_000).toISOString();
 
     if (userId) {
       const { data: rows } = await supabaseAdmin
@@ -110,12 +143,12 @@ export const previewInterstitialEligibility = createServerFn({ method: "POST" })
         .select("created_at")
         .eq("user_id", userId)
         .eq("placement", data.placement)
-        .gte("created_at", sinceDay)
+        .gte("created_at", sinceWindow)
         .order("created_at", { ascending: false })
         .limit(1);
       if (rows && rows.length > 0) {
         const last = new Date(rows[0].created_at as string).getTime();
-        return { eligible: false, nextAllowedAt: new Date(last + 24 * 3600_000).toISOString() };
+        return { eligible: false, nextAllowedAt: new Date(last + windowMin * 60_000).toISOString() };
       }
       return { eligible: true, nextAllowedAt: null };
     }
@@ -128,26 +161,28 @@ export const previewInterstitialEligibility = createServerFn({ method: "POST" })
       .select("created_at")
       .eq("session_id", sid)
       .eq("placement", data.placement)
-      .gte("created_at", sinceDay)
+      .gte("created_at", sinceWindow)
       .order("created_at", { ascending: false })
       .limit(1);
-    const ipQ = supabaseAdmin
-      .from("ad_view_log_anon")
-      .select("created_at")
-      .eq("ip_hash", ipHash)
-      .eq("placement", data.placement)
-      .gte("created_at", sinceHour)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    const ipQ = ipWindowMin > 0
+      ? supabaseAdmin
+          .from("ad_view_log_anon")
+          .select("created_at")
+          .eq("ip_hash", ipHash)
+          .eq("placement", data.placement)
+          .gte("created_at", sinceIp)
+          .order("created_at", { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: [] as Array<{ created_at: string }> });
     const [sessionR, ipR] = await Promise.all([sessionQ, ipQ]);
 
     if (sessionR.data?.length) {
       const last = new Date(sessionR.data[0].created_at as string).getTime();
-      return { eligible: false, nextAllowedAt: new Date(last + 24 * 3600_000).toISOString() };
+      return { eligible: false, nextAllowedAt: new Date(last + windowMin * 60_000).toISOString() };
     }
     if (ipR.data?.length) {
       const last = new Date(ipR.data[0].created_at as string).getTime();
-      return { eligible: false, nextAllowedAt: new Date(last + 3600_000).toISOString() };
+      return { eligible: false, nextAllowedAt: new Date(last + ipWindowMin * 60_000).toISOString() };
     }
     return { eligible: true, nextAllowedAt: null };
   });
@@ -164,15 +199,17 @@ export const claimInterstitialView = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<ClaimResult> => {
     const { supabaseAdmin: sbAdmin } = await import("@/integrations/supabase/client.server");
-    // Generated types don't know about the new RPC functions yet; cast for now.
     const supabaseAdmin = sbAdmin as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown }> };
     const userId = await getCurrentUserId();
+    const windowMin = await windowMinutesFor(data.placement);
+    const ipWindowMin = ipWindowMinutesFor(data.placement, windowMin);
     try {
       if (userId) {
         const { data: res } = await supabaseAdmin.rpc("claim_interstitial_view_user", {
           _user_id: userId,
           _placement: data.placement,
           _ad_id: data.ad_id ?? null,
+          _window_minutes: windowMin,
         });
         const r = (res ?? { claimed: false }) as { claimed: boolean; next_allowed_at?: string };
         if (r.claimed) return { claimed: true };
@@ -187,6 +224,8 @@ export const claimInterstitialView = createServerFn({ method: "POST" })
         _placement: data.placement,
         _ad_id: data.ad_id ?? null,
         _ua: ua,
+        _window_minutes: windowMin,
+        _ip_window_minutes: ipWindowMin,
       });
       const r = (res ?? { claimed: false }) as {
         claimed: boolean;
@@ -200,8 +239,7 @@ export const claimInterstitialView = createServerFn({ method: "POST" })
         nextAllowedAt: r.next_allowed_at ?? null,
       };
     } catch {
-      // Fail-open so telemetry/auth flows never break — frequency caps are
-      // a soft guarantee, not a security boundary.
       return { claimed: true };
     }
   });
+
