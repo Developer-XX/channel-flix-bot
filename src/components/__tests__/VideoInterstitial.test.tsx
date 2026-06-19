@@ -149,7 +149,7 @@ describe("VideoInterstitial", () => {
 
     render(<VideoInterstitial placement="interstitial_login" cancelSeconds={5} onClose={() => {}} />);
 
-    const video = await waitFor(() => document.querySelector("video")!);
+    const video = await waitFor(() => { const v = document.querySelector("video"); if (!v) throw new Error("no video"); return v as HTMLVideoElement; });
     fireEvent.canPlay(video);
 
     const fallback = await screen.findByTestId("interstitial-play-fallback");
@@ -212,7 +212,7 @@ describe("VideoInterstitial", () => {
 
     const cap = captureEvents(["ad_mute", "ad_unmute"]);
     render(<VideoInterstitial placement="interstitial_login" cancelSeconds={5} onClose={() => {}} />);
-    const video = await waitFor(() => document.querySelector("video")!);
+    const video = await waitFor(() => { const v = document.querySelector("video"); if (!v) throw new Error("no video"); return v as HTMLVideoElement; });
     fireEvent.canPlay(video);
 
     const toggle = await screen.findByTestId("interstitial-mute");
