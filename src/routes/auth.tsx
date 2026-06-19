@@ -103,20 +103,45 @@ function AuthPage() {
         redirect_uri: window.location.origin,
       });
       if (result.error) {
+        await logAuthEvent({
+          data: { action: "auth.google.failed", message: (result.error as Error)?.message ?? String(result.error) },
+        }).catch(() => undefined);
         toast.error(formatAuthError(result.error));
         logAuthError("[auth:google]", result.error);
         setBusy(false);
         return;
       }
       if (result.redirected) return;
-      // Tokens already set on the session — go to the intended page.
+
+      // Confirm the session persisted before we leave the auth page; this
+      // guards against a setSession() failure inside the lovable module.
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        await logAuthEvent({
+          data: { action: "auth.google.failed", message: "Session was not persisted after OAuth" },
+        }).catch(() => undefined);
+        toast.error("Google sign-in succeeded but the session was not saved. Please try again.");
+        setBusy(false);
+        return;
+      }
+
+      const email = sessionData.session.user.email ?? undefined;
+      await logAuthEvent({ data: { action: "auth.google.success", email } }).catch(() => undefined);
+      // Best-effort account linking for users who previously signed up with email/password.
+      linkGoogleAccountByEmail().catch((e) => logAuthError("[auth:google-link]", e));
+
+      toast.success("Signed in with Google.");
       window.location.replace(redirectTo);
     } catch (error) {
+      await logAuthEvent({
+        data: { action: "auth.google.failed", message: (error as Error)?.message ?? String(error) },
+      }).catch(() => undefined);
       toast.error(formatAuthError(error));
       logAuthError("[auth:google]", error);
       setBusy(false);
     }
   };
+
 
   const title = mode === "signin" ? "Welcome back" : "Create your account";
   const description = mode === "signin"
