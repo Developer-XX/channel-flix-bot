@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { formatAuthError, logAuthError } from "@/lib/auth-errors";
 import { signInWithBotCheck, signUpWithBotCheck } from "@/lib/auth.functions";
+import { linkGoogleAccountByEmail, logAuthEvent } from "@/lib/auth-events.functions";
 
 type AuthMode = "signin" | "signup";
 
