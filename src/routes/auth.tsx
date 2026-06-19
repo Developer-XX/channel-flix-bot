@@ -27,20 +27,8 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
-// Only allow same-origin relative paths to prevent open redirects.
-function safeRedirect(target: string | undefined): string {
-  if (!target) return "/";
-  try {
-    // Allow simple relative paths starting with "/" but not "//".
-    if (target.startsWith("/") && !target.startsWith("//")) return target;
-    // Allow absolute URLs only when origin matches.
-    const url = new URL(target, window.location.origin);
-    if (url.origin === window.location.origin) return url.pathname + url.search + url.hash;
-  } catch {
-    /* fall through */
-  }
-  return "/";
-}
+import { safeRedirect } from "@/lib/auth-redirect";
+
 
 function AuthPage() {
   // navigate intentionally omitted — we use window.location.replace so the
