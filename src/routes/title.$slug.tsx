@@ -80,9 +80,9 @@ function TitlePage() {
     }
     if (pendingTitleViewPings.has(id)) return;
     pendingTitleViewPings.add(id);
-    void supabase
-      .rpc("increment_title_view", { _title_id: id })
-      .then(({ error }) => {
+    void (async () => {
+      try {
+        const { error } = await supabase.rpc("increment_title_view", { _title_id: id });
         if (error) {
           pendingTitleViewPings.delete(id);
           return;
@@ -92,10 +92,10 @@ function TitlePage() {
         } catch {
           // best-effort dedupe only; analytics must never affect page rendering
         }
-      })
-      .catch(() => {
+      } catch {
         pendingTitleViewPings.delete(id);
-      });
+      }
+    })();
   }, [titleQ.data?.id]);
 
   const filesQ = useQuery({
