@@ -52,6 +52,7 @@ function AuthPage() {
   const [website, setWebsite] = useState("");
   const [startedAt, setStartedAt] = useState(Date.now());
   const [busy, setBusy] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
