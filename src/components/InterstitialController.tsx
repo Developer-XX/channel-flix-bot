@@ -100,26 +100,23 @@ export function InterstitialController() {
             return;
           }
         }
-        // Server-side per-user 24h cap for the login placement (survives
-        // reload, tab close, and device switches). Fail-open on errors so
-        // telemetry can never block the sign-in flow.
-        if (placement === "interstitial_login" && authed === true) {
-          eligibilityFn({ data: { placement } })
-            .then((res) => {
-              if (!res?.eligible) {
-                resolve(false);
-                return;
-              }
-              setRequest({ placement, resolve });
-            })
-            .catch(() => {
-              setRequest({ placement, resolve });
-            });
-          return;
-        }
-        setRequest({ placement, resolve });
+        // Server-side eligibility check for any interstitial placement.
+        // Handles both signed-in users (24h per-user cap) and anonymous
+        // visitors (24h per-session cookie + 1h soft IP fallback). Fail-open
+        // on errors so telemetry can never block the user-facing flow.
+        eligibilityFn({ data: { placement } })
+          .then((res) => {
+            if (!res?.eligible) {
+              resolve(false);
+              return;
+            }
+            setRequest({ placement, resolve });
+          })
+          .catch(() => {
+            setRequest({ placement, resolve });
+          });
       }),
-    [enabled, cfg, authed, eligibilityFn],
+    [enabled, cfg, eligibilityFn],
   );
 
   useEffect(() => {
