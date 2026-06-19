@@ -2,8 +2,26 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { X, AlertTriangle, Volume2, VolumeX, Play } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { listActiveAds, recordAdEvent, type Ad, type AdPlacement } from "@/lib/ads.functions";
-import { recordAdPerfEvent, type AdPerfMetric } from "@/lib/ad-perf.functions";
+import { recordAdPerfEvent, issueInterstitialRequest, type AdPerfMetric } from "@/lib/ad-perf.functions";
 import { pickAd as pickAdPure } from "@/lib/ad-rotation";
+
+// Fire-and-forget beacon to the server-validated perf endpoint. Uses
+// sendBeacon when available so it survives tab close / navigation; falls
+// back to fetch keepalive.
+function sendBeacon(requestId: string | null, phase: string, value?: number) {
+  if (!requestId || typeof window === "undefined") return;
+  try {
+    const payload = JSON.stringify({ request_id: requestId, phase, value });
+    const url = "/api/public/hooks/interstitial-beacon";
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
+      return;
+    }
+    void fetch(url, { method: "POST", body: payload, keepalive: true, headers: { "content-type": "application/json" } }).catch(() => {});
+  } catch {
+    /* noop */
+  }
+}
 
 interface Props {
   placement: AdPlacement;
