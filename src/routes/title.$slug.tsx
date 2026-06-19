@@ -37,6 +37,8 @@ export const Route = createFileRoute("/title/$slug")({
   ),
 });
 
+const pendingTitleViewPings = new Set<string>();
+
 function TitlePage() {
   const { slug } = Route.useParams();
   const isAuthed = useIsAuthed();
@@ -70,14 +72,30 @@ function TitlePage() {
   useEffect(() => {
     const id = titleQ.data?.id;
     if (!id) return;
-    const key = `viewed:${id}`;
+    const key = `viewed:v2:${id}`;
     try {
       if (sessionStorage.getItem(key)) return;
-      sessionStorage.setItem(key, "1");
     } catch {
-      // sessionStorage may be unavailable (e.g. SSR or privacy mode) — fall through and still ping.
+      // sessionStorage may be unavailable (e.g. privacy mode) — still ping once per mounted app instance.
     }
-    void supabase.rpc("increment_title_view", { _title_id: id });
+    if (pendingTitleViewPings.has(id)) return;
+    pendingTitleViewPings.add(id);
+    void (async () => {
+      try {
+        const { error } = await supabase.rpc("increment_title_view", { _title_id: id });
+        if (error) {
+          pendingTitleViewPings.delete(id);
+          return;
+        }
+        try {
+          sessionStorage.setItem(key, "1");
+        } catch {
+          // best-effort dedupe only; analytics must never affect page rendering
+        }
+      } catch {
+        pendingTitleViewPings.delete(id);
+      }
+    })();
   }, [titleQ.data?.id]);
 
   const filesQ = useQuery({
