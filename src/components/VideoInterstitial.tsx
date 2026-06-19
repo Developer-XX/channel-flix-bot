@@ -229,8 +229,12 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
       } else if (typeof v.webkitDroppedFrameCount === "number") {
         dropped = v.webkitDroppedFrameCount;
       }
-      if (dropped > 0) sendPerf("dropped_frames", dropped);
+      if (dropped > 0) {
+        sendPerf("dropped_frames", dropped);
+        sendBeacon(requestIdRef.current, "dropped_frame", dropped);
+      }
     }
+    sendBeacon(requestIdRef.current, "end");
   }, [sendPerf]);
 
   const close = (reason: "completed" | "cancelled") => {
