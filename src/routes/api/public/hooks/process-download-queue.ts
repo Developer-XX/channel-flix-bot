@@ -1,17 +1,16 @@
 // Cron-driven: drains the download_send_queue. Picks queued rows whose
 // next_attempt_at has elapsed, attempts copyMessage, updates status.
-// Auth: apikey header equal to SUPABASE_PUBLISHABLE_KEY (set in pg_cron).
+// Auth: server-only CRON_SECRET (or service-role) via x-cron-secret /
+// Authorization: Bearer header. Publishable/anon keys are NOT accepted.
 import { createFileRoute } from "@tanstack/react-router";
+import { checkCronAuth } from "@/lib/cron-auth.server";
 
 export const Route = createFileRoute("/api/public/hooks/process-download-queue")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = request.headers.get("apikey") ?? "";
-        const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? "";
-        if (!expected || apiKey !== expected) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        const auth = checkCronAuth(request);
+        if (!auth.ok) return auth.response;
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { deliverWithRetry, getBotUserId } = await import("@/lib/delivery.server");
