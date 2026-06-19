@@ -12,7 +12,8 @@ export type TableDiagnostic = {
   checked_at: string;
 };
 
-// Read grants + RLS policies for a public table. Admin-gated server-side.
+type RpcFn = (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+
 export const getTablePermissionDiagnostic = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -20,24 +21,18 @@ export const getTablePermissionDiagnostic = createServerFn({ method: "GET" })
   )
   .handler(async ({ context, data }): Promise<TableDiagnostic> => {
     await requireAdminAccess(context);
-    const { data: rpc, error } = await context.supabase.rpc(
-      // @ts-expect-error - rpc name not yet in generated types
-      "diagnose_table_permissions",
-      { _table: data.table },
-    );
-    if (error) throw error;
-    return rpc as unknown as TableDiagnostic;
+    const rpc = context.supabase.rpc as unknown as RpcFn;
+    const { data: out, error } = await rpc("diagnose_table_permissions", { _table: data.table });
+    if (error) throw error as Error;
+    return out as TableDiagnostic;
   });
 
-// Manually run the nightly drift check from the UI.
 export const runTelegramIngestGrantsCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
-    const { data, error } = await context.supabase.rpc(
-      // @ts-expect-error - rpc name not yet in generated types
-      "check_telegram_ingest_grants",
-    );
-    if (error) throw error;
+    const rpc = context.supabase.rpc as unknown as RpcFn;
+    const { data, error } = await rpc("check_telegram_ingest_grants");
+    if (error) throw error as Error;
     return data as { drift: boolean; missing: Array<{ role: string; privilege: string }>; actual: Record<string, string[]> };
   });
