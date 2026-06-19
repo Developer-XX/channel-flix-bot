@@ -164,17 +164,31 @@ async function recordAuthAudit(action: string, email: string, status: "success" 
   }
 }
 
+function classifySupabaseAuthError(error: unknown): string {
+  const e = error as { status?: number; code?: string; message?: string };
+  const code = (e?.code ?? "").toLowerCase();
+  const message = (e?.message ?? "").toLowerCase();
+  if (code.includes("invalid_credentials") || message.includes("invalid login")) return "invalid_credentials";
+  if (code.includes("user_already_exists") || message.includes("already registered") || message.includes("already exists")) return "email_taken";
+  if (code.includes("email_not_confirmed") || message.includes("email not confirmed")) return "expired_session";
+  if (code.includes("over_request_rate_limit") || code.includes("rate")) return "rate_limited";
+  if (code.includes("validation") || message.includes("invalid")) return "validation_error";
+  if (e?.status && e.status >= 500) return "provider_error";
+  if (e?.status === 0 || message.includes("network") || message.includes("fetch")) return "network_error";
+  return "unknown";
+}
+
 export const signInWithBotCheck = createServerFn({ method: "POST" })
   .inputValidator((input) => AuthActionSchema.extend({ password: z.string().min(6).max(128) }).parse(input))
   .handler(async ({ data }) => {
     const throttle = await enforceRateLimit("signin", data.email);
     if (throttle) {
-      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: throttle.code });
+      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: throttle.code, failure_reason: "rate_limited" });
       return { ok: false as const, error: throttle };
     }
     const botError = botProtection(data);
     if (botError) {
-      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: botError.code });
+      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: botError.code, failure_reason: "bot_protection" });
       return { ok: false as const, error: botError };
     }
 
@@ -184,7 +198,11 @@ export const signInWithBotCheck = createServerFn({ method: "POST" })
     });
 
     if (error) {
-      await recordAuthAudit("auth.signin.failed", data.email, "failed", { code: (error as any).code, message: error.message });
+      await recordAuthAudit("auth.signin.failed", data.email, "failed", {
+        code: (error as any).code,
+        message: error.message,
+        failure_reason: classifySupabaseAuthError(error),
+      });
       return { ok: false as const, error: serializeError(error, "Sign in failed") };
     }
     await clearRateLimit("signin", data.email);
@@ -197,12 +215,12 @@ export const signUpWithBotCheck = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const throttle = await enforceRateLimit("signup", data.email);
     if (throttle) {
-      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: throttle.code });
+      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: throttle.code, failure_reason: "rate_limited" });
       return { ok: false as const, error: throttle };
     }
     const botError = botProtection(data);
     if (botError) {
-      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: botError.code });
+      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: botError.code, failure_reason: "bot_protection" });
       return { ok: false as const, error: botError };
     }
 
@@ -213,13 +231,18 @@ export const signUpWithBotCheck = createServerFn({ method: "POST" })
     });
 
     if (error) {
-      await recordAuthAudit("auth.signup.failed", data.email, "failed", { code: (error as any).code, message: error.message });
+      await recordAuthAudit("auth.signup.failed", data.email, "failed", {
+        code: (error as any).code,
+        message: error.message,
+        failure_reason: classifySupabaseAuthError(error),
+      });
       return { ok: false as const, error: serializeError(error, "Account creation failed") };
     }
     await clearRateLimit("signup", data.email);
     await recordAuthAudit("auth.signup.success", data.email, "success");
     return { ok: true as const, session: serializeSession(result.session) };
   });
+
 
 
 export const requestPasswordReset = createServerFn({ method: "POST" })
