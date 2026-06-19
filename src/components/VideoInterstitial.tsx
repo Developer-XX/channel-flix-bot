@@ -132,6 +132,15 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const bufferTotalRef = useRef<number>(0);
   const requestIdRef = useRef<string | null>(null);
   const firstByteSentRef = useRef(false);
+  // Loop / restart detection. We capture the peak `currentTime` reached and
+  // count any backward jumps after the first frame fires. A jump of >0.5s
+  // back to near-zero before `ended` is a remount or src reset — exactly the
+  // bug we shipped a fix for. Surfacing this as an analytics event lets us
+  // verify the fix holds in production.
+  const peakTimeRef = useRef<number>(0);
+  const loopCountRef = useRef<number>(0);
+  const lifecycleStartedRef = useRef(false);
+
 
   // Best-effort perf send. Bounded by RLS WITH CHECK on the server.
   const sendPerf = useCallback(
