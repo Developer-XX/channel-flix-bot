@@ -89,9 +89,11 @@ const Frame: React.FC<{ children: React.ReactNode; label: string; placement: AdP
     aria-modal="true"
     aria-label={label}
     data-testid={`interstitial-${placement}`}
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm"
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm overflow-hidden"
   >
-    <div className="relative w-screen h-[100dvh] flex items-center justify-center">{children}</div>
+    <div className="relative w-screen h-[100svh] max-h-[100dvh] flex flex-col items-center justify-center overflow-hidden">
+      {children}
+    </div>
   </div>
 );
 
