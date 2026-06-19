@@ -8,6 +8,7 @@ import { lovable } from "@/integrations/lovable";
 import { formatAuthError, logAuthError } from "@/lib/auth-errors";
 import { signInWithBotCheck, signUpWithBotCheck } from "@/lib/auth.functions";
 import { linkGoogleAccountByEmail, logAuthEvent } from "@/lib/auth-events.functions";
+import { handleGoogleSignIn } from "@/lib/auth-google";
 
 type AuthMode = "signin" | "signup";
 
