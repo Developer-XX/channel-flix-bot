@@ -505,7 +505,12 @@ function TelegramAdmin() {
         </div>
 
         {ingest.isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {ingest.error && <p className="text-sm text-destructive">{(ingest.error as Error).message}</p>}
+        {ingest.error && (
+          <IngestErrorBanner
+            error={ingest.error as Error}
+            onRetry={() => ingest.refetch()}
+          />
+        )}
 
         <div className="space-y-2">
           {pageRows.map((row) => (
