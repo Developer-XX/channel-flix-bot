@@ -234,7 +234,7 @@ function Chart({
   dataKey,
 }: {
   title: string;
-  data: Array<{ ts: string; placement: string } & Record<string, number | null>>;
+  data: Array<Record<string, unknown>>;
   placements: string[];
   dataKey: string;
 }) {

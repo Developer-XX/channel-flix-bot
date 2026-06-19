@@ -41,6 +41,7 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
 import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authenticated/admin.premium'
 import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin.notifications'
+import { Route as AuthenticatedAdminInterstitialPerformanceRouteImport } from './routes/_authenticated/admin.interstitial-performance'
 import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenticated/admin.health'
 import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authenticated/admin.error-log'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
@@ -235,6 +236,12 @@ const AuthenticatedAdminNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminInterstitialPerformanceRoute =
+  AuthenticatedAdminInterstitialPerformanceRouteImport.update({
+    id: '/interstitial-performance',
+    path: '/interstitial-performance',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminHealthRoute =
   AuthenticatedAdminHealthRouteImport.update({
     id: '/health',
@@ -388,6 +395,7 @@ export interface FileRoutesByFullPath {
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
+  '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -442,6 +450,7 @@ export interface FileRoutesByTo {
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
+  '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -499,6 +508,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/_authenticated/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
   '/_authenticated/admin/health': typeof AuthenticatedAdminHealthRoute
+  '/_authenticated/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/_authenticated/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -556,6 +566,7 @@ export interface FileRouteTypes {
     | '/admin/diagnostics'
     | '/admin/error-log'
     | '/admin/health'
+    | '/admin/interstitial-performance'
     | '/admin/notifications'
     | '/admin/premium'
     | '/admin/requests'
@@ -610,6 +621,7 @@ export interface FileRouteTypes {
     | '/admin/diagnostics'
     | '/admin/error-log'
     | '/admin/health'
+    | '/admin/interstitial-performance'
     | '/admin/notifications'
     | '/admin/premium'
     | '/admin/requests'
@@ -666,6 +678,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/diagnostics'
     | '/_authenticated/admin/error-log'
     | '/_authenticated/admin/health'
+    | '/_authenticated/admin/interstitial-performance'
     | '/_authenticated/admin/notifications'
     | '/_authenticated/admin/premium'
     | '/_authenticated/admin/requests'
@@ -951,6 +964,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminNotificationsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/interstitial-performance': {
+      id: '/_authenticated/admin/interstitial-performance'
+      path: '/interstitial-performance'
+      fullPath: '/admin/interstitial-performance'
+      preLoaderRoute: typeof AuthenticatedAdminInterstitialPerformanceRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/health': {
       id: '/_authenticated/admin/health'
       path: '/health'
@@ -1129,6 +1149,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
   AuthenticatedAdminErrorLogRoute: typeof AuthenticatedAdminErrorLogRoute
   AuthenticatedAdminHealthRoute: typeof AuthenticatedAdminHealthRoute
+  AuthenticatedAdminInterstitialPerformanceRoute: typeof AuthenticatedAdminInterstitialPerformanceRoute
   AuthenticatedAdminNotificationsRoute: typeof AuthenticatedAdminNotificationsRoute
   AuthenticatedAdminPremiumRoute: typeof AuthenticatedAdminPremiumRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
@@ -1155,6 +1176,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
   AuthenticatedAdminErrorLogRoute: AuthenticatedAdminErrorLogRoute,
   AuthenticatedAdminHealthRoute: AuthenticatedAdminHealthRoute,
+  AuthenticatedAdminInterstitialPerformanceRoute:
+    AuthenticatedAdminInterstitialPerformanceRoute,
   AuthenticatedAdminNotificationsRoute: AuthenticatedAdminNotificationsRoute,
   AuthenticatedAdminPremiumRoute: AuthenticatedAdminPremiumRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
