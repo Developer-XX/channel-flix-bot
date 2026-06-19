@@ -318,17 +318,22 @@ function ExportCsvButton() {
 function Section({
   title,
   icon,
+  action,
   children,
 }: {
   title: string;
   icon?: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="mt-8">
-      <h2 className="font-display text-lg font-bold flex items-center gap-2 mb-3">
-        {icon} {title}
-      </h2>
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <h2 className="font-display text-lg font-bold flex items-center gap-2">
+          {icon} {title}
+        </h2>
+        {action}
+      </div>
       {children}
     </section>
   );
