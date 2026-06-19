@@ -41,15 +41,26 @@ export type ClientAdEventName =
   | "ad_unmute"
   | "ad_video_error"
   | "ad_timeout"
-  | "ad_retry";
+  | "ad_retry"
+  | "ad_lifecycle_start"
+  | "ad_first_frame"
+  | "ad_loop_detected"
+  | "ad_cancel"
+  | "ad_complete";
 
 /**
- * Lightweight client-side analytics beacon for interstitial events. Fires a
- * CustomEvent so any listener (debug overlay, e2e tests, GA wrapper) can pick
- * it up. Server-side events use the closed allow-list on `recordAdEvent` and
- * `recordAdPerfEvent`.
+ * Lightweight client-side analytics beacon for interstitial lifecycle events.
+ * Every event carries the server-issued `request_id` (when available) so
+ * production logs can correlate a single playback session end-to-end.
+ *
+ * Fires a CustomEvent so any listener (debug overlay, e2e tests, GA wrapper)
+ * can pick it up. Server-side metrics use the closed allow-list on
+ * `recordAdEvent` and `recordAdPerfEvent`.
  */
-function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unknown>) {
+function emitClientAdEvent(
+  name: ClientAdEventName,
+  detail: Record<string, unknown> & { request_id?: string | null },
+) {
   try {
     window.dispatchEvent(new CustomEvent(`interstitial:${name}`, { detail }));
     if (import.meta.env.DEV) console.debug(`[interstitial] ${name}`, detail);
@@ -57,6 +68,7 @@ function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unkno
     /* noop */
   }
 }
+
 
 const LOAD_TIMEOUT_MS = 8000;
 const MAX_RETRIES = 1;
@@ -120,6 +132,15 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const bufferTotalRef = useRef<number>(0);
   const requestIdRef = useRef<string | null>(null);
   const firstByteSentRef = useRef(false);
+  // Loop / restart detection. We capture the peak `currentTime` reached and
+  // count any backward jumps after the first frame fires. A jump of >0.5s
+  // back to near-zero before `ended` is a remount or src reset — exactly the
+  // bug we shipped a fix for. Surfacing this as an analytics event lets us
+  // verify the fix holds in production.
+  const peakTimeRef = useRef<number>(0);
+  const loopCountRef = useRef<number>(0);
+  const lifecycleStartedRef = useRef(false);
+
 
   // Best-effort perf send. Bounded by RLS WITH CHECK on the server.
   const sendPerf = useCallback(
@@ -198,12 +219,21 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
       .then((r) => {
         if (cancelled) return;
         requestIdRef.current = r?.request_id ?? null;
+        if (!lifecycleStartedRef.current) {
+          lifecycleStartedRef.current = true;
+          emitClientAdEvent("ad_lifecycle_start", {
+            placement,
+            ad_id: ad.id,
+            request_id: requestIdRef.current,
+          });
+        }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [loadState, ad, issueFn, placement]);
+
 
   // Watchdog: if the video never reaches a playable state within
   // LOAD_TIMEOUT_MS after the ad metadata loads, treat it as a timeout.
@@ -274,7 +304,29 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const close = (reason: "completed" | "cancelled") => {
     if (closedRef.current) return;
     closedRef.current = true;
+    // Hard-stop the underlying media element so a cancelled ad cannot keep
+    // decoding frames or replay the opening clip while the controller is
+    // unmounting. We pause + detach the source + load() to abort any in-
+    // flight network fetch, which also prevents `onCanPlay`/`onLoadedMetadata`
+    // from firing after the close.
+    const v = videoRef.current;
+    if (v) {
+      try {
+        v.pause();
+        v.removeAttribute("src");
+        v.load();
+      } catch {
+        /* noop */
+      }
+    }
     flushPlaybackMetrics();
+    emitClientAdEvent(reason === "completed" ? "ad_complete" : "ad_cancel", {
+      placement,
+      ad_id: ad?.id,
+      request_id: requestIdRef.current,
+      current_time: v?.currentTime ?? null,
+      duration: v?.duration ?? null,
+    });
     if (ad) {
       trackFn({
         data: { ad_id: ad.id, placement, event_type: reason === "completed" ? "complete" : "dismiss" },
@@ -282,6 +334,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     }
     onClose(reason);
   };
+
 
   const openLink = () => {
     if (!ad?.link_url) return;
@@ -521,7 +574,36 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
               ttffLogged.current = true;
               sendPerf("ttff_ms", performance.now() - mountTimeRef.current);
               sendBeacon(requestIdRef.current, "first_frame");
+              emitClientAdEvent("ad_first_frame", {
+                placement,
+                ad_id: ad.id,
+                request_id: requestIdRef.current,
+                ttff_ms: Math.round(performance.now() - mountTimeRef.current),
+              });
             }
+          }}
+          onTimeUpdate={(e) => {
+            const t = (e.currentTarget as HTMLVideoElement).currentTime;
+            // Loop / remount detection: after the first frame fires, a
+            // backwards jump of more than 0.5s to near-zero means the media
+            // element has been reset — either by a remount (the class of bug
+            // we fixed) or by an external src reload. Emit once per detected
+            // loop so production analytics surfaces regressions immediately.
+            if (ttffLogged.current && t + 0.5 < peakTimeRef.current && t < 0.8) {
+              loopCountRef.current += 1;
+              emitClientAdEvent("ad_loop_detected", {
+                placement,
+                ad_id: ad.id,
+                request_id: requestIdRef.current,
+                peak_time: peakTimeRef.current,
+                current_time: t,
+                loop_count: loopCountRef.current,
+              });
+              peakTimeRef.current = t;
+              return;
+            }
+            if (t > peakTimeRef.current) peakTimeRef.current = t;
+
           }}
           onError={() => {
             sendBeacon(requestIdRef.current, "error");
