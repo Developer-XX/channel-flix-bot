@@ -20,6 +20,8 @@ import {
   getInterstitialDrilldown,
   exportInterstitialPerfCSV,
   listRecentInterstitialAds,
+  getInterstitialBaselines,
+  type BaselinesResult,
 } from "@/lib/ad-perf-drilldown.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/interstitial-performance")({
