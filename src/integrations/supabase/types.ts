@@ -2637,20 +2637,43 @@ export type Database = {
     }
     Functions: {
       check_telegram_ingest_grants: { Args: never; Returns: Json }
-      claim_interstitial_view_anon: {
-        Args: {
-          _ad_id: string
-          _ip_hash: string
-          _placement: string
-          _session_id: string
-          _ua: string
-        }
-        Returns: Json
-      }
-      claim_interstitial_view_user: {
-        Args: { _ad_id: string; _placement: string; _user_id: string }
-        Returns: Json
-      }
+      claim_interstitial_view_anon:
+        | {
+            Args: {
+              _ad_id: string
+              _ip_hash: string
+              _placement: string
+              _session_id: string
+              _ua: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _ad_id: string
+              _ip_hash: string
+              _ip_window_minutes?: number
+              _placement: string
+              _session_id: string
+              _ua: string
+              _window_minutes?: number
+            }
+            Returns: Json
+          }
+      claim_interstitial_view_user:
+        | {
+            Args: { _ad_id: string; _placement: string; _user_id: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _ad_id: string
+              _placement: string
+              _user_id: string
+              _window_minutes?: number
+            }
+            Returns: Json
+          }
       diagnose_table_permissions: { Args: { _table: string }; Returns: Json }
       has_role: {
         Args: {
