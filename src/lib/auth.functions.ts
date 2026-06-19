@@ -22,16 +22,8 @@ function createAuthClient() {
   });
 }
 
-function botProtection(input: { website?: string; startedAt: number }) {
-  const elapsedMs = Date.now() - input.startedAt;
-  if (input.website?.trim()) {
-    return { status: 400, code: "bot_detected", message: "Bot protection check failed. Please reload and try again." };
-  }
-  if ((elapsedMs >= 0 && elapsedMs < 1200) || elapsedMs > 30 * 60 * 1000) {
-    return { status: 400, code: "bot_challenge_failed", message: "Security check expired. Please reload and try again." };
-  }
-  return null;
-}
+import { botProtection } from "./auth-bot-protection";
+
 
 type AuthAction = "signin" | "signup" | "reset";
 
