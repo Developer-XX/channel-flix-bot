@@ -558,9 +558,26 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   // viewport entirely so the ad still covers the screen and overlays stay
   // anchored to real edges. Once metadata loads, we switch to the true
   // aspect ratio and letterbox to preserve framing across portrait/landscape.
-  const effectiveAR = hasIntrinsicSize && aspectRatio > 0 ? aspectRatio : viewport.w / Math.max(1, viewport.h);
+  const arMode: "intrinsic" | "fallback-viewport" = hasIntrinsicSize && aspectRatio > 0
+    ? "intrinsic"
+    : "fallback-viewport";
+  const effectiveAR = arMode === "intrinsic" ? aspectRatio : viewport.w / Math.max(1, viewport.h);
   const fitW = Math.min(viewport.w, Math.round(viewport.h * effectiveAR));
   const fitH = Math.min(viewport.h, Math.round(viewport.w / Math.max(0.0001, effectiveAR)));
+
+  // Debug overlay: enabled when `?debug=interstitial` is in the URL, or when
+  // `localStorage.interstitialDebug === "1"`, or in DEV builds via the same
+  // flags. Never on by default in production.
+  const debugOn = (() => {
+    if (typeof window === "undefined") return false;
+    try {
+      if (new URLSearchParams(window.location.search).get("debug") === "interstitial") return true;
+      if (window.localStorage?.getItem("interstitialDebug") === "1") return true;
+    } catch {
+      /* noop */
+    }
+    return false;
+  })();
 
   return (
     <Frame placement={placement} label="Sponsored video">
@@ -573,7 +590,16 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           maxHeight: "100dvh",
         }}
       >
-        <div className="absolute top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
+        {/* Badges/overlays respect iOS safe-area insets so they never sit
+            under the notch, status bar, or rounded corners on rotation. */}
+        <div
+          data-testid="interstitial-badge-ad"
+          className="absolute z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80"
+          style={{
+            top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)",
+            left: "calc(env(safe-area-inset-left, 0px) + 0.5rem)",
+          }}
+        >
           Ad
         </div>
 
@@ -583,7 +609,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             aria-label="Close advertisement"
             data-testid="interstitial-close"
             onClick={() => close("cancelled")}
-            className="absolute top-2 right-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:scale-105 transition-transform"
+            className="absolute z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:scale-105 transition-transform"
+            style={{
+              top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)",
+              right: "calc(env(safe-area-inset-right, 0px) + 0.5rem)",
+            }}
           >
             <X className="h-5 w-5" />
           </button>
@@ -591,7 +621,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           <div
             aria-live="polite"
             data-testid="interstitial-countdown"
-            className="absolute top-2 right-2 z-10 grid h-9 min-w-9 px-2 place-items-center rounded-full bg-white/15 text-white text-xs font-medium border border-white/20"
+            className="absolute z-10 grid h-9 min-w-9 px-2 place-items-center rounded-full bg-white/15 text-white text-xs font-medium border border-white/20"
+            style={{
+              top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)",
+              right: "calc(env(safe-area-inset-right, 0px) + 0.5rem)",
+            }}
           >
             {remaining}s
           </div>
