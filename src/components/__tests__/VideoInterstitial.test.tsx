@@ -8,24 +8,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
 
-// Mock useServerFn from @tanstack/react-start to return controllable fns.
-const listFn = vi.fn();
-const trackFn = vi.fn(() => Promise.resolve({ ok: true }));
-const perfFn = vi.fn(() => Promise.resolve({ ok: true }));
-
+// Mock useServerFn to return its argument as-is — so when the component
+// calls useServerFn(listActiveAds) it receives the vi.fn() we exported below.
 vi.mock("@tanstack/react-start", () => ({
-  useServerFn: (fn: unknown) => {
-    if ((fn as { name?: string })?.name === "listActiveAds") return listFn;
-    if ((fn as { name?: string })?.name === "recordAdEvent") return trackFn;
-    if ((fn as { name?: string })?.name === "recordAdPerfEvent") return perfFn;
-    return vi.fn();
-  },
+  useServerFn: (fn: unknown) => fn,
 }));
 
-// Use the real ad-rotation picker but isolate it from runtime settings.
 vi.mock("@/lib/ads.functions", () => ({
-  listActiveAds: Object.assign(() => {}, { name: "listActiveAds" }),
-  recordAdEvent: Object.assign(() => {}, { name: "recordAdEvent" }),
+  listActiveAds: vi.fn(),
+  recordAdEvent: vi.fn(() => Promise.resolve({ ok: true })),
   AD_PLACEMENTS: [
     "homepage_banner",
     "between_rows",
@@ -43,8 +34,15 @@ vi.mock("@/lib/ads.functions", () => ({
 }));
 
 vi.mock("@/lib/ad-perf.functions", () => ({
-  recordAdPerfEvent: Object.assign(() => {}, { name: "recordAdPerfEvent" }),
+  recordAdPerfEvent: vi.fn(() => Promise.resolve({ ok: true })),
 }));
+
+import { listActiveAds, recordAdEvent } from "@/lib/ads.functions";
+import { recordAdPerfEvent } from "@/lib/ad-perf.functions";
+
+const listFn = listActiveAds as unknown as ReturnType<typeof vi.fn>;
+const trackFn = recordAdEvent as unknown as ReturnType<typeof vi.fn>;
+const perfFn = recordAdPerfEvent as unknown as ReturnType<typeof vi.fn>;
 
 import { VideoInterstitial } from "@/components/VideoInterstitial";
 
