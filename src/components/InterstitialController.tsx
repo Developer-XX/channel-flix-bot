@@ -3,6 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getInterstitialConfig, type InterstitialConfig } from "@/lib/ads.functions";
 import { getMyPremiumStatus } from "@/lib/premium.functions";
+import {
+  getInterstitialEligibility,
+  recordInterstitialView,
+} from "@/lib/interstitial-eligibility.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { VideoInterstitial } from "@/components/VideoInterstitial";
 import type { AdPlacement } from "@/lib/ads.functions";
