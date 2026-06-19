@@ -120,12 +120,20 @@ function TitlePage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("seasons")
-        .select("id, season_number, name, episode_count, poster_url")
+        .select("id, season_number, name, episode_count, poster_url, episodes(count)")
         .eq("title_id", titleQ.data!.id)
         .order("season_number");
-      return data ?? [];
+      return (data ?? []).map((s: typeof data extends Array<infer R> ? R : never) => {
+        const embedded = (s as unknown as { episodes?: Array<{ count: number }> }).episodes;
+        const real = Array.isArray(embedded) && embedded[0] ? Number(embedded[0].count) : 0;
+        return {
+          ...s,
+          episode_count: real > 0 ? real : (s.episode_count ?? 0),
+        };
+      });
     },
   });
+
 
   if (titleQ.isLoading) {
     return (
