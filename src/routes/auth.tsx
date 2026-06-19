@@ -4,10 +4,11 @@ import { Film } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { formatAuthError, logAuthError } from "@/lib/auth-errors";
-import { requestPasswordReset, signInWithBotCheck, signUpWithBotCheck } from "@/lib/auth.functions";
+import { signInWithBotCheck, signUpWithBotCheck } from "@/lib/auth.functions";
 
-type AuthMode = "signin" | "signup" | "forgot";
+type AuthMode = "signin" | "signup";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
