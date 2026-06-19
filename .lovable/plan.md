@@ -1,156 +1,141 @@
-# Interstitial Hardening Plan
+# Interstitial Hardening Plan (Batch 4)
 
-Four work items, sequenced so each one is independently verifiable.
+Four work items. All gated server-side; admin-visible.
 
----
+## 1. Monitoring & alerting
 
-## 1. Per-user 24h frequency cap
+**Goal:** detect failure spikes and TTFF regressions before users complain.
 
-**Goal:** the login-style interstitial (`interstitial_login`) shows at most once per 24h per signed-in user, surviving reloads, tab close, and device switches.
+**Cron route** `src/routes/api/public/hooks/interstitial-health.ts` (POST, apikey-gated, every 5 min via `pg_cron`).
+For each `placement` evaluates a rolling 15-min window from `ad_perf_events`, only when `events >= 50`:
 
-- New table `public.ad_view_log`
-  - Columns: `id uuid pk`, `user_id uuid not null`, `placement text not null`, `ad_id uuid null`, `created_at timestamptz default now()`.
-  - Indexes: `(user_id, placement, created_at desc)`.
-  - RLS: users `SELECT` their own rows; `service_role` full; no anon.
-  - Grants per project policy.
-- New server fn `getInterstitialEligibility({ placement })`
-  - Auth via `requireSupabaseAuth`.
-  - Returns `{ eligible: boolean, nextAllowedAt: string | null }`.
-  - For `interstitial_login`: looks up last row in last 24h.
-- New server fn `recordInterstitialView({ placement, ad_id })` (auth required) → inserts row.
-- Wire into `InterstitialController`:
-  - Before resolving `show("interstitial_login")`, await eligibility check; if not eligible, resolve `false`.
-  - After a successful play (reason !== "no-ad"), call `recordInterstitialView`.
-- Keep existing `localStorage` cooldown for `interstitial_periodic` and `interstitial_before_download` (anonymous-safe; lighter weight). 24h cap applies only to the user-anchored login placement.
+- `video_error rate > 10%` → alert `interstitial_video_error_rate`
+- `autoplay_blocked rate > 40%` → alert `interstitial_autoplay_blocked_rate`
+- `ttff_ms p75 > 3500ms` OR `(p75 / 24h baseline p75) >= 1.5` → alert `interstitial_ttff_regression`
 
-## 2. Perf metrics — `ad_perf_events` + admin tile
+**Alert delivery:**
+- Writes to `admin_alerts` (coalesced by `(kind, subject)` — pattern already used by `check_telegram_ingest_grants`).
+- On first transition to firing, also pushes to Telegram admin chat via existing `telegram-api.server` helper and `telegram_broadcast_subscribers` (role=admin). Resolved transitions also notify.
+- Reuses `admin_audit_log` for each evaluation run.
 
-**Goal:** capture TTFF (time-to-first-frame), buffering duration, dropped-frame count for served interstitials, and show 24h aggregates in the admin analytics dashboard.
+**Storage:** No new tables. Add `interstitial_alert_state` rows in existing `app_settings` (`key='interstitial_alert_state'`, JSON value) to track last-fired timestamps and prevent flapping (min 30-min re-fire interval).
 
-- New table `public.ad_perf_events`
-  - Columns: `id uuid pk`, `ad_id uuid null`, `placement text not null`, `metric text not null check (metric in ('ttff_ms','buffer_ms','dropped_frames','autoplay_blocked','video_error'))`, `value numeric not null default 0`, `user_agent text`, `created_at timestamptz default now()`.
-  - Indexes: `(placement, metric, created_at desc)`, `(ad_id, created_at desc)`.
-  - RLS: `service_role` full; admins `SELECT` via `has_role(auth.uid(),'admin')`; `INSERT` allowed for `authenticated` and `anon` with bounded zod validation (so anonymous interstitial impressions are still measurable). No `SELECT` for anon.
-  - Grants accordingly.
-- New server fn `recordAdPerfEvent({ ad_id, placement, metric, value })`
-  - Public (no auth middleware) so login-page anon hits work.
-  - Zod-validated: metric is a fixed enum, value clamped 0..600000 numeric, user_agent truncated to 256.
-  - Uses server publishable client; relies on RLS `INSERT` policy.
-- New server fn `getAdPerfSummary({ windowHours })` (admin-only)
-  - Returns `{ ttff_p50, ttff_p95, buffer_avg_ms, dropped_frames_total, autoplay_blocked_count, error_count, samples }` per placement.
-- `VideoInterstitial` integration:
-  - Record `performance.now()` at video element mount; on first `onPlaying`, post `ttff_ms`.
-  - Sum `waiting`→`playing` gaps for `buffer_ms`; flush once on close.
-  - On close, read `video.getVideoPlaybackQuality?.()` and post `dropped_frames`.
-  - Post `autoplay_blocked` / `video_error` once per occurrence.
-- Admin dashboard: add a "Interstitial performance (24h)" card to `src/routes/_authenticated/admin.analytics.tsx` showing the 6 summary numbers per placement.
+## 2. Admin dashboard drilldowns + CSV
 
-## 3. iOS Safari / Android Chrome fallback UI
+Replace the single "Interstitial performance (24h)" card in `src/routes/_authenticated/admin.analytics.tsx` with a dedicated route `admin.interstitial-performance.tsx`:
 
-**Goal:** when autoplay is blocked or first-frame never lands, swap inline player for a full-screen player chrome with a static thumbnail (poster) and a clear "Play video" button. Single tap starts playback with sound and counts as the impression.
+**Filters:** placement (multi), ad_id (multi, autocompleted from recent ads), time range (presets: 1h / 24h / 7d / 30d + custom), bucket (5m/1h/1d auto by range).
 
-- Extend `VideoInterstitial`:
-  - Detect blocked autoplay either from caught `play()` rejection or from the existing 8s timeout watchdog.
-  - Render a full-bleed `<div>` covering the dialog frame with: ad poster (`ad.poster_url ?? first-frame screenshot via `preload="metadata"` snapshot fallback), centered large `Play` button, advertiser name, "Sponsored" badge.
-  - Button onClick: unmute + `video.play()` from the gesture; on success, transition back to normal player; on failure, retry once muted then degrade to skippable static thumbnail (countdown still runs, `Continue` button appears at cancel-time).
-- No schema change. `ad.poster_url` already exists on the `ads` row; falls back to a black rectangle when missing.
+**Visualizations (recharts, already in project):**
+- TTFF p50/p75/p95 line chart over time
+- Buffering ms p75 line
+- Dropped frames per session bar
+- video_error count + autoplay_blocked count stacked bar
+- Pivot table: rows = ad_id, cols = the six metrics with sparkline
 
-## 4. Tests
+**Server fns** (`src/lib/ad-perf-drilldown.functions.ts`, admin-only):
+- `getInterstitialDrilldown({ placements, ad_ids, from, to, bucket })` returns timeseries + pivot
+- `exportInterstitialPerfCSV({ ...same filters })` returns CSV string (rows: ts, placement, ad_id, metric, value, user_agent_class). Capped at 100k rows; downloads via `Blob` in browser.
 
-Vitest + React Testing Library where possible; one Playwright spec for cross-browser autoplay behaviour.
+All queries use `ad_perf_events` + join `ads.name`. Indexes already on `(placement, created_at)`; add `(ad_id, created_at)` index.
 
-- **`src/components/__tests__/VideoInterstitial.test.tsx`** (jsdom)
-  - Mocks `useServerFn` for `listActiveAds` + `recordAdEvent` + `recordAdPerfEvent`.
-  - Mocks `HTMLMediaElement.prototype.play` returning resolved / rejected promises.
-  - Cases:
-    - Skeleton renders before ad resolves; container preserves `aspect-video` (no layout shift).
-    - Error state renders with Retry; clicking Retry calls `listActiveAds` again.
-    - Autoplay-blocked path renders the fallback "Play video" thumbnail and unblocks on click.
-    - Timeout watchdog fires `interstitial:ad_timeout` CustomEvent after 8s (fake timers).
-    - Successful play emits `interstitial:ad_play_success` + records `view` server event.
-    - Mute toggle emits `interstitial:ad_mute` / `:ad_unmute`.
-- **`src/lib/__tests__/interstitial-eligibility.test.ts`**
-  - Pure server-fn unit: mocks `context.supabase.from('ad_view_log')`; asserts eligibility window math.
-- **`tests/e2e/interstitial-autoplay.spec.ts`** (Playwright)
-  - Chromium with autoplay policy `no-user-gesture-required` → expects video to play automatically.
-  - Chromium with autoplay policy `user-gesture-required` → expects fallback "Play video" thumbnail, click starts playback.
+## 3. Server-side frequency caps end-to-end
 
-## 5. Verification pass
+**Goal:** no interstitial bypassable via reload, incognito tab, or parallel fetches.
 
-After implementation:
-- `bunx vitest run` (component + lib tests).
-- Playwright spec for autoplay.
-- `invoke-server-function` smoke test for `getInterstitialEligibility` + `recordAdPerfEvent`.
-- Drive the live preview with Playwright headless on the auth page to confirm the fallback renders end-to-end and the impression / view server events fire.
-- Visit `/_authenticated/admin/analytics` and screenshot the new perf tile with seeded events.
+**For signed-in users:** keep `ad_view_log` (user_id, placement) — already enforced. Add UNIQUE partial index `(user_id, placement)` WHERE created_at > now() - 24h is not possible (now() not immutable) → instead rely on a SECURITY DEFINER `claim_interstitial_view(_placement)` function that does eligibility check + insert in a single transaction with `FOR UPDATE` row lock on a per-user advisory lock (`pg_advisory_xact_lock(hashtext(user_id::text || placement))`). Eliminates the parallel-request race.
 
----
+**For anonymous users (new):**
+- Issue httpOnly, SameSite=Lax, Secure session cookie `int_sid` (24h) on first interstitial eligibility check via TanStack server fn using `setCookie` from `@tanstack/react-start/server`. Value: 128-bit random base64url.
+- New table `ad_view_log_anon(id, session_id, ip_hash, placement, ad_id, user_agent_class, created_at)` — RLS: service_role only; written via SECURITY DEFINER fn.
+- Eligibility = no row in last 24h for `(session_id, placement)` AND no row in last 1h for `(ip_hash, placement)` (IP soft fallback prevents cookie-clear bypass while limiting impact behind shared NAT).
+- `ip_hash = sha256(ip || daily_salt)` where `daily_salt` rotates from `app_settings` (privacy: not raw IP). IP from `getRequestIP({ xForwardedFor: true })`.
+- Same advisory-lock-then-insert pattern.
 
-## Technical details
+**Server fn rewrite** `getInterstitialEligibility` and new `claimInterstitialView`:
+- Eligibility is now read-only preview; the actual cap is claimed by `claimInterstitialView` called from `VideoInterstitial` `onPlaying` (the existing analytics point). Two-phase prevents showing-without-claiming if user closes tab mid-load.
 
-### Migrations
+## 4. Playwright E2E
+
+`tests/e2e/interstitial.spec.ts` (Playwright; install with `bun add -D @playwright/test` + `npx playwright install --with-deps chromium webkit`).
+
+Three projects in `playwright.config.ts`:
+- `chromium-android` — mobile Pixel device descriptor + Chromium launch flag `--autoplay-policy=user-gesture-required`
+- `webkit-ios` — iPhone 13 device descriptor (WebKit naturally blocks autoplay)
+- `chromium-desktop` — baseline, autoplay allowed
+
+**Tests:**
+1. Autoplay blocked → fallback UI appears, "Play video" button visible, click resumes playback, `ad_perf_events` POST with `autoplay_blocked` then `ttff_ms` recorded (network intercept).
+2. Retry flow: stub video src to fail twice then succeed; assert 2 retry network events then success.
+3. Frequency cap: trigger interstitial → reload → assert no second interstitial within 24h (cookie persists).
+4. Parallel-request race: fire two eligibility calls simultaneously via `Promise.all` from page context → exactly one claim succeeds.
+5. Analytics firing on iOS WebKit: assert `recordAdPerfEvent` POSTs for `ttff_ms`, `buffer_ms`, `dropped_frames`.
+
+Tests target `http://localhost:8080`, seed an interstitial ad via admin server fn beforeEach, sign in test user using existing `LOVABLE_BROWSER_SUPABASE_*` env mechanism for the authenticated cases.
+
+## Migrations
 
 ```sql
--- ad_view_log
-CREATE TABLE public.ad_view_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  placement text NOT NULL,
-  ad_id uuid NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX ad_view_log_user_placement_idx
-  ON public.ad_view_log (user_id, placement, created_at DESC);
-GRANT SELECT, INSERT ON public.ad_view_log TO authenticated;
-GRANT ALL ON public.ad_view_log TO service_role;
-ALTER TABLE public.ad_view_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "users read own ad views" ON public.ad_view_log
-  FOR SELECT TO authenticated USING (user_id = auth.uid());
-CREATE POLICY "users insert own ad views" ON public.ad_view_log
-  FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+-- 1. Drilldown index
+CREATE INDEX IF NOT EXISTS ad_perf_events_ad_id_created_idx
+  ON public.ad_perf_events (ad_id, created_at DESC);
 
--- ad_perf_events
-CREATE TABLE public.ad_perf_events (
+-- 2. Anon session view log
+CREATE TABLE public.ad_view_log_anon (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  ad_id uuid NULL,
+  session_id text NOT NULL,
+  ip_hash text NOT NULL,
   placement text NOT NULL,
-  metric text NOT NULL CHECK (metric IN
-    ('ttff_ms','buffer_ms','dropped_frames','autoplay_blocked','video_error')),
-  value numeric NOT NULL DEFAULT 0,
-  user_agent text,
+  ad_id uuid REFERENCES public.ads(id) ON DELETE SET NULL,
+  user_agent_class text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX ad_perf_events_lookup_idx
-  ON public.ad_perf_events (placement, metric, created_at DESC);
-GRANT INSERT ON public.ad_perf_events TO anon, authenticated;
-GRANT SELECT ON public.ad_perf_events TO authenticated;
-GRANT ALL ON public.ad_perf_events TO service_role;
-ALTER TABLE public.ad_perf_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "perf insert open" ON public.ad_perf_events
-  FOR INSERT TO anon, authenticated WITH CHECK (
-    length(placement) <= 64 AND
-    (user_agent IS NULL OR length(user_agent) <= 256) AND
-    value >= 0 AND value <= 600000
-  );
-CREATE POLICY "admins read perf" ON public.ad_perf_events
-  FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'));
+GRANT ALL ON public.ad_view_log_anon TO service_role;
+ALTER TABLE public.ad_view_log_anon ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service only" ON public.ad_view_log_anon FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE INDEX ad_view_log_anon_sid_placement_idx ON public.ad_view_log_anon (session_id, placement, created_at DESC);
+CREATE INDEX ad_view_log_anon_iph_placement_idx ON public.ad_view_log_anon (ip_hash, placement, created_at DESC);
+
+-- 3. SECURITY DEFINER claim functions
+CREATE OR REPLACE FUNCTION public.claim_interstitial_view_user(_user_id uuid, _placement text, _ad_id uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+DECLARE existing_at timestamptz;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtext(_user_id::text || ':' || _placement));
+  SELECT created_at INTO existing_at FROM ad_view_log
+    WHERE user_id=_user_id AND placement=_placement AND created_at > now()-interval '24 hours'
+    ORDER BY created_at DESC LIMIT 1;
+  IF existing_at IS NOT NULL THEN
+    RETURN jsonb_build_object('claimed', false, 'next_allowed_at', existing_at + interval '24 hours');
+  END IF;
+  INSERT INTO ad_view_log(user_id, placement, ad_id) VALUES (_user_id, _placement, _ad_id);
+  RETURN jsonb_build_object('claimed', true);
+END $$;
+
+-- analogous claim_interstitial_view_anon(_session_id, _ip_hash, _placement, _ad_id, _ua text)
 ```
 
-### File touch list
+## Files
 
-- new: `supabase/migrations/<ts>_ad_view_log_and_perf.sql`
-- new: `src/lib/interstitial-eligibility.functions.ts`
-- new: `src/lib/ad-perf.functions.ts`
-- edit: `src/components/InterstitialController.tsx` (eligibility gate + recordView call)
-- edit: `src/components/VideoInterstitial.tsx` (perf events + fallback thumbnail UI)
-- edit: `src/routes/_authenticated/admin.analytics.tsx` (perf summary tile)
-- new: `src/components/__tests__/VideoInterstitial.test.tsx`
-- new: `src/lib/__tests__/interstitial-eligibility.test.ts`
-- new: `tests/e2e/interstitial-autoplay.spec.ts`
+**New:**
+- `src/routes/api/public/hooks/interstitial-health.ts`
+- `src/lib/interstitial-cap.functions.ts` (eligibility preview + claim, anon + auth)
+- `src/lib/ad-perf-drilldown.functions.ts`
+- `src/lib/interstitial-alerting.server.ts` (threshold eval, telegram delivery)
+- `src/routes/_authenticated/admin.interstitial-performance.tsx`
+- `tests/e2e/interstitial.spec.ts`, `playwright.config.ts`
 
-### Out of scope
+**Edited:**
+- `src/components/InterstitialController.tsx` (call new eligibility for any placement, not just auth)
+- `src/components/VideoInterstitial.tsx` (call `claimInterstitialView` on `onPlaying`)
+- `src/lib/interstitial-eligibility.functions.ts` (deprecate; thin shim → new module)
+- `src/routes/_authenticated/admin.analytics.tsx` (replace tile w/ link to drilldown page)
 
-- Backend rate limiting on `recordAdPerfEvent` beyond the RLS WITH CHECK bounds (project policy).
-- Cross-device dedup for anon users (no stable id).
-- Per-placement cap UI in admin settings — current admin `cancelSeconds` / cooldown controls stay as-is.
+**Migrations:** indexes + anon table + claim functions (one file).
+**Cron seed:** insert via `supabase--insert` after route deploys.
+
+## Out of scope
+- Per-placement threshold UI (admin currently hardcoded; can move to `app_settings` later).
+- Cross-device dedup for anon beyond IP fallback.
+- Email delivery of alerts (Telegram + in-app only).
+- Playwright in CI pipeline wiring (tests added, runner config provided, CI hookup separate).

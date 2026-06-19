@@ -4,9 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { getInterstitialConfig, type InterstitialConfig } from "@/lib/ads.functions";
 import { getMyPremiumStatus } from "@/lib/premium.functions";
 import {
-  getInterstitialEligibility,
-  recordInterstitialView,
-} from "@/lib/interstitial-eligibility.functions";
+  previewInterstitialEligibility,
+  claimInterstitialView,
+} from "@/lib/interstitial-cap.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { VideoInterstitial } from "@/components/VideoInterstitial";
 import type { AdPlacement } from "@/lib/ads.functions";
@@ -43,8 +43,8 @@ function lsSetNum(key: string, value: number) {
 export function InterstitialController() {
   const configFn = useServerFn(getInterstitialConfig);
   const premiumFn = useServerFn(getMyPremiumStatus);
-  const eligibilityFn = useServerFn(getInterstitialEligibility);
-  const recordViewFn = useServerFn(recordInterstitialView);
+  const eligibilityFn = useServerFn(previewInterstitialEligibility);
+  const claimFn = useServerFn(claimInterstitialView);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [request, setRequest] = useState<Request>(null);
   const justSignedInRef = useRef(false);
@@ -100,26 +100,23 @@ export function InterstitialController() {
             return;
           }
         }
-        // Server-side per-user 24h cap for the login placement (survives
-        // reload, tab close, and device switches). Fail-open on errors so
-        // telemetry can never block the sign-in flow.
-        if (placement === "interstitial_login" && authed === true) {
-          eligibilityFn({ data: { placement } })
-            .then((res) => {
-              if (!res?.eligible) {
-                resolve(false);
-                return;
-              }
-              setRequest({ placement, resolve });
-            })
-            .catch(() => {
-              setRequest({ placement, resolve });
-            });
-          return;
-        }
-        setRequest({ placement, resolve });
+        // Server-side eligibility check for any interstitial placement.
+        // Handles both signed-in users (24h per-user cap) and anonymous
+        // visitors (24h per-session cookie + 1h soft IP fallback). Fail-open
+        // on errors so telemetry can never block the user-facing flow.
+        eligibilityFn({ data: { placement } })
+          .then((res) => {
+            if (!res?.eligible) {
+              resolve(false);
+              return;
+            }
+            setRequest({ placement, resolve });
+          })
+          .catch(() => {
+            setRequest({ placement, resolve });
+          });
       }),
-    [enabled, cfg, authed, eligibilityFn],
+    [enabled, cfg, eligibilityFn],
   );
 
   useEffect(() => {
@@ -173,10 +170,11 @@ export function InterstitialController() {
         if (req?.placement === "interstitial_before_download") {
           lsSetNum(LS_LAST_BEFORE_DOWNLOAD, Date.now());
         }
-        // Record the per-user 24h cap entry only for login placement and
-        // only when the ad actually rendered (not "no-ad").
-        if (req?.placement === "interstitial_login" && reason !== "no-ad" && authed === true) {
-          recordViewFn({ data: { placement: req.placement, ad_id: null } }).catch(() => {});
+        // Atomically claim the frequency-cap slot for every interstitial
+        // placement when the ad actually rendered. Handles both signed-in
+        // users (ad_view_log) and anon visitors (ad_view_log_anon).
+        if (req && reason !== "no-ad") {
+          claimFn({ data: { placement: req.placement, ad_id: null } }).catch(() => {});
         }
         req?.resolve(reason !== "no-ad");
       }}
