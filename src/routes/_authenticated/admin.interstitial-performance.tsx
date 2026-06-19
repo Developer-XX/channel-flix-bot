@@ -191,6 +191,8 @@ function Page() {
         </div>
       )}
 
+      {baselinesQ.data && <BaselinesPanel data={baselinesQ.data} />}
+
       {data && (
         <>
           <Stats data={data} />
