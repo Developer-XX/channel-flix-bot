@@ -66,6 +66,20 @@ function TitlePage() {
     },
   });
 
+  // Track a view at most once per session per title.
+  useEffect(() => {
+    const id = titleQ.data?.id;
+    if (!id) return;
+    const key = `viewed:${id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // sessionStorage may be unavailable (e.g. SSR or privacy mode) — fall through and still ping.
+    }
+    void supabase.rpc("increment_title_view", { _title_id: id });
+  }, [titleQ.data?.id]);
+
   const filesQ = useQuery({
     queryKey: ["title-files", titleQ.data?.id],
     enabled: !!titleQ.data?.id,
