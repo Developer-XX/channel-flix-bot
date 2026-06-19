@@ -60,6 +60,16 @@ function Page() {
     refetchInterval: 60_000,
   });
 
+  const baselinesQ = useQuery({
+    queryKey: ["interstitial-baselines", placements.length === 1 ? placements[0] : null],
+    queryFn: () =>
+      getInterstitialBaselines({
+        data: { placement: placements.length === 1 ? placements[0] : null },
+      }),
+    retry: false,
+    staleTime: 60_000,
+  });
+
   const adListQ = useQuery({
     queryKey: ["interstitial-ad-list"],
     queryFn: () => listRecentInterstitialAds(),
