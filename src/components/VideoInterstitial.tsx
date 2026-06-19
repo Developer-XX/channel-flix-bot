@@ -744,7 +744,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             aria-label={muted ? "Unmute ad" : "Mute ad"}
             data-testid="interstitial-mute"
             onClick={() => void toggleMute()}
-            className="absolute bottom-2 left-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
+            className="absolute z-10 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
+            style={{
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
+              left: "calc(env(safe-area-inset-left, 0px) + 0.5rem)",
+            }}
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
@@ -752,7 +756,14 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
         {/* Sponsor strip pinned to the bottom of the player box so it scales
             with the viewport instead of pushing the video out of 100dvh. */}
-        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2 text-[11px] text-white/80">
+        <div
+          data-testid="interstitial-sponsor"
+          className="absolute z-10 flex items-center gap-2 text-[11px] text-white/80"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
+            right: "calc(env(safe-area-inset-right, 0px) + 0.5rem)",
+          }}
+        >
           <span className="truncate max-w-[40vw] rounded bg-black/60 px-1.5 py-0.5">{ad.name}</span>
           {ad.link_url && (
             <button
@@ -764,6 +775,19 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             </button>
           )}
         </div>
+
+        {debugOn && (
+          <div
+            data-testid="interstitial-debug"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-md bg-black/80 px-3 py-2 font-mono text-[11px] leading-tight text-lime-300 ring-1 ring-lime-400/40"
+          >
+            <div>mode: <span data-testid="dbg-ar-mode">{arMode}</span></div>
+            <div>viewport: <span data-testid="dbg-viewport">{viewport.w}×{viewport.h}</span></div>
+            <div>player: <span data-testid="dbg-player">{fitW}×{fitH}</span></div>
+            <div>ar: <span data-testid="dbg-ar">{effectiveAR.toFixed(3)}</span></div>
+            <div>video: <span data-testid="dbg-intrinsic">{videoRef.current?.videoWidth ?? 0}×{videoRef.current?.videoHeight ?? 0}</span></div>
+          </div>
+        )}
       </div>
     </Frame>
   );
