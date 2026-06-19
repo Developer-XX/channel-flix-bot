@@ -70,10 +70,33 @@ export const submitPremiumPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({
     planId: z.string().uuid(),
-    screenshotPath: z.string().min(3),
+    screenshotPath: z.string().min(3).max(512),
     userNote: z.string().max(500).optional().nullable(),
   }).parse(d))
   .handler(async ({ context, data }) => {
+    // Enforce that the screenshot path lives in the caller's own storage folder.
+    // Storage RLS prevents uploads outside `{userId}/...`, but the path string
+    // saved on premium_payments was not previously cross-checked, allowing a
+    // crafted request to reference another user's screenshot.
+    const prefix = `${context.userId}/`;
+    const normalized = data.screenshotPath.replace(/^\/+/, "");
+    if (!normalized.startsWith(prefix) || normalized.includes("..")) {
+      throw new Error("Screenshot must be in your own storage folder");
+    }
+    // Verify the object actually exists under the caller's folder.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const rest = normalized.slice(prefix.length);
+    const lastSlash = rest.lastIndexOf("/");
+    const dir = lastSlash >= 0 ? `${prefix}${rest.slice(0, lastSlash)}` : prefix.replace(/\/$/, "");
+    const fileName = lastSlash >= 0 ? rest.slice(lastSlash + 1) : rest;
+    const { data: listed, error: listErr } = await supabaseAdmin
+      .storage.from("payment-proofs")
+      .list(dir, { search: fileName, limit: 1 });
+    if (listErr) throw listErr;
+    if (!listed || !listed.some((o) => o.name === fileName)) {
+      throw new Error("Screenshot not found in your storage folder");
+    }
+
     const { data: plan, error: planErr } = await context.supabase
       .from("premium_plans").select("id,name,price_inr,duration_days").eq("id", data.planId).maybeSingle();
     if (planErr || !plan) throw new Error("Plan not found");
@@ -83,12 +106,13 @@ export const submitPremiumPayment = createServerFn({ method: "POST" })
       plan_name: plan.name,
       amount_inr: plan.price_inr,
       duration_days: plan.duration_days,
-      screenshot_url: data.screenshotPath,
+      screenshot_url: normalized,
       user_note: data.userNote ?? null,
     } as never);
     if (error) throw error;
     return { ok: true };
   });
+
 
 // ---------------- Admin ----------------
 export const adminListPayments = createServerFn({ method: "GET" })
