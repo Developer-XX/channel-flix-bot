@@ -17,6 +17,19 @@ export function SiteHeader() {
   const { user } = useAuth();
   const { isAdmin } = useIsAdmin();
   const { location } = useRouterState();
+  const queryClient = useQueryClient();
+
+  const handleSignOut = async () => {
+    const email = user?.email ?? undefined;
+    try {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      await supabase.auth.signOut();
+      await logAuthEvent({ data: { action: "auth.signout", email } }).catch(() => undefined);
+    } finally {
+      navigate({ to: "/auth", replace: true });
+    }
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
