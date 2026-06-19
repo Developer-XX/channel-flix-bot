@@ -19,6 +19,7 @@ import {
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
 import { Button } from "@/components/ui/button";
+import { AuthEventsWidget } from "@/components/AuthEventsWidget";
 
 export const Route = createFileRoute("/_authenticated/admin/analytics")({
   component: AnalyticsPage,
