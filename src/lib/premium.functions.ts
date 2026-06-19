@@ -74,28 +74,20 @@ export const submitPremiumPayment = createServerFn({ method: "POST" })
     userNote: z.string().max(500).optional().nullable(),
   }).parse(d))
   .handler(async ({ context, data }) => {
-    // Enforce that the screenshot path lives in the caller's own storage folder.
-    // Storage RLS prevents uploads outside `{userId}/...`, but the path string
-    // saved on premium_payments was not previously cross-checked, allowing a
-    // crafted request to reference another user's screenshot.
-    const prefix = `${context.userId}/`;
-    const normalized = data.screenshotPath.replace(/^\/+/, "");
-    if (!normalized.startsWith(prefix) || normalized.includes("..")) {
-      throw new Error("Screenshot must be in your own storage folder");
-    }
-    // Verify the object actually exists under the caller's folder.
+    // Enforce that the screenshot path lives in the caller's own storage folder
+    // and that the object actually exists. Storage RLS prevents uploads outside
+    // `{userId}/...`, but the path string saved on premium_payments was not
+    // previously cross-checked, allowing a crafted request to reference another
+    // user's screenshot. See src/lib/premium-screenshot.ts for the rules.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const rest = normalized.slice(prefix.length);
-    const lastSlash = rest.lastIndexOf("/");
-    const dir = lastSlash >= 0 ? `${prefix}${rest.slice(0, lastSlash)}` : prefix.replace(/\/$/, "");
-    const fileName = lastSlash >= 0 ? rest.slice(lastSlash + 1) : rest;
-    const { data: listed, error: listErr } = await supabaseAdmin
-      .storage.from("payment-proofs")
-      .list(dir, { search: fileName, limit: 1 });
-    if (listErr) throw listErr;
-    if (!listed || !listed.some((o) => o.name === fileName)) {
-      throw new Error("Screenshot not found in your storage folder");
-    }
+    const { validateScreenshotPath } = await import("@/lib/premium-screenshot");
+    const check = await validateScreenshotPath(
+      data.screenshotPath,
+      context.userId,
+      supabaseAdmin.storage as never,
+    );
+    if (!check.ok) throw new Error(check.message);
+    const normalized = check.normalized;
 
     const { data: plan, error: planErr } = await context.supabase
       .from("premium_plans").select("id,name,price_inr,duration_days").eq("id", data.planId).maybeSingle();
