@@ -120,6 +120,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const [muted, setMuted] = useState(true);
   const [needsTap, setNeedsTap] = useState(false);
   const [retries, setRetries] = useState(0);
+  const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
 
   const impressionLogged = useRef(false);
   const playLogged = useRef(false);
