@@ -50,7 +50,7 @@ export const Route = createFileRoute("/api/public/hooks/interstitial-beacon")({
         } catch {
           /* swallow — telemetry must never break playback */
         }
-        return new Response("ok", { status: 204 });
+        return new Response(null, { status: 204 });
       },
       OPTIONS: async () => new Response(null, { status: 204 }),
     },
