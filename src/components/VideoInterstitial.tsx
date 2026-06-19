@@ -574,7 +574,36 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
               ttffLogged.current = true;
               sendPerf("ttff_ms", performance.now() - mountTimeRef.current);
               sendBeacon(requestIdRef.current, "first_frame");
+              emitClientAdEvent("ad_first_frame", {
+                placement,
+                ad_id: ad.id,
+                request_id: requestIdRef.current,
+                ttff_ms: Math.round(performance.now() - mountTimeRef.current),
+              });
             }
+          }}
+          onTimeUpdate={(e) => {
+            const t = (e.currentTarget as HTMLVideoElement).currentTime;
+            // Loop / remount detection: after the first frame fires, a
+            // backwards jump of more than 0.5s to near-zero means the media
+            // element has been reset — either by a remount (the class of bug
+            // we fixed) or by an external src reload. Emit once per detected
+            // loop so production analytics surfaces regressions immediately.
+            if (ttffLogged.current && t + 0.5 < peakTimeRef.current && t < 0.8) {
+              loopCountRef.current += 1;
+              emitClientAdEvent("ad_loop_detected", {
+                placement,
+                ad_id: ad.id,
+                request_id: requestIdRef.current,
+                peak_time: peakTimeRef.current,
+                current_time: t,
+                loop_count: loopCountRef.current,
+              });
+              peakTimeRef.current = t;
+              return;
+            }
+            if (t > peakTimeRef.current) peakTimeRef.current = t;
+
           }}
           onError={() => {
             sendBeacon(requestIdRef.current, "error");
