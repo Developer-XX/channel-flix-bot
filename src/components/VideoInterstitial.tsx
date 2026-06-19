@@ -182,28 +182,78 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   }, []);
 
   // Track viewport size so the player recalculates on resize / orientation
-  // change / virtual-keyboard toggles. Uses visualViewport when available
-  // (handles iOS Safari's URL-bar collapse correctly) and falls back to
-  // window resize + orientationchange.
+  // change / virtual-keyboard toggles. iOS Safari changes window.innerHeight
+  // when the URL bar collapses/expands, but only `visualViewport` reports
+  // the correct usable rect during that transition — so we listen to both
+  // `resize` AND `scroll` on visualViewport, plus the legacy
+  // `orientationchange` event (still fired before resize on some iOS
+  // versions). A short rAF debounce coalesces the burst of events iOS
+  // dispatches during rotation.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let raf = 0;
     const measure = () => {
-      const vv = window.visualViewport;
-      setViewport({
-        w: Math.round(vv?.width ?? window.innerWidth),
-        h: Math.round(vv?.height ?? window.innerHeight),
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const vv = window.visualViewport;
+        setViewport({
+          w: Math.round(vv?.width ?? window.innerWidth),
+          h: Math.round(vv?.height ?? window.innerHeight),
+        });
       });
     };
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("orientationchange", measure);
     window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("resize", measure);
       window.removeEventListener("orientationchange", measure);
       window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
     };
   }, []);
+
+  // Telemetry: record the chosen aspect-ratio mode and the final rendered
+  // dimensions whenever they change. Helps debug clipping reports — we can
+  // see exactly which viewport/AR pairing produced a complaint.
+  const sizingLoggedRef = useRef<string>("");
+  useEffect(() => {
+    if (loadState !== "ready" || !ad) return;
+    const v = videoRef.current;
+    const vw = v?.videoWidth ?? 0;
+    const vh = v?.videoHeight ?? 0;
+    const mode: "intrinsic" | "fallback-viewport" =
+      hasIntrinsicSize && aspectRatio > 0 ? "intrinsic" : "fallback-viewport";
+    const ar = mode === "intrinsic" ? aspectRatio : viewport.w / Math.max(1, viewport.h);
+    const renderedW = Math.min(viewport.w, Math.round(viewport.h * ar));
+    const renderedH = Math.min(viewport.h, Math.round(viewport.w / Math.max(0.0001, ar)));
+    const key = `${mode}|${vw}x${vh}|${renderedW}x${renderedH}|${viewport.w}x${viewport.h}`;
+    if (sizingLoggedRef.current === key) return;
+    sizingLoggedRef.current = key;
+    emitClientAdEvent("ad_lifecycle_start", {
+      placement,
+      ad_id: ad.id,
+      request_id: requestIdRef.current,
+      sizing: {
+        mode,
+        video_width: vw,
+        video_height: vh,
+        intrinsic_available: vw > 0 && vh > 0,
+        chosen_aspect_ratio: Number(ar.toFixed(4)),
+        rendered_width: renderedW,
+        rendered_height: renderedH,
+        viewport_width: viewport.w,
+        viewport_height: viewport.h,
+        dpr: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+        orientation: viewport.w >= viewport.h ? "landscape" : "portrait",
+      },
+    });
+    sendBeacon(requestIdRef.current, "sizing", renderedW * 1000 + renderedH);
+  }, [loadState, ad, hasIntrinsicSize, aspectRatio, viewport, placement]);
+
 
   // Load a video ad for this placement (with retry).
   const loadAd = useCallback(async () => {
@@ -547,9 +597,26 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   // viewport entirely so the ad still covers the screen and overlays stay
   // anchored to real edges. Once metadata loads, we switch to the true
   // aspect ratio and letterbox to preserve framing across portrait/landscape.
-  const effectiveAR = hasIntrinsicSize && aspectRatio > 0 ? aspectRatio : viewport.w / Math.max(1, viewport.h);
+  const arMode: "intrinsic" | "fallback-viewport" = hasIntrinsicSize && aspectRatio > 0
+    ? "intrinsic"
+    : "fallback-viewport";
+  const effectiveAR = arMode === "intrinsic" ? aspectRatio : viewport.w / Math.max(1, viewport.h);
   const fitW = Math.min(viewport.w, Math.round(viewport.h * effectiveAR));
   const fitH = Math.min(viewport.h, Math.round(viewport.w / Math.max(0.0001, effectiveAR)));
+
+  // Debug overlay: enabled when `?debug=interstitial` is in the URL, or when
+  // `localStorage.interstitialDebug === "1"`, or in DEV builds via the same
+  // flags. Never on by default in production.
+  const debugOn = (() => {
+    if (typeof window === "undefined") return false;
+    try {
+      if (new URLSearchParams(window.location.search).get("debug") === "interstitial") return true;
+      if (window.localStorage?.getItem("interstitialDebug") === "1") return true;
+    } catch {
+      /* noop */
+    }
+    return false;
+  })();
 
   return (
     <Frame placement={placement} label="Sponsored video">
@@ -562,7 +629,16 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           maxHeight: "100dvh",
         }}
       >
-        <div className="absolute top-2 left-2 z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80">
+        {/* Badges/overlays respect iOS safe-area insets so they never sit
+            under the notch, status bar, or rounded corners on rotation. */}
+        <div
+          data-testid="interstitial-badge-ad"
+          className="absolute z-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-white/80"
+          style={{
+            top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)",
+            left: "calc(env(safe-area-inset-left, 0px) + 0.5rem)",
+          }}
+        >
           Ad
         </div>
 
@@ -572,7 +648,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             aria-label="Close advertisement"
             data-testid="interstitial-close"
             onClick={() => close("cancelled")}
-            className="absolute top-2 right-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:scale-105 transition-transform"
+            className="absolute z-10 grid h-9 w-9 place-items-center rounded-full bg-white text-black shadow-lg hover:scale-105 transition-transform"
+            style={{
+              top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)",
+              right: "calc(env(safe-area-inset-right, 0px) + 0.5rem)",
+            }}
           >
             <X className="h-5 w-5" />
           </button>
@@ -580,7 +660,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           <div
             aria-live="polite"
             data-testid="interstitial-countdown"
-            className="absolute top-2 right-2 z-10 grid h-9 min-w-9 px-2 place-items-center rounded-full bg-white/15 text-white text-xs font-medium border border-white/20"
+            className="absolute z-10 grid h-9 min-w-9 px-2 place-items-center rounded-full bg-white/15 text-white text-xs font-medium border border-white/20"
+            style={{
+              top: "calc(env(safe-area-inset-top, 0px) + 0.5rem)",
+              right: "calc(env(safe-area-inset-right, 0px) + 0.5rem)",
+            }}
           >
             {remaining}s
           </div>
@@ -699,7 +783,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             aria-label={muted ? "Unmute ad" : "Mute ad"}
             data-testid="interstitial-mute"
             onClick={() => void toggleMute()}
-            className="absolute bottom-2 left-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
+            className="absolute z-10 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
+            style={{
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
+              left: "calc(env(safe-area-inset-left, 0px) + 0.5rem)",
+            }}
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
@@ -707,7 +795,14 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
         {/* Sponsor strip pinned to the bottom of the player box so it scales
             with the viewport instead of pushing the video out of 100dvh. */}
-        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-2 text-[11px] text-white/80">
+        <div
+          data-testid="interstitial-sponsor"
+          className="absolute z-10 flex items-center gap-2 text-[11px] text-white/80"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)",
+            right: "calc(env(safe-area-inset-right, 0px) + 0.5rem)",
+          }}
+        >
           <span className="truncate max-w-[40vw] rounded bg-black/60 px-1.5 py-0.5">{ad.name}</span>
           {ad.link_url && (
             <button
@@ -719,6 +814,19 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             </button>
           )}
         </div>
+
+        {debugOn && (
+          <div
+            data-testid="interstitial-debug"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-md bg-black/80 px-3 py-2 font-mono text-[11px] leading-tight text-lime-300 ring-1 ring-lime-400/40"
+          >
+            <div>mode: <span data-testid="dbg-ar-mode">{arMode}</span></div>
+            <div>viewport: <span data-testid="dbg-viewport">{viewport.w}×{viewport.h}</span></div>
+            <div>player: <span data-testid="dbg-player">{fitW}×{fitH}</span></div>
+            <div>ar: <span data-testid="dbg-ar">{effectiveAR.toFixed(3)}</span></div>
+            <div>video: <span data-testid="dbg-intrinsic">{videoRef.current?.videoWidth ?? 0}×{videoRef.current?.videoHeight ?? 0}</span></div>
+          </div>
+        )}
       </div>
     </Frame>
   );
