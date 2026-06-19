@@ -123,7 +123,7 @@ function TitlePage() {
         .select("id, season_number, name, episode_count, poster_url, episodes(count)")
         .eq("title_id", titleQ.data!.id)
         .order("season_number");
-      return (data ?? []).map((s: typeof data extends Array<infer R> ? R : never) => {
+      return (data ?? []).map((s) => {
         const embedded = (s as unknown as { episodes?: Array<{ count: number }> }).episodes;
         const real = Array.isArray(embedded) && embedded[0] ? Number(embedded[0].count) : 0;
         return {
@@ -131,6 +131,7 @@ function TitlePage() {
           episode_count: real > 0 ? real : (s.episode_count ?? 0),
         };
       });
+
     },
   });
 
