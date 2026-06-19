@@ -3,6 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getInterstitialConfig, type InterstitialConfig } from "@/lib/ads.functions";
 import { getMyPremiumStatus } from "@/lib/premium.functions";
+import {
+  getInterstitialEligibility,
+  recordInterstitialView,
+} from "@/lib/interstitial-eligibility.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { VideoInterstitial } from "@/components/VideoInterstitial";
 import type { AdPlacement } from "@/lib/ads.functions";
@@ -39,6 +43,8 @@ function lsSetNum(key: string, value: number) {
 export function InterstitialController() {
   const configFn = useServerFn(getInterstitialConfig);
   const premiumFn = useServerFn(getMyPremiumStatus);
+  const eligibilityFn = useServerFn(getInterstitialEligibility);
+  const recordViewFn = useServerFn(recordInterstitialView);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [request, setRequest] = useState<Request>(null);
   const justSignedInRef = useRef(false);
@@ -94,9 +100,26 @@ export function InterstitialController() {
             return;
           }
         }
+        // Server-side per-user 24h cap for the login placement (survives
+        // reload, tab close, and device switches). Fail-open on errors so
+        // telemetry can never block the sign-in flow.
+        if (placement === "interstitial_login" && authed === true) {
+          eligibilityFn({ data: { placement } })
+            .then((res) => {
+              if (!res?.eligible) {
+                resolve(false);
+                return;
+              }
+              setRequest({ placement, resolve });
+            })
+            .catch(() => {
+              setRequest({ placement, resolve });
+            });
+          return;
+        }
         setRequest({ placement, resolve });
       }),
-    [enabled, cfg],
+    [enabled, cfg, authed, eligibilityFn],
   );
 
   useEffect(() => {
@@ -127,7 +150,6 @@ export function InterstitialController() {
         void show("interstitial_periodic");
       }
     };
-    // Initial delay so we don't slam users immediately on every page load.
     const initial = setTimeout(tick, Math.min(intervalMs, 60_000));
     const id = setInterval(tick, 60_000);
     return () => {
@@ -151,8 +173,14 @@ export function InterstitialController() {
         if (req?.placement === "interstitial_before_download") {
           lsSetNum(LS_LAST_BEFORE_DOWNLOAD, Date.now());
         }
+        // Record the per-user 24h cap entry only for login placement and
+        // only when the ad actually rendered (not "no-ad").
+        if (req?.placement === "interstitial_login" && reason !== "no-ad" && authed === true) {
+          recordViewFn({ data: { placement: req.placement, ad_id: null } }).catch(() => {});
+        }
         req?.resolve(reason !== "no-ad");
       }}
     />
   );
 }
+

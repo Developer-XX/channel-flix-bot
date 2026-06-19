@@ -15,9 +15,11 @@ import {
   ShieldAlert,
   Gauge,
   FileDown,
+  Activity,
 } from "lucide-react";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
+import { getAdPerfSummary } from "@/lib/ad-perf.functions";
 import { Button } from "@/components/ui/button";
 import { AuthEventsWidget } from "@/components/AuthEventsWidget";
 
@@ -70,6 +72,10 @@ function AnalyticsPage() {
       </Section>
 
       <AuthEventsWidget />
+
+      <InterstitialPerfWidget />
+
+
 
 
 
@@ -438,3 +444,46 @@ function TitleList({
     </div>
   );
 }
+
+function InterstitialPerfWidget() {
+  const q = useQuery({
+    queryKey: ["admin-ad-perf-summary", 24],
+    queryFn: () => getAdPerfSummary({ data: { windowHours: 24 } }),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const rows = q.data?.rows ?? [];
+  return (
+    <Section title="Interstitial performance (24h)" icon={<Activity className="h-4 w-4" />}>
+      {q.error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+          {(q.error as Error).message}
+        </div>
+      )}
+      {!q.error && rows.length === 0 && (
+        <p className="text-xs text-muted-foreground">No interstitial telemetry recorded yet in the last 24h.</p>
+      )}
+      <div className="space-y-3">
+        {rows.map((r) => (
+          <div key={r.placement} className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <span className="font-mono text-xs text-primary">{r.placement}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {r.samples.toLocaleString()} samples
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <Stat label="TTFF p50" value={r.ttff_p50 != null ? `${r.ttff_p50}ms` : "—"} accent />
+              <Stat label="TTFF p95" value={r.ttff_p95 != null ? `${r.ttff_p95}ms` : "—"} />
+              <Stat label="Buffer avg" value={r.buffer_avg_ms != null ? `${r.buffer_avg_ms}ms` : "—"} />
+              <Stat label="Dropped frames" value={r.dropped_frames_total} />
+              <Stat label="Autoplay blocked" value={r.autoplay_blocked_count} />
+              <Stat label="Video errors" value={r.error_count} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+

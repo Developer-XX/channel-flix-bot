@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { X, AlertTriangle, Volume2, VolumeX, Play } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { listActiveAds, recordAdEvent, type Ad, type AdPlacement } from "@/lib/ads.functions";
+import { recordAdPerfEvent, type AdPerfMetric } from "@/lib/ad-perf.functions";
 import { pickAd as pickAdPure } from "@/lib/ad-rotation";
 
 interface Props {
@@ -12,29 +13,27 @@ interface Props {
 
 type LoadState = "loading" | "ready" | "error";
 
+export type ClientAdEventName =
+  | "ad_load_start"
+  | "ad_load_success"
+  | "ad_load_error"
+  | "ad_play_success"
+  | "ad_autoplay_blocked"
+  | "ad_mute"
+  | "ad_unmute"
+  | "ad_video_error"
+  | "ad_timeout"
+  | "ad_retry";
+
 /**
- * Lightweight client-side analytics beacon for interstitial events that
- * don't map to the server-side `recordAdEvent` allow-list
- * (impression/click/dismiss/complete/view). Fires a CustomEvent so any
- * listener (GA wrapper, debug overlay, e2e tests) can pick it up.
+ * Lightweight client-side analytics beacon for interstitial events. Fires a
+ * CustomEvent so any listener (debug overlay, e2e tests, GA wrapper) can pick
+ * it up. Server-side events use the closed allow-list on `recordAdEvent` and
+ * `recordAdPerfEvent`.
  */
-function emitClientAdEvent(
-  name:
-    | "ad_load_start"
-    | "ad_load_success"
-    | "ad_load_error"
-    | "ad_play_success"
-    | "ad_autoplay_blocked"
-    | "ad_mute"
-    | "ad_unmute"
-    | "ad_video_error"
-    | "ad_timeout"
-    | "ad_retry",
-  detail: Record<string, unknown>,
-) {
+function emitClientAdEvent(name: ClientAdEventName, detail: Record<string, unknown>) {
   try {
     window.dispatchEvent(new CustomEvent(`interstitial:${name}`, { detail }));
-    // eslint-disable-next-line no-console
     if (import.meta.env.DEV) console.debug(`[interstitial] ${name}`, detail);
   } catch {
     /* noop */
@@ -47,6 +46,7 @@ const MAX_RETRIES = 1;
 export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) {
   const listFn = useServerFn(listActiveAds);
   const trackFn = useServerFn(recordAdEvent);
+  const perfFn = useServerFn(recordAdPerfEvent);
 
   const [ad, setAd] = useState<Ad | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -58,9 +58,34 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
 
   const impressionLogged = useRef(false);
   const playLogged = useRef(false);
+  const ttffLogged = useRef(false);
   const closedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const loadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountTimeRef = useRef<number>(0);
+  const bufferStartRef = useRef<number | null>(null);
+  const bufferTotalRef = useRef<number>(0);
+
+  // Best-effort perf send. Bounded by RLS WITH CHECK on the server.
+  const sendPerf = useCallback(
+    (metric: AdPerfMetric, value: number) => {
+      try {
+        const ua = typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 256) : undefined;
+        void perfFn({
+          data: {
+            ad_id: ad?.id ?? null,
+            placement,
+            metric,
+            value: Math.max(0, Math.min(600000, Math.round(value))),
+            user_agent: ua,
+          },
+        }).catch(() => {});
+      } catch {
+        /* noop */
+      }
+    },
+    [ad, perfFn, placement],
+  );
 
   // Lock body scroll while interstitial is mounted.
   useEffect(() => {
@@ -101,6 +126,12 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     void loadAd();
   }, [loadAd]);
 
+  // Start TTFF clock the moment the player mounts.
+  useEffect(() => {
+    if (loadState !== "ready" || !ad) return;
+    mountTimeRef.current = performance.now();
+  }, [loadState, ad]);
+
   // Watchdog: if the video never reaches a playable state within
   // LOAD_TIMEOUT_MS after the ad metadata loads, treat it as a timeout.
   useEffect(() => {
@@ -109,14 +140,14 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     loadTimerRef.current = setTimeout(() => {
       if (!playLogged.current && !closedRef.current) {
         emitClientAdEvent("ad_timeout", { placement, ad_id: ad.id, ms: LOAD_TIMEOUT_MS });
-        // Surface a tap-to-play affordance rather than hard-failing.
+        sendPerf("autoplay_blocked", 1);
         setNeedsTap(true);
       }
     }, LOAD_TIMEOUT_MS);
     return () => {
       if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
     };
-  }, [loadState, ad, placement]);
+  }, [loadState, ad, placement, sendPerf]);
 
   // Countdown for the cancel-button reveal.
   useEffect(() => {
@@ -133,9 +164,40 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     trackFn({ data: { ad_id: ad.id, placement, event_type: "impression" } }).catch(() => {});
   }, [ad, placement, trackFn]);
 
+  const flushPlaybackMetrics = useCallback(() => {
+    // Buffer total (sum of waiting→playing gaps).
+    if (bufferStartRef.current != null) {
+      bufferTotalRef.current += performance.now() - bufferStartRef.current;
+      bufferStartRef.current = null;
+    }
+    if (bufferTotalRef.current > 0) {
+      sendPerf("buffer_ms", bufferTotalRef.current);
+      bufferTotalRef.current = 0;
+    }
+    // Dropped frames (HTMLVideoElement.getVideoPlaybackQuality).
+    const v = videoRef.current as (HTMLVideoElement & {
+      getVideoPlaybackQuality?: () => { droppedVideoFrames: number };
+      webkitDroppedFrameCount?: number;
+    }) | null;
+    if (v) {
+      let dropped = 0;
+      if (typeof v.getVideoPlaybackQuality === "function") {
+        try {
+          dropped = v.getVideoPlaybackQuality().droppedVideoFrames ?? 0;
+        } catch {
+          /* noop */
+        }
+      } else if (typeof v.webkitDroppedFrameCount === "number") {
+        dropped = v.webkitDroppedFrameCount;
+      }
+      if (dropped > 0) sendPerf("dropped_frames", dropped);
+    }
+  }, [sendPerf]);
+
   const close = (reason: "completed" | "cancelled") => {
     if (closedRef.current) return;
     closedRef.current = true;
+    flushPlaybackMetrics();
     if (ad) {
       trackFn({
         data: { ad_id: ad.id, placement, event_type: reason === "completed" ? "complete" : "dismiss" },
@@ -153,9 +215,6 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const tryPlay = useCallback(async () => {
     const v = videoRef.current;
     if (!v) return;
-    // iOS Safari requires muted + playsInline + the play() call from a
-    // user gesture or from within a `canplay` handler. We always start muted
-    // so the first play attempt is allowed by every modern browser.
     try {
       v.muted = true;
       await v.play();
@@ -172,8 +231,46 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
         ad_id: ad?.id,
         reason: err instanceof Error ? err.message : "blocked",
       });
+      sendPerf("autoplay_blocked", 1);
     }
-  }, [ad, placement, trackFn]);
+  }, [ad, placement, trackFn, sendPerf]);
+
+  // Single-gesture user-initiated play, used by the "Play video" fallback.
+  const playWithSound = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      v.muted = false;
+      setMuted(false);
+      await v.play();
+      setNeedsTap(false);
+      if (!playLogged.current && ad) {
+        playLogged.current = true;
+        emitClientAdEvent("ad_play_success", { placement, ad_id: ad.id });
+        trackFn({ data: { ad_id: ad.id, placement, event_type: "view" } }).catch(() => {});
+      }
+    } catch {
+      // Degrade to muted playback.
+      try {
+        v.muted = true;
+        setMuted(true);
+        await v.play();
+        setNeedsTap(false);
+        if (!playLogged.current && ad) {
+          playLogged.current = true;
+          emitClientAdEvent("ad_play_success", { placement, ad_id: ad.id, fallback: "muted" });
+          trackFn({ data: { ad_id: ad.id, placement, event_type: "view" } }).catch(() => {});
+        }
+      } catch (err2) {
+        emitClientAdEvent("ad_autoplay_blocked", {
+          placement,
+          ad_id: ad?.id,
+          reason: err2 instanceof Error ? err2.message : "blocked-after-gesture",
+        });
+        sendPerf("autoplay_blocked", 1);
+      }
+    }
+  }, [ad, placement, trackFn, sendPerf]);
 
   const toggleMute = async () => {
     const v = videoRef.current;
@@ -182,16 +279,15 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     setMuted(next);
     v.muted = next;
     if (!next) {
-      // Unmuting requires a user gesture; we're already in one here.
       try {
         await v.play();
         emitClientAdEvent("ad_unmute", { placement, ad_id: ad?.id });
       } catch {
-        // Roll back to muted playback if the browser blocks the unmuted play.
         setMuted(true);
         v.muted = true;
         void v.play().catch(() => {});
         emitClientAdEvent("ad_autoplay_blocked", { placement, ad_id: ad?.id, reason: "unmute-blocked" });
+        sendPerf("autoplay_blocked", 1);
       }
     } else {
       emitClientAdEvent("ad_mute", { placement, ad_id: ad?.id });
@@ -202,10 +298,10 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     const v = videoRef.current;
     const code = v?.error?.code ?? null;
     emitClientAdEvent("ad_video_error", { placement, ad_id: ad?.id, code });
+    sendPerf("video_error", 1);
     if (retries < MAX_RETRIES) {
       setRetries((n) => n + 1);
       emitClientAdEvent("ad_retry", { placement, ad_id: ad?.id, attempt: retries + 1 });
-      // Force a reload of the same source.
       if (v) {
         try {
           v.load();
@@ -222,6 +318,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   const retry = () => {
     setRetries(0);
     playLogged.current = false;
+    ttffLogged.current = false;
     emitClientAdEvent("ad_retry", { placement, ad_id: ad?.id, attempt: "manual" });
     void loadAd();
   };
@@ -239,10 +336,11 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
     </div>
   );
 
-  // Skeleton player container — same aspect ratio as the real video so the
-  // dialog occupies the final size before bytes arrive.
   const PlayerSkeleton = () => (
-    <div className="relative w-full aspect-video rounded-lg bg-white/5 overflow-hidden">
+    <div
+      data-testid="interstitial-skeleton"
+      className="relative w-full aspect-video rounded-lg bg-white/5 overflow-hidden"
+    >
       <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-white/0 via-white/10 to-white/0" />
       <div className="absolute inset-0 grid place-items-center text-xs text-white/70">Loading ad…</div>
     </div>
@@ -263,7 +361,10 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
   if (loadState === "error" || !ad) {
     return (
       <Frame label="Advertisement failed to load">
-        <div className="w-full aspect-video rounded-lg bg-black/80 border border-white/10 grid place-items-center p-6 text-center">
+        <div
+          data-testid="interstitial-error"
+          className="w-full aspect-video rounded-lg bg-black/80 border border-white/10 grid place-items-center p-6 text-center"
+        >
           <div className="space-y-3 max-w-sm">
             <AlertTriangle className="mx-auto h-8 w-8 text-amber-400" />
             <div className="text-sm text-white">
@@ -272,6 +373,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
+                data-testid="interstitial-retry"
                 onClick={retry}
                 className="rounded-md bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5"
               >
@@ -326,11 +428,10 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
         <video
           ref={videoRef}
           src={ad.video_url!}
+          poster={ad.image_url ?? undefined}
           autoPlay
           muted={muted}
           playsInline
-          // iOS Safari + WeChat / X5 (Android) hints to keep playback inline
-          // and avoid the OS-level fullscreen takeover.
           {...({
             "webkit-playsinline": "true",
             "x5-playsinline": "true",
@@ -340,9 +441,20 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           controls={false}
           onCanPlay={tryPlay}
           onLoadedMetadata={tryPlay}
+          onWaiting={() => {
+            if (bufferStartRef.current == null) bufferStartRef.current = performance.now();
+          }}
           onPlaying={() => {
             if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
             setNeedsTap(false);
+            if (bufferStartRef.current != null) {
+              bufferTotalRef.current += performance.now() - bufferStartRef.current;
+              bufferStartRef.current = null;
+            }
+            if (!ttffLogged.current && mountTimeRef.current > 0) {
+              ttffLogged.current = true;
+              sendPerf("ttff_ms", performance.now() - mountTimeRef.current);
+            }
           }}
           onError={handleVideoError}
           onEnded={() => close("completed")}
@@ -352,11 +464,23 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
         {needsTap && (
           <button
             type="button"
-            onClick={() => void tryPlay()}
-            className="absolute inset-0 grid place-items-center gap-2 bg-black/50 text-white text-sm font-medium"
+            data-testid="interstitial-play-fallback"
+            onClick={() => void playWithSound()}
+            className="absolute inset-0 grid place-items-center bg-black/70"
+            style={
+              ad.image_url
+                ? { backgroundImage: `url(${ad.image_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                : undefined
+            }
           >
-            <Play className="h-10 w-10" />
-            <span>Tap to play ad</span>
+            <div className="absolute inset-0 bg-black/55" />
+            <div className="relative flex flex-col items-center gap-3 text-white">
+              <div className="grid h-20 w-20 place-items-center rounded-full bg-white text-black shadow-2xl">
+                <Play className="h-9 w-9 ml-1" />
+              </div>
+              <div className="text-sm font-semibold tracking-wide">Play video</div>
+              <div className="text-[11px] uppercase tracking-wider text-white/70">Sponsored · {ad.name}</div>
+            </div>
           </button>
         )}
 
@@ -364,6 +488,7 @@ export function VideoInterstitial({ placement, cancelSeconds, onClose }: Props) 
           <button
             type="button"
             aria-label={muted ? "Unmute ad" : "Mute ad"}
+            data-testid="interstitial-mute"
             onClick={() => void toggleMute()}
             className="absolute bottom-2 left-2 grid h-9 w-9 place-items-center rounded-full bg-black/70 hover:bg-black/85 text-white"
           >

@@ -97,6 +97,60 @@ export type Database = {
           },
         ]
       }
+      ad_perf_events: {
+        Row: {
+          ad_id: string | null
+          created_at: string
+          id: string
+          metric: string
+          placement: string
+          user_agent: string | null
+          value: number
+        }
+        Insert: {
+          ad_id?: string | null
+          created_at?: string
+          id?: string
+          metric: string
+          placement: string
+          user_agent?: string | null
+          value?: number
+        }
+        Update: {
+          ad_id?: string | null
+          created_at?: string
+          id?: string
+          metric?: string
+          placement?: string
+          user_agent?: string | null
+          value?: number
+        }
+        Relationships: []
+      }
+      ad_view_log: {
+        Row: {
+          ad_id: string | null
+          created_at: string
+          id: string
+          placement: string
+          user_id: string
+        }
+        Insert: {
+          ad_id?: string | null
+          created_at?: string
+          id?: string
+          placement: string
+          user_id: string
+        }
+        Update: {
+          ad_id?: string | null
+          created_at?: string
+          id?: string
+          placement?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_alerts: {
         Row: {
           acknowledged_at: string | null
