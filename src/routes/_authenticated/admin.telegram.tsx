@@ -43,7 +43,7 @@ import {
   reparseIngest,
   reparseChannelFromCaptions,
 } from "@/lib/telegram.functions";
-import { getTablePermissionDiagnostic, runTelegramIngestGrantsCheck } from "@/lib/permission-diagnostics.functions";
+import { IngestErrorBanner, PermissionDiagnostic } from "@/components/PermissionDiagnostic";
 import { Switch } from "@/components/ui/switch";
 
 
