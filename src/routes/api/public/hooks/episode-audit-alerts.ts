@@ -115,11 +115,32 @@ export const Route = createFileRoute("/api/public/hooks/episode-audit-alerts")({
             }
           }
 
+          for (const [chId, count] of partMismatchByCh) {
+            if (count >= PART_MISMATCH_THRESHOLD) {
+              const subject = `Part/season mis-grouping: ${chName.get(chId) ?? chId}`;
+              await openAdminAlert(supabaseAdmin as any, {
+                kind: "episode_part_mismatch",
+                severity: count >= PART_MISMATCH_THRESHOLD * 5 ? "error" : "warn",
+                subject,
+                source: JOB_NAME,
+                details: {
+                  channel_id: chId,
+                  channel_name: chName.get(chId),
+                  mismatches: count,
+                  pattern: "SxxPyy / Part",
+                  hint: "Run admin → Episode audit → Reparse for this channel.",
+                },
+              });
+              openedSubjects.add(subject);
+              alertsOpened++;
+            }
+          }
+
           // Resolve previously-open alerts that are now below threshold.
           const { data: openAlerts } = await supabaseAdmin
             .from("admin_alerts")
             .select("id, kind, subject")
-            .in("kind", ["episode_unassigned", "episode_parse_fail"])
+            .in("kind", ["episode_unassigned", "episode_parse_fail", "episode_part_mismatch"])
             .is("resolved_at", null);
           let resolved = 0;
           for (const a of (openAlerts as any[]) ?? []) {
@@ -132,6 +153,7 @@ export const Route = createFileRoute("/api/public/hooks/episode-audit-alerts")({
           const summary = {
             channels_unassigned: unassignedByCh.size,
             channels_parse_fail: parseFailByCh.size,
+            channels_part_mismatch: partMismatchByCh.size,
             alerts_opened: alertsOpened,
             alerts_resolved: resolved,
             duration_ms: Date.now() - start,
