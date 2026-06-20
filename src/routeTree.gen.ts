@@ -44,6 +44,7 @@ import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_a
 import { Route as AuthenticatedAdminInterstitialPerformanceRouteImport } from './routes/_authenticated/admin.interstitial-performance'
 import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenticated/admin.health'
 import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authenticated/admin.error-log'
+import { Route as AuthenticatedAdminEpisodeAuditRouteImport } from './routes/_authenticated/admin.episode-audit'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
 import { Route as AuthenticatedAdminBulkRouteImport } from './routes/_authenticated/admin.bulk'
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated/admin.audit'
@@ -66,6 +67,7 @@ import { Route as ApiPublicHooksProcessDownloadQueueRouteImport } from './routes
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 import { Route as ApiPublicHooksInterstitialHealthRouteImport } from './routes/api/public/hooks/interstitial-health'
 import { Route as ApiPublicHooksInterstitialBeaconRouteImport } from './routes/api/public/hooks/interstitial-beacon'
+import { Route as ApiPublicHooksEpisodeAuditAlertsRouteImport } from './routes/api/public/hooks/episode-audit-alerts'
 
 const TrustRoute = TrustRouteImport.update({
   id: '/trust',
@@ -256,6 +258,12 @@ const AuthenticatedAdminErrorLogRoute =
     path: '/error-log',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminEpisodeAuditRoute =
+  AuthenticatedAdminEpisodeAuditRouteImport.update({
+    id: '/episode-audit',
+    path: '/episode-audit',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminDiagnosticsRoute =
   AuthenticatedAdminDiagnosticsRouteImport.update({
     id: '/diagnostics',
@@ -382,6 +390,12 @@ const ApiPublicHooksInterstitialBeaconRoute =
     path: '/api/public/hooks/interstitial-beacon',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksEpisodeAuditAlertsRoute =
+  ApiPublicHooksEpisodeAuditAlertsRouteImport.update({
+    id: '/api/public/hooks/episode-audit-alerts',
+    path: '/api/public/hooks/episode-audit-alerts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -407,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
@@ -426,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -464,6 +480,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
@@ -483,6 +500,7 @@ export interface FileRoutesByTo {
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -524,6 +542,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
   '/_authenticated/admin/bulk': typeof AuthenticatedAdminBulkRoute
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
+  '/_authenticated/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/_authenticated/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
   '/_authenticated/admin/health': typeof AuthenticatedAdminHealthRoute
   '/_authenticated/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
@@ -543,6 +562,7 @@ export interface FileRoutesById {
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
   '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -584,6 +604,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/bulk'
     | '/admin/diagnostics'
+    | '/admin/episode-audit'
     | '/admin/error-log'
     | '/admin/health'
     | '/admin/interstitial-performance'
@@ -603,6 +624,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/admin/'
+    | '/api/public/hooks/episode-audit-alerts'
     | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -641,6 +663,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/bulk'
     | '/admin/diagnostics'
+    | '/admin/episode-audit'
     | '/admin/error-log'
     | '/admin/health'
     | '/admin/interstitial-performance'
@@ -660,6 +683,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/admin'
+    | '/api/public/hooks/episode-audit-alerts'
     | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -700,6 +724,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/audit'
     | '/_authenticated/admin/bulk'
     | '/_authenticated/admin/diagnostics'
+    | '/_authenticated/admin/episode-audit'
     | '/_authenticated/admin/error-log'
     | '/_authenticated/admin/health'
     | '/_authenticated/admin/interstitial-performance'
@@ -719,6 +744,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/_authenticated/admin/'
+    | '/api/public/hooks/episode-audit-alerts'
     | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -750,6 +776,7 @@ export interface RootRouteChildren {
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
+  ApiPublicHooksEpisodeAuditAlertsRoute: typeof ApiPublicHooksEpisodeAuditAlertsRoute
   ApiPublicHooksInterstitialBeaconRoute: typeof ApiPublicHooksInterstitialBeaconRoute
   ApiPublicHooksInterstitialHealthRoute: typeof ApiPublicHooksInterstitialHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -1013,6 +1040,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminErrorLogRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/episode-audit': {
+      id: '/_authenticated/admin/episode-audit'
+      path: '/episode-audit'
+      fullPath: '/admin/episode-audit'
+      preLoaderRoute: typeof AuthenticatedAdminEpisodeAuditRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/diagnostics': {
       id: '/_authenticated/admin/diagnostics'
       path: '/diagnostics'
@@ -1167,6 +1201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksInterstitialBeaconRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/episode-audit-alerts': {
+      id: '/api/public/hooks/episode-audit-alerts'
+      path: '/api/public/hooks/episode-audit-alerts'
+      fullPath: '/api/public/hooks/episode-audit-alerts'
+      preLoaderRoute: typeof ApiPublicHooksEpisodeAuditAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1189,6 +1230,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
   AuthenticatedAdminBulkRoute: typeof AuthenticatedAdminBulkRoute
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
+  AuthenticatedAdminEpisodeAuditRoute: typeof AuthenticatedAdminEpisodeAuditRoute
   AuthenticatedAdminErrorLogRoute: typeof AuthenticatedAdminErrorLogRoute
   AuthenticatedAdminHealthRoute: typeof AuthenticatedAdminHealthRoute
   AuthenticatedAdminInterstitialPerformanceRoute: typeof AuthenticatedAdminInterstitialPerformanceRoute
@@ -1216,6 +1258,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
   AuthenticatedAdminBulkRoute: AuthenticatedAdminBulkRoute,
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
+  AuthenticatedAdminEpisodeAuditRoute: AuthenticatedAdminEpisodeAuditRoute,
   AuthenticatedAdminErrorLogRoute: AuthenticatedAdminErrorLogRoute,
   AuthenticatedAdminHealthRoute: AuthenticatedAdminHealthRoute,
   AuthenticatedAdminInterstitialPerformanceRoute:
@@ -1272,6 +1315,7 @@ const rootRouteChildren: RootRouteChildren = {
   TitleSlugRoute: TitleSlugRoute,
   ApiPublicClientErrorsRoute: ApiPublicClientErrorsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
+  ApiPublicHooksEpisodeAuditAlertsRoute: ApiPublicHooksEpisodeAuditAlertsRoute,
   ApiPublicHooksInterstitialBeaconRoute: ApiPublicHooksInterstitialBeaconRoute,
   ApiPublicHooksInterstitialHealthRoute: ApiPublicHooksInterstitialHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:
