@@ -309,3 +309,101 @@ function GoogleOAuthAdminPage() {
     </div>
   );
 }
+
+type DiagCheck = { label: string; ok: boolean | null; hint?: string };
+
+function DiagnosticsPanel({
+  clientId,
+  clientSecret,
+  redirectUri,
+  latestError,
+}: {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  latestError: { error_code: string | null; error_message: string | null; checked_at: string } | null;
+}) {
+  const checks: DiagCheck[] = [
+    {
+      label: "Client ID format",
+      ok: clientId ? /\.apps\.googleusercontent\.com$/i.test(clientId.trim()) : null,
+      hint: "Must end with .apps.googleusercontent.com",
+    },
+    {
+      label: "Client ID has numeric prefix",
+      ok: clientId ? /^\d{6,}-/.test(clientId.trim()) : null,
+      hint: "Google OAuth web clients start with the project number, e.g. 123456789-abc...",
+    },
+    {
+      label: "Client Secret format",
+      ok: clientSecret ? /^GOCSPX-[\w-]{10,}$/.test(clientSecret.trim()) : null,
+      hint: "New Google secrets start with GOCSPX-. (Older legacy secrets are also accepted but won't pass this hint.)",
+    },
+    {
+      label: "Redirect URI is HTTPS",
+      ok: redirectUri ? /^https:\/\//i.test(redirectUri.trim()) : null,
+      hint: "Google requires HTTPS for non-localhost redirect URIs.",
+    },
+    {
+      label: "Redirect URI path is correct",
+      ok: redirectUri ? /\/admin\/google-oauth-callback\/?$/.test(redirectUri.trim()) : null,
+      hint: "Should end with /admin/google-oauth-callback",
+    },
+    {
+      label: "No trailing whitespace",
+      ok: clientId || clientSecret ? clientId.trim() === clientId && clientSecret.trim() === clientSecret : null,
+      hint: "Copy-paste from Google Cloud Console can leave invisible whitespace.",
+    },
+  ];
+
+  return (
+    <section className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" /> Diagnostics
+        </h2>
+        <span className="text-xs text-muted-foreground">Runs locally as you type — no network calls.</span>
+      </div>
+      <ul className="grid sm:grid-cols-2 gap-2">
+        {checks.map((c) => (
+          <li
+            key={c.label}
+            className={`flex items-start gap-2 rounded-md border p-2 text-xs ${
+              c.ok === null
+                ? "border-border text-muted-foreground"
+                : c.ok
+                ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/40 bg-destructive/5 text-destructive"
+            }`}
+          >
+            {c.ok === null ? (
+              <span className="h-3.5 w-3.5 mt-0.5 inline-block rounded-full border border-current opacity-50" />
+            ) : c.ok ? (
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5" />
+            ) : (
+              <XCircle className="h-3.5 w-3.5 mt-0.5" />
+            )}
+            <div className="flex-1">
+              <div className="font-medium text-foreground/90">{c.label}</div>
+              {c.ok === false && c.hint && <div className="opacity-80 mt-0.5">{c.hint}</div>}
+              {c.ok === null && <div className="opacity-60 mt-0.5">Fill in the field to validate</div>}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {latestError && (
+        <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
+          <div className="font-medium text-destructive">Last server-side failure</div>
+          <div className="mt-1">
+            <span className="font-mono">{latestError.error_code ?? "error"}</span> · {latestError.error_message ?? "(no message)"}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            Failing step: <strong>{stepFor(latestError.error_code)}</strong> · {new Date(latestError.checked_at).toLocaleString()}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
