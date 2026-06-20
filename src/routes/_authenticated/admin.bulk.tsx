@@ -373,10 +373,7 @@ function BulkRematchPage() {
 }
 
 function ReparseSeriesPartsPanel() {
-  const fn = useServerFn(
-    // dynamic import keeps this panel decoupled from the main bundle's typegen
-    (require("@/lib/reparse-series.functions") as typeof import("@/lib/reparse-series.functions")).reparseSeriesParts,
-  );
+  const fn = useServerFn(reparseSeriesParts);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Awaited<ReturnType<typeof fn>> | null>(null);
 
