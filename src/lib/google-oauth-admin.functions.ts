@@ -104,7 +104,10 @@ export const getGoogleOAuthConfig = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
-    const { data, error } = await supabase
+    // client_secret column SELECT is revoked from authenticated; use service-role
+    // client after the admin check above.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
       .from("google_oauth_credentials")
       .select("id, client_id, client_secret, redirect_uri, updated_at, updated_by")
       .limit(1)
