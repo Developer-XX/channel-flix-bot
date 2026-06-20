@@ -463,3 +463,114 @@ function DiagnosticsPanel({
   );
 }
 
+
+function StatusDot({ ok }: { ok: boolean | null | undefined }) {
+  if (ok === true) return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
+  if (ok === false) return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+  return <span className="h-2.5 w-2.5 inline-block rounded-full bg-muted" />;
+}
+
+function SelfCheckReport({
+  data,
+  loading,
+  onRetest,
+}: {
+  data: any;
+  loading: boolean;
+  onRetest: () => void;
+}) {
+  const s = data?.sections;
+  const rows: Array<{ key: string; label: string; ok: boolean | null; detail: React.ReactNode }> = s
+    ? [
+        {
+          key: "config",
+          label: "Saved configuration valid",
+          ok: s.config.ok,
+          detail: s.config.ok
+            ? `Updated ${s.config.updatedAt ? new Date(s.config.updatedAt).toLocaleString() : "—"}`
+            : (s.config.problems ?? []).map((p: any) => p.message).join(" · "),
+        },
+        {
+          key: "callback",
+          label: "Callback route ready",
+          ok: s.callback.ok,
+          detail: s.callback.ok
+            ? `Path ${s.callback.expectedPath}`
+            : `Expected ${s.callback.expectedPath}, got ${s.callback.actualPath ?? "—"}`,
+        },
+        {
+          key: "discovery",
+          label: "Google discovery reachable",
+          ok: s.discovery.ok,
+          detail: s.discovery.ok
+            ? `HTTP ${s.discovery.status} · ${s.discovery.latencyMs}ms`
+            : `${s.discovery.error ?? "unreachable"} (${s.discovery.latencyMs ?? "?"}ms)`,
+        },
+        {
+          key: "latest",
+          label: "Last health check",
+          ok: s.latestHealth ? s.latestHealth.ok : null,
+          detail: s.latestHealth
+            ? `${s.latestHealth.kind} · ${new Date(s.latestHealth.checkedAt).toLocaleString()} · ${s.latestHealth.latencyMs ?? "?"}ms${s.latestHealth.errorCode ? ` · ${s.latestHealth.errorCode}` : ""}`
+            : "No checks recorded yet",
+        },
+        {
+          key: "cron",
+          label: "Last cron run",
+          ok: s.lastCron ? s.lastCron.ok : null,
+          detail: s.lastCron
+            ? `${new Date(s.lastCron.checkedAt).toLocaleString()} · ${s.lastCron.latencyMs ?? "?"}ms${s.lastCron.errorCode ? ` · ${s.lastCron.errorCode}` : ""}`
+            : "Cron has not run yet",
+        },
+      ]
+    : [];
+
+  return (
+    <section data-testid="oauth-self-check" className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          Self-check report
+          {data && (
+            <span
+              data-testid="oauth-self-check-overall"
+              className={`text-xs rounded-full px-2 py-0.5 border ${
+                data.overall === "ok"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-600"
+              }`}
+            >
+              {data.overall === "ok" ? "All systems OK" : "Needs attention"}
+            </span>
+          )}
+        </h2>
+        <Button size="sm" variant="outline" onClick={onRetest} disabled={loading} data-testid="oauth-self-check-retest">
+          {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+          Re-test
+        </Button>
+      </div>
+      {!data && <div className="text-sm text-muted-foreground">Loading…</div>}
+      {data && (
+        <ul className="grid sm:grid-cols-2 gap-2">
+          {rows.map((r) => (
+            <li
+              key={r.key}
+              data-testid={`oauth-self-check-${r.key}`}
+              className="flex items-start gap-2 rounded-md border border-border p-2 text-xs"
+            >
+              <span className="mt-0.5"><StatusDot ok={r.ok} /></span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-foreground/90">{r.label}</div>
+                <div className="text-muted-foreground break-words">{r.detail}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {data && (
+        <div className="mt-3 text-[10px] text-muted-foreground">
+          Generated {new Date(data.generatedAt).toLocaleString()}
+        </div>
+      )}
+    </section>
+  );
+}
