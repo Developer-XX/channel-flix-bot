@@ -37,7 +37,7 @@ export const getShortenerReport = createServerFn({ method: "GET" })
         avgLatency7: null, avgLatency30: null,
         lastFailure: null, lastSample: null,
       };
-      const created = s.created_at;
+      const created = s.checked_at;
       const lat = typeof s.latency_ms === "number" ? s.latency_ms : null;
       prev.total30++;
       if (s.ok) prev.ok30++;
