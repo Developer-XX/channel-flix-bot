@@ -90,8 +90,26 @@ function EpisodeAuditPage() {
         </header>
         {stats.isLoading ? (
           <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+        ) : stats.error ? (
+          <div
+            data-testid="episode-audit-error-state"
+            className="p-4 text-sm border-t border-destructive/40 bg-destructive/10 text-destructive"
+          >
+            <div className="font-semibold">Backend query failed</div>
+            <div className="mt-1 text-xs opacity-90 break-all">{(stats.error as Error).message}</div>
+          </div>
+        ) : (stats.data?.rows ?? []).length === 0 ? (
+          <div
+            data-testid="episode-audit-empty-state"
+            className="p-6 text-sm text-muted-foreground"
+          >
+            No channel activity in the last 14 days. This is an empty result,
+            not an error — ingest some Telegram files and refresh.
+          </div>
         ) : (
           <>
+
+
             {totals && (
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 p-3 text-xs">
                 <Stat label="Total files" value={totals.total_files} />
