@@ -63,9 +63,10 @@ const LANG_TOKENS = [
 const LANG_RE = new RegExp(`\\b(${LANG_TOKENS.join("|")})\\b`, "gi");
 const DUAL_RE = /\b(Dual[\s._-]?Audio|Multi[\s._-]?Audio|Multi|Dubbed|Subbed|Subtitled)\b/i;
 
-const SE_RE = /\bS(\d{1,2})[\s._-]?E(\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
+const SE_RE = /\bS(\d{1,2})(?:[\s._-]?(?:Part|Pt|P)[\s._-]?(\d{1,2}))?[\s._-]?E(\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
 const SEASON_ONLY_RE = /\bSeason[\s._-]?(\d{1,2})\b/i;
 const EPISODE_ONLY_RE = /\b(?:Episode|EP|Ep)[\s._-]?(\d{1,3})\b/i;
+const PART_ONLY_RE = /\b(?:Part|Pt)[\s._-]?(\d{1,2})\b/i;
 const YEAR_RE = /\b(19[5-9]\d|20[0-4]\d)\b/;
 
 // Category cues
