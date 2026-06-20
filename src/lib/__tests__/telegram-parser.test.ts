@@ -128,8 +128,8 @@ describe("telegram-parser: Season/Part/Episode extraction", () => {
     expect(p.episode).toBe(2);
   });
 
-  it("standalone Part with Episode keyword: Show S05 Part 1 Episode 22", () => {
-    const p = parseSingleSource("Show S05 Part 1 Episode 22 720p");
+  it("standalone Season+Part+Episode keywords: Season 5 Part 1 Episode 22", () => {
+    const p = parseSingleSource("Show Season 5 Part 1 Episode 22 720p");
     expect(p.season).toBe(5);
     expect(p.part).toBe(1);
     expect(p.episode).toBe(22);
