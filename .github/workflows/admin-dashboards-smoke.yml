@@ -158,6 +158,7 @@ jobs:
             tests/e2e/admin-dashboards-pagination.spec.ts \
             tests/e2e/admin-dashboards-failure.spec.ts \
             tests/e2e/admin-dashboards-http-errors.spec.ts \
+            tests/e2e/admin-dashboards-auth-failure.spec.ts \
             tests/e2e/admin-dashboards-warm-cache.spec.ts
 
 
