@@ -42,15 +42,40 @@ function buildSamples(rowsPerProvider: number): ShortenerHealthSample[] {
   return out;
 }
 
-function timeIt(fn: () => unknown, iterations = 5): number {
-  let best = Infinity;
+interface TimingResult {
+  best: number;
+  worst: number;
+  mean: number;
+  samples: number[];
+}
+
+function timeIt(fn: () => unknown, iterations = 5): TimingResult {
+  const samples: number[] = [];
   for (let i = 0; i < iterations; i++) {
     const start = performance.now();
     fn();
-    const dt = performance.now() - start;
-    if (dt < best) best = dt;
+    samples.push(performance.now() - start);
   }
-  return best;
+  const best = Math.min(...samples);
+  const worst = Math.max(...samples);
+  const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+  return { best, worst, mean, samples };
+}
+
+function fmt(t: TimingResult): string {
+  const s = t.samples.map((v) => v.toFixed(2)).join(", ");
+  return `best=${t.best.toFixed(2)}ms mean=${t.mean.toFixed(2)}ms worst=${t.worst.toFixed(2)}ms samples=[${s}]ms`;
+}
+
+function report(label: string, t: TimingResult, budget: number) {
+  const pct = ((t.best / budget) * 100).toFixed(1);
+  const headroom = (budget - t.best).toFixed(2);
+  // Surface a single readable line in the test runner output so CI logs
+  // and `vitest --reporter=verbose` make tuning obvious.
+   
+  console.log(
+    `[perf] ${label}: ${fmt(t)} | budget=${budget}ms | best/budget=${pct}% | headroom=${headroom}ms`,
+  );
 }
 
 /**
@@ -67,11 +92,12 @@ const REPORT_BUDGET_MS = Number(process.env.SHORTENER_PERF_REPORT_MS ?? 50);
 describe("shortener stats — perf regression", () => {
   it(`aggregateShortenerSamples processes 240 rows under ${AGG_BUDGET_MS}ms (best-of-5)`, () => {
     const samples = buildSamples(60); // matches the seed script
-    const best = timeIt(() => aggregateShortenerSamples(samples));
+    const t = timeIt(() => aggregateShortenerSamples(samples));
+    report("aggregateShortenerSamples(240 rows)", t, AGG_BUDGET_MS);
     expect(samples.length).toBe(240);
     expect(
-      best,
-      `aggregateShortenerSamples took ${best.toFixed(2)}ms — budget is ${AGG_BUDGET_MS}ms`,
+      t.best,
+      `aggregateShortenerSamples exceeded budget — ${fmt(t)} vs budget=${AGG_BUDGET_MS}ms (diff=+${(t.best - AGG_BUDGET_MS).toFixed(2)}ms). Tune via SHORTENER_PERF_AGG_MS.`,
     ).toBeLessThan(AGG_BUDGET_MS);
   });
 
@@ -84,11 +110,12 @@ describe("shortener stats — perf regression", () => {
       priority: 100 + i,
       weight: 1,
     }));
-    const best = timeIt(() => buildShortenerReport(configs, samples));
+    const t = timeIt(() => buildShortenerReport(configs, samples));
+    report("buildShortenerReport(2880 rows)", t, REPORT_BUDGET_MS);
     expect(samples.length).toBe(2880);
     expect(
-      best,
-      `buildShortenerReport took ${best.toFixed(2)}ms — budget is ${REPORT_BUDGET_MS}ms`,
+      t.best,
+      `buildShortenerReport exceeded budget — ${fmt(t)} vs budget=${REPORT_BUDGET_MS}ms (diff=+${(t.best - REPORT_BUDGET_MS).toFixed(2)}ms). Tune via SHORTENER_PERF_REPORT_MS.`,
     ).toBeLessThan(REPORT_BUDGET_MS);
   });
 });
