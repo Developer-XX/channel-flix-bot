@@ -224,7 +224,7 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
 
   if (!captionParsed && !fileParsed) {
     return {
-      title: "Untitled", year: null, season: null, episode: null,
+      title: "Untitled", year: null, season: null, episode: null, part: null,
       resolution: null, quality: null, codec: null, language: null, category: null,
     };
   }
