@@ -18,6 +18,8 @@ const Input = z.object({
   offset: z.number().int().min(0).default(0),
   /** Restrict to a single title when set. */
   titleId: z.string().uuid().nullable().optional(),
+  /** Max sample rows returned in the dry-run preview. */
+  sampleLimit: z.number().int().min(0).max(500).default(25),
 });
 
 type ReparsedRow = {
