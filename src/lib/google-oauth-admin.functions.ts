@@ -265,8 +265,11 @@ export const validateGoogleOAuthSetup = createServerFn({ method: "GET" })
 // -----------------------------------------------------------------------------
 // Shared health-check engine (works for both user-context and cron contexts)
 // -----------------------------------------------------------------------------
-async function loadCreds(supabase: any) {
-  const { data, error } = await supabase
+async function loadCreds(_supabase: any) {
+  // client_secret column SELECT is revoked from authenticated; always read
+  // via service-role. Caller already gated access (admin check or cron auth).
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
     .from("google_oauth_credentials")
     .select("client_id, client_secret, redirect_uri")
     .limit(1)
