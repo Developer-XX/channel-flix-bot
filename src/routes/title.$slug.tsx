@@ -16,6 +16,7 @@ import { AdSlot } from "@/components/AdSlot";
 import { useIsAuthed } from "@/hooks/use-session-flag";
 import { usePublicBrowsing } from "@/hooks/use-public-browsing";
 import { logBlockedBrowsing } from "@/lib/blocked-access";
+import { compareByResolution } from "@/lib/resolution-sort";
 
 export const Route = createFileRoute("/title/$slug")({
   head: ({ params }) => ({
