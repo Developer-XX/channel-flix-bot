@@ -44,33 +44,44 @@ export function SeasonAccordion({ titleId }: Props) {
   });
 
   const grouped = useMemo(() => {
-    const map = new Map<
-      number | "other",
-      { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> }
-    >();
+    type Group = {
+      key: string;
+      seasonNumber: number | "other";
+      part: number | null;
+      seasonName: string | null;
+      episodes: Map<number | "other", FileRow[]>;
+    };
+    const map = new Map<string, Group>();
     for (const f of q.data ?? []) {
       let sNum: number | "other" = f.episodes?.seasons?.season_number ?? "other";
-      let sName: string | null = f.episodes?.seasons?.name ?? null;
+      const sName: string | null = f.episodes?.seasons?.name ?? null;
       let eNum: number | "other" = f.episodes?.episode_number ?? "other";
-      // Fallback: parse caption / filename when the row hasn't been linked to
-      // an episode row yet. Handles SxxPyEzz, SxxEyy, etc. so files don't
-      // pile up under "Unassigned" while the reparse cron catches up.
-      if (sNum === "other" || eNum === "other") {
+      let part: number | null = null;
+      // Decode part-encoded episode numbers from DB (part*100 + episode).
+      if (typeof eNum === "number" && eNum >= 100) {
+        part = Math.floor(eNum / 100);
+        eNum = eNum % 100;
+      }
+      // Fallback: parse caption / filename when the row hasn't been linked.
+      if (sNum === "other" || eNum === "other" || part === null) {
         const parsed = parseMedia(f.caption, f.file_name);
         if (parsed.season != null && sNum === "other") sNum = parsed.season;
-        if (parsed.episode != null && eNum === "other") {
-          eNum = parsed.part != null ? parsed.part * 100 + parsed.episode : parsed.episode;
-        }
+        if (parsed.episode != null && eNum === "other") eNum = parsed.episode;
+        if (parsed.part != null && part === null) part = parsed.part;
       }
-      if (!map.has(sNum)) map.set(sNum, { seasonNumber: sNum, seasonName: sName, episodes: new Map() });
-      const season = map.get(sNum)!;
+      const key = `${sNum}__${part ?? 0}`;
+      if (!map.has(key))
+        map.set(key, { key, seasonNumber: sNum, part, seasonName: sName, episodes: new Map() });
+      const season = map.get(key)!;
       if (!season.episodes.has(eNum)) season.episodes.set(eNum, []);
       season.episodes.get(eNum)!.push(f);
     }
     return Array.from(map.values()).sort((a, b) => {
       if (a.seasonNumber === "other") return 1;
       if (b.seasonNumber === "other") return -1;
-      return (a.seasonNumber as number) - (b.seasonNumber as number);
+      const s = (a.seasonNumber as number) - (b.seasonNumber as number);
+      if (s !== 0) return s;
+      return (a.part ?? 0) - (b.part ?? 0);
     });
   }, [q.data]);
 
@@ -82,19 +93,16 @@ export function SeasonAccordion({ titleId }: Props) {
       </div>
     );
 
-  // Auto-open the FIRST season in the list (covers cases where season 1 doesn't
-  // exist, e.g. a manually added "Chhota Bheem Season 18"). If there's only one
-  // season, it stays open. Other seasons stay collapsed.
-  const firstKey = grouped[0]?.seasonNumber;
+  const firstKey = grouped[0]?.key;
 
   return (
     <div className="space-y-3" data-testid="season-accordion">
       {grouped.map((s) => (
         <SeasonBlock
-          key={String(s.seasonNumber)}
+          key={s.key}
           season={s}
           titleId={titleId}
-          defaultOpen={s.seasonNumber === firstKey}
+          defaultOpen={s.key === firstKey}
         />
       ))}
     </div>
@@ -106,7 +114,12 @@ function SeasonBlock({
   titleId,
   defaultOpen,
 }: {
-  season: { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> };
+  season: {
+    seasonNumber: number | "other";
+    part: number | null;
+    seasonName: string | null;
+    episodes: Map<number | "other", FileRow[]>;
+  };
   titleId: string;
   defaultOpen?: boolean;
 }) {
@@ -117,10 +130,14 @@ function SeasonBlock({
     return (a as number) - (b as number);
   });
   const totalFiles = episodes.reduce((acc, [, files]) => acc + files.length, 0);
-  const label =
+  const baseLabel =
     season.seasonNumber === "other"
       ? "Other files"
       : season.seasonName ?? `Season ${season.seasonNumber}`;
+  const label =
+    season.part && season.part > 1 && season.seasonNumber !== "other"
+      ? `${baseLabel} · Part ${season.part}`
+      : baseLabel;
 
   return (
     <div className="rounded-xl border border-border bg-surface/40 overflow-hidden min-w-0 w-full">
@@ -144,10 +161,8 @@ function SeasonBlock({
               typeof files[0]?.episodes?.seasons?.season_number === "number"
                 ? files[0]!.episodes!.seasons!.season_number
                 : (typeof season.seasonNumber === "number" ? season.seasonNumber : null);
-            // Decode part-encoded episode numbers (part*100 + episode).
-            const rawEp = typeof epNum === "number" ? epNum : null;
-            const partNum = rawEp != null && rawEp >= 100 ? Math.floor(rawEp / 100) : null;
-            const episodeNum = rawEp != null && rawEp >= 100 ? rawEp % 100 : rawEp;
+            const episodeNum = typeof epNum === "number" ? epNum : null;
+            const partNum = season.part && season.part > 1 ? season.part : null;
             const epLabel =
               epNum === "other"
                 ? "Unassigned"
