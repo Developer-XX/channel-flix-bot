@@ -226,7 +226,7 @@ function EpisodeAuditPage() {
                     </td>
                     <td className="px-3 py-1.5 font-mono">
                       {r.current.season != null
-                        ? `S${r.current.season} E${r.current.episode}`
+                        ? `S${r.current.season}${r.current.part != null ? `P${r.current.part}` : ""} E${r.current.episode}`
                         : <span className="text-muted-foreground">unassigned</span>}
                     </td>
                     <td className="px-3 py-1.5 font-mono">
@@ -235,7 +235,9 @@ function EpisodeAuditPage() {
                         : <span className="text-muted-foreground">unparseable</span>}
                     </td>
                     <td className="px-3 py-1.5">
-                      {r.mismatch ? (
+                      {(r as any).partMismatch ? (
+                        <span className="text-destructive">part mismatch</span>
+                      ) : r.mismatch ? (
                         <span className="text-destructive">mismatch</span>
                       ) : !r.current.season ? (
                         r.actionable ? <span className="text-amber-500">fixable</span> : <span className="text-muted-foreground">no parse</span>
