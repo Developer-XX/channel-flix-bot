@@ -464,6 +464,45 @@ async function maybeEmitOAuthAlert(supabaseAdmin: any, source: "manual" | "cron"
         /* best-effort */
       }
     }
+
+    // Email alert (best-effort). Sends only when an ALERT_ADMIN_EMAIL is configured
+    // AND the Lovable Emails infra has been scaffolded with a "google-oauth-alert"
+    // template. Silently no-ops otherwise — the in-app admin_notifications row is
+    // always written above so admins still see the alert in the dashboard.
+    const recipient = await getSetting("ALERT_ADMIN_EMAIL");
+    if (recipient && /.+@.+\..+/.test(recipient)) {
+      try {
+        const origin =
+          process.env.PUBLIC_APP_URL ??
+          process.env.VITE_PUBLIC_APP_URL ??
+          "";
+        if (origin) {
+          const res = await fetchWithRetry(
+            `${origin.replace(/\/$/, "")}/lovable/email/transactional/send`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                // Server-to-server: use service-role bearer so the send route accepts it.
+                Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""}`,
+              },
+              body: JSON.stringify({
+                templateName: "google-oauth-alert",
+                recipientEmail: recipient,
+                idempotencyKey: `google-oauth.${dedupe}`,
+                templateData: { title, body, source, dedupe },
+              }),
+            },
+            { timeoutMs: 8_000, retries: 1, label: "email-alert" },
+          );
+          if (!res.ok) {
+            console.warn("[google-oauth] email alert send returned", res.status);
+          }
+        }
+      } catch (e) {
+        console.warn("[google-oauth] email alert failed", (e as Error).message);
+      }
+    }
   } catch (e) {
     console.warn("[google-oauth] maybeEmitOAuthAlert failed", (e as Error).message);
   }
