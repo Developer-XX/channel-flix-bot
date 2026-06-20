@@ -230,7 +230,8 @@ export const validateGoogleOAuthSetup = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
-    const { data, error } = await supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
       .from("google_oauth_credentials")
       .select("client_id, client_secret, redirect_uri, updated_at")
       .limit(1)
