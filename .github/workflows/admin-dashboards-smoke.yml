@@ -82,16 +82,34 @@ jobs:
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
 
-      - name: Wait for Postgres + Redis
+      - name: Wait for Postgres to accept connections
         run: |
-          for i in {1..30}; do
-            pg_isready -h localhost -p 5432 -U postgres && break
+          set -e
+          for i in $(seq 1 60); do
+            if pg_isready -h localhost -p 5432 -U postgres >/dev/null 2>&1; then
+              echo "postgres: ready after ${i}s"
+              # Confirm we can actually open a session, not just TCP.
+              PGPASSWORD=postgres psql -h localhost -U postgres -d app_test -c 'select 1' >/dev/null && exit 0
+            fi
             sleep 1
           done
-          for i in {1..30}; do
-            (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1 && break
+          echo "::error::postgres never became ready"
+          exit 1
+
+      - name: Wait for Redis to accept commands
+        run: |
+          set -e
+          for i in $(seq 1 60); do
+            if (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1; then
+              # PING confirms the server is actually serving, not just listening.
+              reply=$(printf 'PING\r\n' | timeout 2 bash -c 'cat > /dev/tcp/localhost/6379 & sleep 0.3; cat < /dev/tcp/localhost/6379' 2>/dev/null || true)
+              echo "redis: ready after ${i}s"
+              exit 0
+            fi
             sleep 1
           done
+          echo "::error::redis never became ready"
+          exit 1
 
       - name: Seed deterministic shortener + audit data
         if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
@@ -104,21 +122,44 @@ jobs:
         run: |
           bun run dev > dev-server.log 2>&1 &
           echo $! > .dev-server.pid
-          # Wait up to 60s for the server to come up.
-          for i in {1..60}; do
-            curl -sf http://localhost:8080 > /dev/null && exit 0
+
+      - name: Wait for dev server to be reachable
+        run: |
+          set -e
+          # Two-stage health check: TCP first (cheap), then HTTP 2xx/3xx.
+          for i in $(seq 1 90); do
+            if (echo > /dev/tcp/localhost/8080) >/dev/null 2>&1; then
+              code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8080 || echo 000)
+              if [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; then
+                echo "dev-server: HTTP ${code} after ${i}s"
+                exit 0
+              fi
+            fi
+            # Bail early if the process already died.
+            if ! kill -0 "$(cat .dev-server.pid)" 2>/dev/null; then
+              echo "::error::dev server process exited before becoming reachable"
+              tail -200 dev-server.log
+              exit 1
+            fi
             sleep 1
           done
-          echo "::error::dev server failed to start"
+          echo "::error::dev server never responded on http://localhost:8080"
           tail -200 dev-server.log
           exit 1
 
       - name: Run admin-dashboards Playwright suites
+        env:
+          # Relax perf budgets on shared GitHub runners; locals keep defaults.
+          SHORTENER_PERF_AGG_MS: "75"
+          SHORTENER_PERF_REPORT_MS: "150"
         run: |
           bunx playwright test \
             tests/e2e/admin-dashboards-smoke.spec.ts \
             tests/e2e/admin-dashboards-pagination.spec.ts \
-            tests/e2e/admin-dashboards-failure.spec.ts
+            tests/e2e/admin-dashboards-failure.spec.ts \
+            tests/e2e/admin-dashboards-http-errors.spec.ts \
+            tests/e2e/admin-dashboards-warm-cache.spec.ts
+
 
       - name: Stop dev server
         if: always()

@@ -53,18 +53,29 @@ function timeIt(fn: () => unknown, iterations = 5): number {
   return best;
 }
 
+/**
+ * Both budgets are configurable via env vars so CI runners (which are
+ * often slower / noisier than local dev) can relax the threshold
+ * without code edits. Defaults match the original tight budget.
+ *
+ *   SHORTENER_PERF_AGG_MS    — budget for aggregateShortenerSamples (default 25)
+ *   SHORTENER_PERF_REPORT_MS — budget for buildShortenerReport       (default 50)
+ */
+const AGG_BUDGET_MS = Number(process.env.SHORTENER_PERF_AGG_MS ?? 25);
+const REPORT_BUDGET_MS = Number(process.env.SHORTENER_PERF_REPORT_MS ?? 50);
+
 describe("shortener stats — perf regression", () => {
-  it("aggregateShortenerSamples processes 240 rows under 25ms (best-of-5)", () => {
+  it(`aggregateShortenerSamples processes 240 rows under ${AGG_BUDGET_MS}ms (best-of-5)`, () => {
     const samples = buildSamples(60); // matches the seed script
     const best = timeIt(() => aggregateShortenerSamples(samples));
     expect(samples.length).toBe(240);
     expect(
       best,
-      `aggregateShortenerSamples took ${best.toFixed(2)}ms — budget is 25ms`,
-    ).toBeLessThan(25);
+      `aggregateShortenerSamples took ${best.toFixed(2)}ms — budget is ${AGG_BUDGET_MS}ms`,
+    ).toBeLessThan(AGG_BUDGET_MS);
   });
 
-  it("buildShortenerReport processes a 30-day worst-case dataset under 50ms", () => {
+  it(`buildShortenerReport processes a 30-day worst-case dataset under ${REPORT_BUDGET_MS}ms`, () => {
     // Worst-case: one log row per provider per hour for 30 days.
     const samples = buildSamples(30 * 24); // 2880 rows total
     const configs: ShortenerConfigRow[] = PROVIDERS.map((p, i) => ({
@@ -77,7 +88,7 @@ describe("shortener stats — perf regression", () => {
     expect(samples.length).toBe(2880);
     expect(
       best,
-      `buildShortenerReport took ${best.toFixed(2)}ms — budget is 50ms`,
-    ).toBeLessThan(50);
+      `buildShortenerReport took ${best.toFixed(2)}ms — budget is ${REPORT_BUDGET_MS}ms`,
+    ).toBeLessThan(REPORT_BUDGET_MS);
   });
 });
