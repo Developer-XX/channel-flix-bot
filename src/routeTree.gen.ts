@@ -43,6 +43,9 @@ import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin.notifications'
 import { Route as AuthenticatedAdminInterstitialPerformanceRouteImport } from './routes/_authenticated/admin.interstitial-performance'
 import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenticated/admin.health'
+import { Route as AuthenticatedAdminGoogleOauthHelpRouteImport } from './routes/_authenticated/admin.google-oauth-help'
+import { Route as AuthenticatedAdminGoogleOauthCallbackRouteImport } from './routes/_authenticated/admin.google-oauth-callback'
+import { Route as AuthenticatedAdminGoogleOauthRouteImport } from './routes/_authenticated/admin.google-oauth'
 import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authenticated/admin.error-log'
 import { Route as AuthenticatedAdminEpisodeAuditRouteImport } from './routes/_authenticated/admin.episode-audit'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
@@ -252,6 +255,24 @@ const AuthenticatedAdminHealthRoute =
     path: '/health',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminGoogleOauthHelpRoute =
+  AuthenticatedAdminGoogleOauthHelpRouteImport.update({
+    id: '/google-oauth-help',
+    path: '/google-oauth-help',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminGoogleOauthCallbackRoute =
+  AuthenticatedAdminGoogleOauthCallbackRouteImport.update({
+    id: '/google-oauth-callback',
+    path: '/google-oauth-callback',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminGoogleOauthRoute =
+  AuthenticatedAdminGoogleOauthRouteImport.update({
+    id: '/google-oauth',
+    path: '/google-oauth',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminErrorLogRoute =
   AuthenticatedAdminErrorLogRouteImport.update({
     id: '/error-log',
@@ -423,6 +444,9 @@ export interface FileRoutesByFullPath {
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/admin/google-oauth': typeof AuthenticatedAdminGoogleOauthRoute
+  '/admin/google-oauth-callback': typeof AuthenticatedAdminGoogleOauthCallbackRoute
+  '/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
@@ -482,6 +506,9 @@ export interface FileRoutesByTo {
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/admin/google-oauth': typeof AuthenticatedAdminGoogleOauthRoute
+  '/admin/google-oauth-callback': typeof AuthenticatedAdminGoogleOauthCallbackRoute
+  '/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
@@ -544,6 +571,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/_authenticated/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/_authenticated/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/_authenticated/admin/google-oauth': typeof AuthenticatedAdminGoogleOauthRoute
+  '/_authenticated/admin/google-oauth-callback': typeof AuthenticatedAdminGoogleOauthCallbackRoute
+  '/_authenticated/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
   '/_authenticated/admin/health': typeof AuthenticatedAdminHealthRoute
   '/_authenticated/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
@@ -606,6 +636,9 @@ export interface FileRouteTypes {
     | '/admin/diagnostics'
     | '/admin/episode-audit'
     | '/admin/error-log'
+    | '/admin/google-oauth'
+    | '/admin/google-oauth-callback'
+    | '/admin/google-oauth-help'
     | '/admin/health'
     | '/admin/interstitial-performance'
     | '/admin/notifications'
@@ -665,6 +698,9 @@ export interface FileRouteTypes {
     | '/admin/diagnostics'
     | '/admin/episode-audit'
     | '/admin/error-log'
+    | '/admin/google-oauth'
+    | '/admin/google-oauth-callback'
+    | '/admin/google-oauth-help'
     | '/admin/health'
     | '/admin/interstitial-performance'
     | '/admin/notifications'
@@ -726,6 +762,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/diagnostics'
     | '/_authenticated/admin/episode-audit'
     | '/_authenticated/admin/error-log'
+    | '/_authenticated/admin/google-oauth'
+    | '/_authenticated/admin/google-oauth-callback'
+    | '/_authenticated/admin/google-oauth-help'
     | '/_authenticated/admin/health'
     | '/_authenticated/admin/interstitial-performance'
     | '/_authenticated/admin/notifications'
@@ -1033,6 +1072,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminHealthRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/google-oauth-help': {
+      id: '/_authenticated/admin/google-oauth-help'
+      path: '/google-oauth-help'
+      fullPath: '/admin/google-oauth-help'
+      preLoaderRoute: typeof AuthenticatedAdminGoogleOauthHelpRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/google-oauth-callback': {
+      id: '/_authenticated/admin/google-oauth-callback'
+      path: '/google-oauth-callback'
+      fullPath: '/admin/google-oauth-callback'
+      preLoaderRoute: typeof AuthenticatedAdminGoogleOauthCallbackRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/google-oauth': {
+      id: '/_authenticated/admin/google-oauth'
+      path: '/google-oauth'
+      fullPath: '/admin/google-oauth'
+      preLoaderRoute: typeof AuthenticatedAdminGoogleOauthRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/error-log': {
       id: '/_authenticated/admin/error-log'
       path: '/error-log'
@@ -1232,6 +1292,9 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
   AuthenticatedAdminEpisodeAuditRoute: typeof AuthenticatedAdminEpisodeAuditRoute
   AuthenticatedAdminErrorLogRoute: typeof AuthenticatedAdminErrorLogRoute
+  AuthenticatedAdminGoogleOauthRoute: typeof AuthenticatedAdminGoogleOauthRoute
+  AuthenticatedAdminGoogleOauthCallbackRoute: typeof AuthenticatedAdminGoogleOauthCallbackRoute
+  AuthenticatedAdminGoogleOauthHelpRoute: typeof AuthenticatedAdminGoogleOauthHelpRoute
   AuthenticatedAdminHealthRoute: typeof AuthenticatedAdminHealthRoute
   AuthenticatedAdminInterstitialPerformanceRoute: typeof AuthenticatedAdminInterstitialPerformanceRoute
   AuthenticatedAdminNotificationsRoute: typeof AuthenticatedAdminNotificationsRoute
@@ -1260,6 +1323,11 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
   AuthenticatedAdminEpisodeAuditRoute: AuthenticatedAdminEpisodeAuditRoute,
   AuthenticatedAdminErrorLogRoute: AuthenticatedAdminErrorLogRoute,
+  AuthenticatedAdminGoogleOauthRoute: AuthenticatedAdminGoogleOauthRoute,
+  AuthenticatedAdminGoogleOauthCallbackRoute:
+    AuthenticatedAdminGoogleOauthCallbackRoute,
+  AuthenticatedAdminGoogleOauthHelpRoute:
+    AuthenticatedAdminGoogleOauthHelpRoute,
   AuthenticatedAdminHealthRoute: AuthenticatedAdminHealthRoute,
   AuthenticatedAdminInterstitialPerformanceRoute:
     AuthenticatedAdminInterstitialPerformanceRoute,
