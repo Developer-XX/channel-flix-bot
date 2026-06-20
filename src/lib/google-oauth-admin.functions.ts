@@ -14,6 +14,38 @@ async function assertAdmin(supabase: any, userId: string) {
   if (!data) throw new Error("Forbidden: admin role required");
 }
 
+// Server-side rate limit using the public.rl_hit RPC. Per-user + action key.
+async function enforceRateLimit(
+  supabase: any,
+  userId: string,
+  action: string,
+  windowSec: number,
+  limit: number,
+) {
+  const key = `gauth:${action}:${userId}`;
+  const { data, error } = await supabase.rpc("rl_hit", {
+    _key: key,
+    _window_sec: windowSec,
+    _limit: limit,
+  });
+  if (error) {
+    // Fail open on RPC errors to avoid locking admins out, but log it.
+    console.warn("[google-oauth] rate-limit RPC failed", error.message);
+    return;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (row && row.allowed === false) {
+    const resetAt = row.reset_at ? new Date(row.reset_at) : null;
+    const secs = resetAt ? Math.max(1, Math.ceil((resetAt.getTime() - Date.now()) / 1000)) : windowSec;
+    const err: any = new Error(
+      `Rate limit exceeded for "${action}" (${row.used}/${row.lim}). Try again in ~${secs}s.`,
+    );
+    err.code = "rate_limited";
+    err.retryAfterSec = secs;
+    throw err;
+  }
+}
+
 function maskSecret(v: string | null | undefined): string | null {
   if (!v) return null;
   if (v.length <= 6) return "•".repeat(v.length);
