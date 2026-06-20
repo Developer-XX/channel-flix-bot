@@ -32,6 +32,7 @@ import { Route as AuthenticatedAdminVerificationLimitsRouteImport } from './rout
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAdminTutorialRouteImport } from './routes/_authenticated/admin.tutorial'
 import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenticated/admin.titles'
+import { Route as AuthenticatedAdminTelegramHealthRouteImport } from './routes/_authenticated/admin.telegram-health'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
 import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
@@ -190,6 +191,12 @@ const AuthenticatedAdminTitlesRoute =
   AuthenticatedAdminTitlesRouteImport.update({
     id: '/titles',
     path: '/titles',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminTelegramHealthRoute =
+  AuthenticatedAdminTelegramHealthRouteImport.update({
+    id: '/telegram-health',
+    path: '/telegram-health',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminTelegramRoute =
@@ -479,6 +486,7 @@ export interface FileRoutesByFullPath {
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
+  '/admin/telegram-health': typeof AuthenticatedAdminTelegramHealthRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -544,6 +552,7 @@ export interface FileRoutesByTo {
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
+  '/admin/telegram-health': typeof AuthenticatedAdminTelegramHealthRoute
   '/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -612,6 +621,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
   '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
+  '/_authenticated/admin/telegram-health': typeof AuthenticatedAdminTelegramHealthRoute
   '/_authenticated/admin/titles': typeof AuthenticatedAdminTitlesRoute
   '/_authenticated/admin/tutorial': typeof AuthenticatedAdminTutorialRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -680,6 +690,7 @@ export interface FileRouteTypes {
     | '/admin/support'
     | '/admin/sync-trace'
     | '/admin/telegram'
+    | '/admin/telegram-health'
     | '/admin/titles'
     | '/admin/tutorial'
     | '/admin/users'
@@ -745,6 +756,7 @@ export interface FileRouteTypes {
     | '/admin/support'
     | '/admin/sync-trace'
     | '/admin/telegram'
+    | '/admin/telegram-health'
     | '/admin/titles'
     | '/admin/tutorial'
     | '/admin/users'
@@ -812,6 +824,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/support'
     | '/_authenticated/admin/sync-trace'
     | '/_authenticated/admin/telegram'
+    | '/_authenticated/admin/telegram-health'
     | '/_authenticated/admin/titles'
     | '/_authenticated/admin/tutorial'
     | '/_authenticated/admin/users'
@@ -1034,6 +1047,13 @@ declare module '@tanstack/react-router' {
       path: '/titles'
       fullPath: '/admin/titles'
       preLoaderRoute: typeof AuthenticatedAdminTitlesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/telegram-health': {
+      id: '/_authenticated/admin/telegram-health'
+      path: '/telegram-health'
+      fullPath: '/admin/telegram-health'
+      preLoaderRoute: typeof AuthenticatedAdminTelegramHealthRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/telegram': {
@@ -1368,6 +1388,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
   AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
+  AuthenticatedAdminTelegramHealthRoute: typeof AuthenticatedAdminTelegramHealthRoute
   AuthenticatedAdminTitlesRoute: typeof AuthenticatedAdminTitlesRoute
   AuthenticatedAdminTutorialRoute: typeof AuthenticatedAdminTutorialRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
@@ -1402,6 +1423,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
   AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
+  AuthenticatedAdminTelegramHealthRoute: AuthenticatedAdminTelegramHealthRoute,
   AuthenticatedAdminTitlesRoute: AuthenticatedAdminTitlesRoute,
   AuthenticatedAdminTutorialRoute: AuthenticatedAdminTutorialRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
