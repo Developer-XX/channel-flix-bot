@@ -4,6 +4,7 @@ import { ChevronDown, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { DownloadButton } from "@/components/DownloadButton";
 import { parseMedia } from "@/lib/telegram-parser";
+import { compareByResolution } from "@/lib/resolution-sort";
 
 interface Props {
   titleId: string;
