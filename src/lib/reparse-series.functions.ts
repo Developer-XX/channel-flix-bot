@@ -202,6 +202,6 @@ export const reparseSeriesParts = createServerFn({ method: "POST" })
       seasons_created: seasonsCreated,
       episodes_created: episodesCreated,
       next_offset: (rows ?? []).length === data.limit ? data.offset + data.limit : null,
-      samples: changed.slice(0, 25),
+      samples: changed.slice(0, data.sampleLimit),
     };
   });
