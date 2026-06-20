@@ -32,7 +32,7 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
         try {
           const { data: rows, error } = await supabaseAdmin
             .from("scheduled_message_deletes")
-            .select("id, chat_id, message_id, attempts")
+            .select("id, chat_id, message_id, attempts, delete_at")
             .is("done_at", null)
             .lte("delete_at", new Date().toISOString())
             .order("delete_at", { ascending: true })
@@ -40,6 +40,26 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
           if (error) throw error;
 
           processedCount = (rows ?? []).length;
+
+          if (dryRun) {
+            return Response.json({
+              ok: true,
+              dryRun: true,
+              processed: processedCount,
+              targets: (rows ?? []).map((r) => ({
+                id: r.id,
+                chat_id: r.chat_id,
+                message_id: r.message_id,
+                delete_at: r.delete_at,
+                attempts: r.attempts,
+                overdue_seconds: Math.max(
+                  0,
+                  Math.floor((Date.now() - new Date(r.delete_at).getTime()) / 1000),
+                ),
+              })),
+            });
+          }
+
           for (const row of rows ?? []) {
             const r = await deleteMessage(row.chat_id, Number(row.message_id));
             if (r.ok) {
