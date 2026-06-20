@@ -256,6 +256,7 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
     year: pick("year"),
     season: pick("season"),
     episode: pick("episode"),
+    part: pick("part"),
     resolution: pick("resolution"),
     quality: pick("quality"),
     codec: pick("codec"),
