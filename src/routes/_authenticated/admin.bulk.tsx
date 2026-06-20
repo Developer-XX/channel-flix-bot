@@ -386,6 +386,11 @@ function MessageDeletesPanel() {
   const [busy, setBusy] = useState(false);
   const [includeFuture, setIncludeFuture] = useState(false);
   const [limit, setLimit] = useState(50);
+  const [offset, setOffset] = useState(0);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<"all" | "pending" | "failed_pending" | "done">("pending");
+  const [sinceIso, setSinceIso] = useState("");
+  const [untilIso, setUntilIso] = useState("");
   const [result, setResult] = useState<any>(null);
   const metrics = useQuery({
     queryKey: ["delete-cron-metrics"],
@@ -393,12 +398,22 @@ function MessageDeletesPanel() {
     refetchInterval: 15000,
   });
 
-  async function loadPreview() {
+  async function loadPreview(nextOffset = offset) {
     setBusy(true);
     try {
-      const r = await previewFn({ data: { limit, includeFuture } });
+      const r = await previewFn({
+        data: {
+          limit,
+          offset: nextOffset,
+          includeFuture,
+          status,
+          search: search.trim() || null,
+          sinceIso: sinceIso ? new Date(sinceIso).toISOString() : null,
+          untilIso: untilIso ? new Date(untilIso).toISOString() : null,
+        },
+      });
       setResult(r);
-      toast.success(`Previewed ${r.count} deletion target${r.count === 1 ? "" : "s"}`);
+      setOffset(nextOffset);
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to preview");
     } finally {
@@ -415,14 +430,14 @@ function MessageDeletesPanel() {
     if (format === "json") {
       blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     } else {
-      const header = ["id", "chat_id", "message_id", "delete_at", "attempts", "overdue_seconds", "last_error"];
+      const header = ["id", "chat_id", "message_id", "delete_at", "status", "attempts", "overdue_seconds", "last_error"];
       const esc = (v: any) => {
         const s = String(v ?? "");
         return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
       const lines = [header.join(",")];
       for (const t of result.targets) {
-        lines.push([t.id, t.chat_id, t.message_id, t.delete_at, t.attempts, t.overdue_seconds, t.last_error].map(esc).join(","));
+        lines.push([t.id, t.chat_id, t.message_id, t.delete_at, t.status, t.attempts, t.overdue_seconds, t.last_error].map(esc).join(","));
       }
       blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
     }
@@ -436,33 +451,65 @@ function MessageDeletesPanel() {
 
   const m: any = metrics.data;
   const summary: any = m?.last_summary ?? {};
+  const total = result?.total ?? 0;
+  const page = Math.floor(offset / limit) + 1;
+  const pages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <div className="mt-6 rounded-xl border border-border bg-surface/40 p-4">
       <h2 className="text-base font-semibold mb-1">Private-chat auto-delete</h2>
       <p className="text-xs text-muted-foreground mb-3">
-        Preview which scheduled deletions would run next and export the list for verification.
-        Telemetry below comes from the most recent <code>process-message-deletes</code> cron run.
+        Preview, filter, and export scheduled deletion targets. Telemetry below comes from the most recent
+        <code className="mx-1">process-message-deletes</code> cron run.
       </p>
 
-      <div className="flex flex-wrap items-end gap-2 mb-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mb-3">
         <div className="space-y-1">
-          <Label className="text-xs">Limit</Label>
+          <Label className="text-xs">Search chat/message ID</Label>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. 123456789" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as any)}
+            className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+          >
+            <option value="pending">Pending</option>
+            <option value="failed_pending">Failed (retrying)</option>
+            <option value="done">Done</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Since</Label>
+          <Input type="datetime-local" value={sinceIso} onChange={(e) => setSinceIso(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Until</Label>
+          <Input type="datetime-local" value={untilIso} onChange={(e) => setUntilIso(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Page size</Label>
           <Input
             type="number"
             min={1}
             max={500}
             value={limit}
             onChange={(e) => setLimit(Math.max(1, Math.min(500, Number(e.target.value) || 50)))}
-            className="w-24"
           />
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={includeFuture} onChange={(e) => setIncludeFuture(e.target.checked)} />
-          Include future
-        </label>
-        <Button size="sm" variant="outline" onClick={loadPreview} disabled={busy}>
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Preview targets"}
+        <div className="flex items-end gap-2">
+          <label className="flex items-center gap-2 text-sm whitespace-nowrap">
+            <input type="checkbox" checked={includeFuture} onChange={(e) => setIncludeFuture(e.target.checked)} />
+            Future
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Button size="sm" variant="outline" onClick={() => loadPreview(0)} disabled={busy}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Apply filters"}
         </Button>
         <Button size="sm" variant="outline" onClick={() => download("csv")} disabled={!result?.count}>
           <Download className="h-3.5 w-3.5 mr-1.5" /> CSV
@@ -470,6 +517,13 @@ function MessageDeletesPanel() {
         <Button size="sm" variant="outline" onClick={() => download("json")} disabled={!result?.count}>
           <Download className="h-3.5 w-3.5 mr-1.5" /> JSON
         </Button>
+        {result && (
+          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <Button size="sm" variant="ghost" disabled={busy || offset === 0} onClick={() => loadPreview(Math.max(0, offset - limit))}>‹ Prev</Button>
+            <span>Page {page} / {pages} · {total} total</span>
+            <Button size="sm" variant="ghost" disabled={busy || page >= pages} onClick={() => loadPreview(offset + limit)}>Next ›</Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
@@ -484,9 +538,45 @@ function MessageDeletesPanel() {
       </div>
 
       {result && (
-        <pre className="max-h-64 overflow-auto rounded bg-background/60 p-2 text-[11px]">
-          {JSON.stringify(result, null, 2)}
-        </pre>
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="max-h-[420px] overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-surface/60 sticky top-0">
+                <tr className="text-left">
+                  <th className="px-2 py-1.5">Status</th>
+                  <th className="px-2 py-1.5">Chat</th>
+                  <th className="px-2 py-1.5">Message</th>
+                  <th className="px-2 py-1.5">Delete at</th>
+                  <th className="px-2 py-1.5 text-right">Overdue</th>
+                  <th className="px-2 py-1.5 text-right">Attempts</th>
+                  <th className="px-2 py-1.5">Last error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.targets.length === 0 && (
+                  <tr><td colSpan={7} className="px-2 py-3 text-center text-muted-foreground">No matching rows</td></tr>
+                )}
+                {result.targets.map((t: any) => (
+                  <tr key={t.id} className="border-t border-border">
+                    <td className="px-2 py-1.5">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] ${
+                        t.status === "done" ? "bg-emerald-500/10 text-emerald-500"
+                        : t.status === "failed_pending" ? "bg-amber-500/10 text-amber-500"
+                        : "bg-sky-500/10 text-sky-500"
+                      }`}>{t.status}</span>
+                    </td>
+                    <td className="px-2 py-1.5 font-mono">{t.chat_id}</td>
+                    <td className="px-2 py-1.5 font-mono">{t.message_id}</td>
+                    <td className="px-2 py-1.5">{new Date(t.delete_at).toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{t.overdue_seconds}s</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{t.attempts}</td>
+                    <td className="px-2 py-1.5 truncate max-w-[280px] text-muted-foreground">{t.last_error ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
