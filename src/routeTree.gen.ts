@@ -62,6 +62,7 @@ import { Route as ApiPublicTelegramBackfillIngestRouteImport } from './routes/ap
 import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/public/telegram/backfill'
 import { Route as ApiPublicSectionKeyRouteImport } from './routes/api/public/section/$key'
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
+import { Route as ApiPublicHooksTelegramSyncAlertsRouteImport } from './routes/api/public/hooks/telegram-sync-alerts'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksReparseSeriesCronRouteImport } from './routes/api/public/hooks/reparse-series-cron'
@@ -72,6 +73,7 @@ import { Route as ApiPublicHooksInterstitialHealthRouteImport } from './routes/a
 import { Route as ApiPublicHooksInterstitialBeaconRouteImport } from './routes/api/public/hooks/interstitial-beacon'
 import { Route as ApiPublicHooksGoogleOauthHealthcheckRouteImport } from './routes/api/public/hooks/google-oauth-healthcheck'
 import { Route as ApiPublicHooksEpisodeAuditAlertsRouteImport } from './routes/api/public/hooks/episode-audit-alerts'
+import { Route as ApiPublicHealthTelegramSyncRouteImport } from './routes/api/public/health/telegram-sync'
 
 const TrustRoute = TrustRouteImport.update({
   id: '/trust',
@@ -364,6 +366,12 @@ const ApiPublicSTokenRoute = ApiPublicSTokenRouteImport.update({
   path: '/api/public/s/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksTelegramSyncAlertsRoute =
+  ApiPublicHooksTelegramSyncAlertsRouteImport.update({
+    id: '/api/public/hooks/telegram-sync-alerts',
+    path: '/api/public/hooks/telegram-sync-alerts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksTelegramResyncRecentRoute =
   ApiPublicHooksTelegramResyncRecentRouteImport.update({
     id: '/api/public/hooks/telegram-resync-recent',
@@ -424,6 +432,12 @@ const ApiPublicHooksEpisodeAuditAlertsRoute =
     path: '/api/public/hooks/episode-audit-alerts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHealthTelegramSyncRoute =
+  ApiPublicHealthTelegramSyncRouteImport.update({
+    id: '/telegram-sync',
+    path: '/telegram-sync',
+    getParentRoute: () => ApiPublicHealthRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -470,8 +484,9 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
-  '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/health': typeof ApiPublicHealthRouteWithChildren
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/health/telegram-sync': typeof ApiPublicHealthTelegramSyncRoute
   '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
   '/api/public/hooks/google-oauth-healthcheck': typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
@@ -482,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -533,8 +549,9 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
-  '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/health': typeof ApiPublicHealthRouteWithChildren
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/api/public/health/telegram-sync': typeof ApiPublicHealthTelegramSyncRoute
   '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
   '/api/public/hooks/google-oauth-healthcheck': typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
@@ -545,6 +562,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -599,8 +617,9 @@ export interface FileRoutesById {
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/admin/verification-limits': typeof AuthenticatedAdminVerificationLimitsRoute
   '/api/public/client-errors': typeof ApiPublicClientErrorsRoute
-  '/api/public/health': typeof ApiPublicHealthRoute
+  '/api/public/health': typeof ApiPublicHealthRouteWithChildren
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/api/public/health/telegram-sync': typeof ApiPublicHealthTelegramSyncRoute
   '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
   '/api/public/hooks/google-oauth-healthcheck': typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
@@ -611,6 +630,7 @@ export interface FileRoutesById {
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
   '/api/public/telegram/backfill': typeof ApiPublicTelegramBackfillRoute
@@ -667,6 +687,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/admin/'
+    | '/api/public/health/telegram-sync'
     | '/api/public/hooks/episode-audit-alerts'
     | '/api/public/hooks/google-oauth-healthcheck'
     | '/api/public/hooks/interstitial-beacon'
@@ -677,6 +698,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/hooks/telegram-sync-alerts'
     | '/api/public/s/$token'
     | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
@@ -730,6 +752,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/admin'
+    | '/api/public/health/telegram-sync'
     | '/api/public/hooks/episode-audit-alerts'
     | '/api/public/hooks/google-oauth-healthcheck'
     | '/api/public/hooks/interstitial-beacon'
@@ -740,6 +763,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/hooks/telegram-sync-alerts'
     | '/api/public/s/$token'
     | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
@@ -795,6 +819,7 @@ export interface FileRouteTypes {
     | '/api/public/client-errors'
     | '/api/public/health'
     | '/_authenticated/admin/'
+    | '/api/public/health/telegram-sync'
     | '/api/public/hooks/episode-audit-alerts'
     | '/api/public/hooks/google-oauth-healthcheck'
     | '/api/public/hooks/interstitial-beacon'
@@ -805,6 +830,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/hooks/telegram-sync-alerts'
     | '/api/public/s/$token'
     | '/api/public/section/$key'
     | '/api/public/telegram/backfill'
@@ -827,7 +853,7 @@ export interface RootRouteChildren {
   SectionKeyRoute: typeof SectionKeyRoute
   TitleSlugRoute: typeof TitleSlugRoute
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
-  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRouteWithChildren
   ApiPublicHooksEpisodeAuditAlertsRoute: typeof ApiPublicHooksEpisodeAuditAlertsRoute
   ApiPublicHooksGoogleOauthHealthcheckRoute: typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   ApiPublicHooksInterstitialBeaconRoute: typeof ApiPublicHooksInterstitialBeaconRoute
@@ -838,6 +864,7 @@ export interface RootRouteChildren {
   ApiPublicHooksReparseSeriesCronRoute: typeof ApiPublicHooksReparseSeriesCronRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
+  ApiPublicHooksTelegramSyncAlertsRoute: typeof ApiPublicHooksTelegramSyncAlertsRoute
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
   ApiPublicSectionKeyRoute: typeof ApiPublicSectionKeyRoute
   ApiPublicTelegramBackfillRoute: typeof ApiPublicTelegramBackfillRoute
@@ -1219,6 +1246,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/telegram-sync-alerts': {
+      id: '/api/public/hooks/telegram-sync-alerts'
+      path: '/api/public/hooks/telegram-sync-alerts'
+      fullPath: '/api/public/hooks/telegram-sync-alerts'
+      preLoaderRoute: typeof ApiPublicHooksTelegramSyncAlertsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/telegram-resync-recent': {
       id: '/api/public/hooks/telegram-resync-recent'
       path: '/api/public/hooks/telegram-resync-recent'
@@ -1288,6 +1322,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/public/hooks/episode-audit-alerts'
       preLoaderRoute: typeof ApiPublicHooksEpisodeAuditAlertsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/public/health/telegram-sync': {
+      id: '/api/public/health/telegram-sync'
+      path: '/telegram-sync'
+      fullPath: '/api/public/health/telegram-sync'
+      preLoaderRoute: typeof ApiPublicHealthTelegramSyncRouteImport
+      parentRoute: typeof ApiPublicHealthRoute
     }
   }
 }
@@ -1389,6 +1430,18 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface ApiPublicHealthRouteChildren {
+  ApiPublicHealthTelegramSyncRoute: typeof ApiPublicHealthTelegramSyncRoute
+}
+
+const ApiPublicHealthRouteChildren: ApiPublicHealthRouteChildren = {
+  ApiPublicHealthTelegramSyncRoute: ApiPublicHealthTelegramSyncRoute,
+}
+
+const ApiPublicHealthRouteWithChildren = ApiPublicHealthRoute._addFileChildren(
+  ApiPublicHealthRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
@@ -1403,7 +1456,7 @@ const rootRouteChildren: RootRouteChildren = {
   SectionKeyRoute: SectionKeyRoute,
   TitleSlugRoute: TitleSlugRoute,
   ApiPublicClientErrorsRoute: ApiPublicClientErrorsRoute,
-  ApiPublicHealthRoute: ApiPublicHealthRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRouteWithChildren,
   ApiPublicHooksEpisodeAuditAlertsRoute: ApiPublicHooksEpisodeAuditAlertsRoute,
   ApiPublicHooksGoogleOauthHealthcheckRoute:
     ApiPublicHooksGoogleOauthHealthcheckRoute,
@@ -1419,6 +1472,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
+  ApiPublicHooksTelegramSyncAlertsRoute: ApiPublicHooksTelegramSyncAlertsRoute,
   ApiPublicSTokenRoute: ApiPublicSTokenRoute,
   ApiPublicSectionKeyRoute: ApiPublicSectionKeyRoute,
   ApiPublicTelegramBackfillRoute: ApiPublicTelegramBackfillRoute,
