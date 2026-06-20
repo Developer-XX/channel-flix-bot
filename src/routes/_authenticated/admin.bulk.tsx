@@ -366,9 +366,61 @@ function BulkRematchPage() {
         </div>
       )}
 
+      <ReparseSeriesPartsPanel />
     </div>
   );
 }
+
+function ReparseSeriesPartsPanel() {
+  const fn = useServerFn(
+    // dynamic import keeps this panel decoupled from the main bundle's typegen
+    (require("@/lib/reparse-series.functions") as typeof import("@/lib/reparse-series.functions")).reparseSeriesParts,
+  );
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Awaited<ReturnType<typeof fn>> | null>(null);
+
+  async function run(dry: boolean) {
+    setBusy(true);
+    try {
+      const r = await fn({ data: { dryRun: dry, limit: 500, offset: 0 } });
+      setResult(r);
+      toast.success(
+        dry
+          ? `Dry-run: ${r.changed_count} of ${r.scanned} rows would be re-parsed`
+          : `Re-parsed ${r.updated_ingest} ingest rows, relinked ${r.relinked_files} files`,
+      );
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-xl border border-border bg-surface/40 p-4">
+      <h2 className="text-base font-semibold mb-1">Re-parse TV series Part/Episode metadata</h2>
+      <p className="text-xs text-muted-foreground mb-3">
+        Scans already-ingested rows and updates any whose caption/filename uses the
+        <code className="mx-1 rounded bg-muted px-1">SxxPnEyy</code> pattern so the
+        season/part/episode encoding matches the current parser.
+      </p>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" onClick={() => run(true)} disabled={busy}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Dry-run"}
+        </Button>
+        <Button size="sm" onClick={() => run(false)} disabled={busy}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Re-parse now"}
+        </Button>
+      </div>
+      {result && (
+        <pre className="mt-3 max-h-64 overflow-auto rounded bg-background/60 p-2 text-[11px]">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 
 function Stat({
   label,
