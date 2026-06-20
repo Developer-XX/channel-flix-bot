@@ -107,8 +107,8 @@ describe("telegram-parser: Season/Part/Episode extraction", () => {
     expect(p.episode).toBe(3);
   });
 
-  it("parses underscore separators: Show_S03_P1_E12", () => {
-    const p = parseSingleSource("Show_Name_S03_P1_E12_720p.mkv");
+  it("parses dotted separators in filenames: Show.S03.P1.E12", () => {
+    const p = parseSingleSource("Show.Name.S03.P1.E12.720p.mkv");
     expect(p.season).toBe(3);
     expect(p.part).toBe(1);
     expect(p.episode).toBe(12);
