@@ -149,11 +149,12 @@ function AdminShortenersPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, testId }: { label: string; value: string; testId?: string }) {
   return (
     <div className="rounded border border-border p-2">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-sm font-semibold">{value}</div>
+      <div className="text-sm font-semibold" data-testid={testId}>{value}</div>
     </div>
   );
 }
+
