@@ -4,6 +4,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { checkCronAuth } from "@/lib/cron-auth.server";
 
+const JOB = "process-message-deletes";
+const LOCK_TTL_SEC = 240; // safety net if a run crashes mid-flight
+
 export const Route = createFileRoute("/api/public/hooks/process-message-deletes")({
   server: {
     handlers: {
@@ -11,11 +14,6 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
         const auth = checkCronAuth(request);
         if (!auth.ok) return auth.response;
 
-        // Dry-run: when `?dryRun=1` is set, report which rows WOULD be deleted
-        // (with their delete_at timing) without calling Telegram or mutating
-        // the queue. Useful for validating targets and timing before the real
-        // cron run picks them up. `?format=csv|json` allows direct download
-        // for offline verification of private-chat deletion targets.
         const url = new URL(request.url);
         const dryRun = ["1", "true", "yes"].includes(
           (url.searchParams.get("dryRun") ?? "").toLowerCase(),
@@ -24,8 +22,11 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { deleteMessage } = await import("@/lib/telegram-api.server");
-        const { recordCronRun } = await import("@/lib/audit.server");
+        const { recordCronRun, openAdminAlert, maybeNotifyAdminsTelegram, resolveAdminAlerts } =
+          await import("@/lib/audit.server");
 
+        // Dry-run never mutates and never acquires the lock so it can be invoked
+        // concurrently with the real cron run.
         const t0 = Date.now();
         let processedCount = 0;
         let okCount = 0;
@@ -34,8 +35,25 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
         let retryAfterMsTotal = 0;
         let retryAttemptsTotal = 0;
         let runError: string | null = null;
+        let lockAcquired = false;
 
         try {
+          if (!dryRun) {
+            const { data: gotLock } = await supabaseAdmin.rpc("try_acquire_cron_lock", {
+              _job_name: JOB,
+              _ttl_seconds: LOCK_TTL_SEC,
+              _holder: "cron",
+            });
+            if (gotLock !== true) {
+              return Response.json({
+                ok: true,
+                skipped: true,
+                reason: "another run is in progress",
+              });
+            }
+            lockAcquired = true;
+          }
+
           const { data: rows, error } = await supabaseAdmin
             .from("scheduled_message_deletes")
             .select("id, chat_id, message_id, attempts, delete_at")
@@ -93,7 +111,6 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
           }
 
           for (const row of rows ?? []) {
-            // Track retry attempts (this is the Nth try for this row).
             retryAttemptsTotal += row.attempts;
             const r = await deleteMessage(row.chat_id, Number(row.message_id));
             if (r.ok) {
@@ -119,6 +136,10 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
           }
         } catch (e) {
           runError = (e as Error).message;
+        } finally {
+          if (lockAcquired) {
+            try { await supabaseAdmin.rpc("release_cron_lock", { _job_name: JOB }); } catch {}
+          }
         }
 
         const durationMs = Date.now() - t0;
@@ -126,7 +147,7 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
 
         await recordCronRun(
           supabaseAdmin,
-          "process-message-deletes",
+          JOB,
           runError === null,
           {
             processed: processedCount,
@@ -140,6 +161,45 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
           },
           runError,
         );
+
+        // ----- Threshold alerts -----
+        // (1) too many 429s in a single run
+        const FLOOD_429_THRESHOLD = 5;
+        if (rateLimited429 >= FLOOD_429_THRESHOLD) {
+          const alertId = await openAdminAlert(supabaseAdmin, {
+            kind: "cron_rate_limit",
+            severity: "warn",
+            subject: `Telegram 429 flood in ${JOB}`,
+            details: { rateLimited429, retryAfterMsTotal, processed: processedCount, durationMs },
+            source: JOB,
+          });
+          await maybeNotifyAdminsTelegram(supabaseAdmin, {
+            alertId,
+            kind: "cron_rate_limit",
+            text: `⚠️ <b>Telegram rate limit</b>\nJob: <code>${JOB}</code>\n429s: <b>${rateLimited429}</b> in ${processedCount} ops · retry-after total ${retryAfterMsTotal}ms`,
+          });
+        } else {
+          await resolveAdminAlerts(supabaseAdmin, "cron_rate_limit", `Telegram 429 flood in ${JOB}`);
+        }
+
+        // (2) sustained slow runs (avg > 3000ms/message on a non-trivial batch)
+        const SLOW_AVG_MS = 3000;
+        if (processedCount >= 5 && avgMs > SLOW_AVG_MS) {
+          const alertId = await openAdminAlert(supabaseAdmin, {
+            kind: "cron_slow",
+            severity: "warn",
+            subject: `${JOB} avg duration high`,
+            details: { avgMs, processed: processedCount, durationMs },
+            source: JOB,
+          });
+          await maybeNotifyAdminsTelegram(supabaseAdmin, {
+            alertId,
+            kind: "cron_slow",
+            text: `🐢 <b>Cron slow</b>\nJob: <code>${JOB}</code>\nAvg: <b>${avgMs}ms</b>/op across ${processedCount}`,
+          });
+        } else if (processedCount >= 5 && avgMs <= SLOW_AVG_MS) {
+          await resolveAdminAlerts(supabaseAdmin, "cron_slow", `${JOB} avg duration high`);
+        }
 
         return Response.json({
           ok: runError === null,
