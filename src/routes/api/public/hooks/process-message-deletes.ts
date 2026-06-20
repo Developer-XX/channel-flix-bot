@@ -11,6 +11,15 @@ export const Route = createFileRoute("/api/public/hooks/process-message-deletes"
         const auth = checkCronAuth(request);
         if (!auth.ok) return auth.response;
 
+        // Dry-run: when `?dryRun=1` is set, report which rows WOULD be deleted
+        // (with their delete_at timing) without calling Telegram or mutating
+        // the queue. Useful for validating targets and timing before the real
+        // cron run picks them up.
+        const url = new URL(request.url);
+        const dryRun = ["1", "true", "yes"].includes(
+          (url.searchParams.get("dryRun") ?? "").toLowerCase(),
+        );
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { deleteMessage } = await import("@/lib/telegram-api.server");
         const { recordCronRun } = await import("@/lib/audit.server");
