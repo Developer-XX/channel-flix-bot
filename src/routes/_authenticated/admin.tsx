@@ -139,7 +139,9 @@ function AdminLayout() {
           <NavItem to="/admin/slideshow" icon={<Images className="h-4 w-4" />} label="Homepage slideshow" />
           <NavItem to="/admin/ads" icon={<BadgeDollarSign className="h-4 w-4" />} label="Ads" />
           <NavItem to="/admin/notifications" icon={<Bell className="h-4 w-4" />} label="Notifications" />
+          <NavItem to="/admin/google-oauth" icon={<ShieldAlert className="h-4 w-4" />} label="Google OAuth" />
           <NavItem to="/admin/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
+
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-foreground inline-flex items-center gap-1"><ArrowLeft className="h-3 w-3" /> Back to site</Link>
@@ -174,7 +176,9 @@ function AdminLayout() {
             <MobileNavItem to="/admin/slideshow" label="Slides" />
             <MobileNavItem to="/admin/ads" label="Ads" />
             <MobileNavItem to="/admin/notifications" label="Alerts" />
+            <MobileNavItem to="/admin/google-oauth" label="Google OAuth" />
             <MobileNavItem to="/admin/settings" label="Settings" />
+
           </nav>
         </div>
         <AlertsBanner />

@@ -20,8 +20,10 @@ import {
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
 import { getAdPerfSummary } from "@/lib/ad-perf.functions";
+import { getGoogleOAuthLatestHealth } from "@/lib/google-oauth-admin.functions";
 import { Button } from "@/components/ui/button";
 import { AuthEventsWidget } from "@/components/AuthEventsWidget";
+
 
 export const Route = createFileRoute("/_authenticated/admin/analytics")({
   component: AnalyticsPage,
@@ -73,7 +75,10 @@ function AnalyticsPage() {
 
       <AuthEventsWidget />
 
+      <GoogleOAuthHealthWidget />
+
       <InterstitialPerfWidget />
+
 
 
 
