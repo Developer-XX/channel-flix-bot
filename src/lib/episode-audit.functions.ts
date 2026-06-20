@@ -171,11 +171,23 @@ export const listUnassignedEpisodes = createServerFn({ method: "POST" })
           ? (parsed.part != null ? parsed.part * 100 + parsed.episode : parsed.episode)
           : null;
       const currentSeason = r.episodes?.seasons?.season_number ?? null;
-      const currentEpisode = r.episodes?.episode_number ?? null;
+      const currentEpisodeRaw = r.episodes?.episode_number ?? null;
+      // Decode the part out of the stored episode_number (part*100 + ep).
+      const currentPart =
+        typeof currentEpisodeRaw === "number" && currentEpisodeRaw >= 100
+          ? Math.floor(currentEpisodeRaw / 100)
+          : null;
+      const currentEpisode =
+        typeof currentEpisodeRaw === "number" && currentEpisodeRaw >= 100
+          ? currentEpisodeRaw % 100
+          : currentEpisodeRaw;
       const mismatch =
         parsed.season != null &&
         encoded != null &&
-        (currentSeason !== parsed.season || currentEpisode !== encoded);
+        (currentSeason !== parsed.season || currentEpisodeRaw !== encoded);
+      // Specifically: parser found a part, DB grouping doesn't agree on the part.
+      const partMismatch =
+        parsed.part != null && currentPart !== parsed.part;
       return {
         id: r.id,
         title_id: r.title_id,
@@ -183,7 +195,12 @@ export const listUnassignedEpisodes = createServerFn({ method: "POST" })
         channel_id: r.channel_id,
         file_name: r.file_name,
         caption: r.caption,
-        current: { season: currentSeason, episode: currentEpisode, episode_id: r.episode_id },
+        current: {
+          season: currentSeason,
+          part: currentPart,
+          episode: currentEpisode,
+          episode_id: r.episode_id,
+        },
         expected: {
           season: parsed.season,
           part: parsed.part,
@@ -191,11 +208,12 @@ export const listUnassignedEpisodes = createServerFn({ method: "POST" })
           encoded_episode: encoded,
         },
         mismatch,
+        partMismatch,
         actionable: parsed.season != null && parsed.episode != null,
       };
     });
 
-    const filtered = data.mismatchOnly ? items.filter((i) => i.mismatch) : items;
+    const filtered = data.mismatchOnly ? items.filter((i) => i.mismatch || i.partMismatch) : items;
 
     return { items: filtered, total: count ?? filtered.length };
   });

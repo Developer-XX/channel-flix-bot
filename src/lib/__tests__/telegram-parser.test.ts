@@ -150,4 +150,68 @@ describe("telegram-parser: Season/Part/Episode extraction", () => {
     expect(p.resolution).toBe("720p");
     expect(p.language).toBe("Hindi");
   });
+
+  // ---- S02P2 / S02P02 grouping regression suite ----
+  // The accordion groups by (season, part). Each fixture below must encode to
+  // the same (season, part, episode) regardless of zero-padding or separators,
+  // so historical files don't drift into the wrong "Season X · Part Y" bucket.
+  describe("S02P2 / S02P02 grouping invariants", () => {
+    const fixtures: Array<[string, number, number, number]> = [
+      ["Mighty Little Bheem S02P2E01 1080p Hindi",              2, 2, 1],
+      ["Mighty Little Bheem S02P02E01 1080p Hindi",             2, 2, 1],
+      ["Mighty Little Bheem S02 P2 E01 1080p",                  2, 2, 1],
+      ["Mighty Little Bheem S02 P02 E01 1080p",                 2, 2, 1],
+      ["Mighty Little Bheem S02.P2.E01.1080p",                  2, 2, 1],
+      ["Mighty Little Bheem S02 P02 E01 mkv",                   2, 2, 1],
+      ["Mighty Little Bheem S02-P2-E01 [Hindi]",                2, 2, 1],
+      ["Mighty Little Bheem Season 2 Part 2 Episode 1 720p",    2, 2, 1],
+      ["Mighty Little Bheem S02Pt2E01 720p",                    2, 2, 1],
+      ["Mighty Little Bheem S2P2E1 480p",                       2, 2, 1],
+    ];
+    it.each(fixtures)("%s → S%i P%i E%i", (text, s, part, ep) => {
+      const p = parseSingleSource(text);
+      expect(p.season).toBe(s);
+      expect(p.part).toBe(part);
+      expect(p.episode).toBe(ep);
+    });
+
+    it("mixed: caption=S02P2E01, filename plain — part survives", () => {
+      const p = parseMedia("Show S02P2E01", "random.bytes.mkv");
+      expect(p.season).toBe(2); expect(p.part).toBe(2); expect(p.episode).toBe(1);
+    });
+    it("mixed: caption plain, filename=Show.S02P02E01 — part survives", () => {
+      const p = parseMedia("Just a banner caption", "Show.S02P02E01.1080p.mkv");
+      expect(p.season).toBe(2); expect(p.part).toBe(2); expect(p.episode).toBe(1);
+    });
+
+    // Sort contract used by SeasonAccordion: composite (season, part||0).
+    // Season 2 (no part) renders before Season 2 · Part 2.
+    it("group ordering: Season 2 sorts before Season 2 · Part 2", () => {
+      const items = [
+        { s: 2, part: 2 as number | null },
+        { s: 2, part: null as number | null },
+        { s: 1, part: null as number | null },
+        { s: 2, part: 3 as number | null },
+      ];
+      const sorted = [...items].sort((a, b) => {
+        const sd = a.s - b.s;
+        if (sd !== 0) return sd;
+        return (a.part ?? 0) - (b.part ?? 0);
+      });
+      expect(sorted.map((i) => `${i.s}.${i.part ?? 0}`)).toEqual([
+        "1.0", "2.0", "2.2", "2.3",
+      ]);
+    });
+
+    // Encoding contract: (part * 100) + episode — round-trips cleanly.
+    it("encoded episode round-trips for parts 1..12 / episodes 1..99", () => {
+      for (let part = 1; part <= 12; part++) {
+        for (let ep = 1; ep <= 99; ep++) {
+          const enc = part * 100 + ep;
+          expect(Math.floor(enc / 100)).toBe(part);
+          expect(enc % 100).toBe(ep);
+        }
+      }
+    });
+  });
 });

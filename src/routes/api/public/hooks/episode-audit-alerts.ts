@@ -8,6 +8,7 @@ import { parseMedia } from "@/lib/telegram-parser";
 const JOB_NAME = "episode-audit-alerts";
 const UNASSIGNED_THRESHOLD = 10; // open alert if ≥10 unassigned in a channel
 const PARSE_FAIL_THRESHOLD = 10; // open alert if ≥10 parse-no-episode in 14d
+const PART_MISMATCH_THRESHOLD = 5; // open alert if ≥5 SxxPyy files are mis-grouped
 
 function authorize(request: Request): Response | null {
   const apikey = request.headers.get("apikey") ?? request.headers.get("x-cron-key");
@@ -28,16 +29,33 @@ export const Route = createFileRoute("/api/public/hooks/episode-audit-alerts")({
         const start = Date.now();
 
         try {
-          // Files: unassigned per channel
+          // Files: unassigned per channel + SxxPyy mis-grouping per channel.
           const { data: files } = await supabaseAdmin
             .from("media_files")
-            .select("channel_id, episode_id")
+            .select(
+              "channel_id, episode_id, caption, file_name, episodes(episode_number, seasons(season_number))",
+            )
             .eq("is_active", true);
 
           const unassignedByCh = new Map<string, number>();
+          const partMismatchByCh = new Map<string, number>();
           for (const f of (files as any[]) ?? []) {
-            if (!f.channel_id || f.episode_id) continue;
-            unassignedByCh.set(f.channel_id, (unassignedByCh.get(f.channel_id) ?? 0) + 1);
+            if (!f.channel_id) continue;
+            if (!f.episode_id) {
+              unassignedByCh.set(f.channel_id, (unassignedByCh.get(f.channel_id) ?? 0) + 1);
+              continue;
+            }
+            // Compare parser expectation vs current grouping for part-bearing files.
+            const text = `${f.caption ?? ""} ${f.file_name ?? ""}`;
+            if (!/\bS\d{1,2}[\s._-]?P/i.test(text) && !/\bPart[\s._-]?\d/i.test(text)) continue;
+            const parsed = parseMedia(f.caption, f.file_name);
+            if (parsed.part == null || parsed.season == null || parsed.episode == null) continue;
+            const expectedEnc = parsed.part * 100 + parsed.episode;
+            const curSeason = f.episodes?.seasons?.season_number ?? null;
+            const curEp = f.episodes?.episode_number ?? null;
+            if (curSeason !== parsed.season || curEp !== expectedEnc) {
+              partMismatchByCh.set(f.channel_id, (partMismatchByCh.get(f.channel_id) ?? 0) + 1);
+            }
           }
 
           // Ingest: parse-no-episode per channel (last 14d)
@@ -97,11 +115,32 @@ export const Route = createFileRoute("/api/public/hooks/episode-audit-alerts")({
             }
           }
 
+          for (const [chId, count] of partMismatchByCh) {
+            if (count >= PART_MISMATCH_THRESHOLD) {
+              const subject = `Part/season mis-grouping: ${chName.get(chId) ?? chId}`;
+              await openAdminAlert(supabaseAdmin as any, {
+                kind: "episode_part_mismatch",
+                severity: count >= PART_MISMATCH_THRESHOLD * 5 ? "error" : "warn",
+                subject,
+                source: JOB_NAME,
+                details: {
+                  channel_id: chId,
+                  channel_name: chName.get(chId),
+                  mismatches: count,
+                  pattern: "SxxPyy / Part",
+                  hint: "Run admin → Episode audit → Reparse for this channel.",
+                },
+              });
+              openedSubjects.add(subject);
+              alertsOpened++;
+            }
+          }
+
           // Resolve previously-open alerts that are now below threshold.
           const { data: openAlerts } = await supabaseAdmin
             .from("admin_alerts")
             .select("id, kind, subject")
-            .in("kind", ["episode_unassigned", "episode_parse_fail"])
+            .in("kind", ["episode_unassigned", "episode_parse_fail", "episode_part_mismatch"])
             .is("resolved_at", null);
           let resolved = 0;
           for (const a of (openAlerts as any[]) ?? []) {
@@ -114,6 +153,7 @@ export const Route = createFileRoute("/api/public/hooks/episode-audit-alerts")({
           const summary = {
             channels_unassigned: unassignedByCh.size,
             channels_parse_fail: parseFailByCh.size,
+            channels_part_mismatch: partMismatchByCh.size,
             alerts_opened: alertsOpened,
             alerts_resolved: resolved,
             duration_ms: Date.now() - start,
