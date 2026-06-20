@@ -20,8 +20,10 @@ import {
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
 import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
 import { getAdPerfSummary } from "@/lib/ad-perf.functions";
+import { getGoogleOAuthLatestHealth } from "@/lib/google-oauth-admin.functions";
 import { Button } from "@/components/ui/button";
 import { AuthEventsWidget } from "@/components/AuthEventsWidget";
+
 
 export const Route = createFileRoute("/_authenticated/admin/analytics")({
   component: AnalyticsPage,
@@ -73,7 +75,10 @@ function AnalyticsPage() {
 
       <AuthEventsWidget />
 
+      <GoogleOAuthHealthWidget />
+
       <InterstitialPerfWidget />
+
 
 
 
@@ -502,4 +507,45 @@ function InterstitialPerfWidget() {
     </Section>
   );
 }
+
+function GoogleOAuthHealthWidget() {
+  const q = useQuery({
+    queryKey: ["google-oauth-latest-health"],
+    queryFn: () => getGoogleOAuthLatestHealth(),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  const r = q.data;
+  const color =
+    !r ? "text-muted-foreground" : r.status === "ok" ? "text-emerald-600" : "text-destructive";
+  const dot =
+    !r ? "bg-muted-foreground/40" : r.status === "ok" ? "bg-emerald-500" : "bg-destructive";
+  return (
+    <section className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold flex items-center gap-2">
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
+            Google OAuth health
+          </h2>
+          {!r && <p className="text-xs text-muted-foreground mt-1">No checks recorded yet.</p>}
+          {r && (
+            <p className={`text-xs mt-1 ${color}`}>
+              {r.status === "ok" ? "Healthy" : "Failing"} · {r.kind} check ·{" "}
+              {new Date(r.checkedAt).toLocaleString()}
+              {r.latencyMs != null ? ` · ${r.latencyMs} ms` : ""}
+            </p>
+          )}
+          {r?.errorMessage && (
+            <p className="text-xs text-destructive mt-1">{r.errorCode}: {r.errorMessage}</p>
+          )}
+        </div>
+        <Link to="/admin/google-oauth">
+          <Button size="sm" variant="outline">Open Google OAuth</Button>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 
