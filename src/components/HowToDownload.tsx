@@ -73,7 +73,6 @@ export function HowToDownload() {
             )}
           </div>
         </div>
-        </div>
         <div className="px-6 md:px-8 pb-6 pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-border/60">
           <p className="text-sm text-muted-foreground">Ready? Request a title we don't have yet.</p>
           <a
