@@ -96,10 +96,27 @@ function GoogleOAuthAdminPage() {
       toast.success("Saved");
       setClientSecret("");
       cfgQ.refetch();
+      setupQ.refetch();
+      selfQ.refetch();
     } catch (e: any) {
       toast.error(e?.message ?? "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onProbeFull() {
+    setProbing(true);
+    try {
+      const r = await probeFull();
+      logQ.refetch();
+      selfQ.refetch();
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Probe failed");
+    } finally {
+      setProbing(false);
     }
   }
 
