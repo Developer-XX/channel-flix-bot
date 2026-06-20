@@ -11,7 +11,7 @@ import {
 import { getMyPremiumStatus } from "@/lib/premium.functions";
 import { pickAd as pickAdPure } from "@/lib/ad-rotation";
 
-function useIsPremium(): boolean {
+function usePremiumGate(): { isPremium: boolean; ready: boolean } {
   const fn = useServerFn(getMyPremiumStatus);
   const [authed, setAuthed] = useState<boolean | null>(null);
   useEffect(() => {
@@ -19,8 +19,12 @@ function useIsPremium(): boolean {
     supabase.auth.getSession().then(({ data }) => {
       if (!cancelled) setAuthed(!!data.session);
     });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthed(!!session);
+    });
     return () => {
       cancelled = true;
+      sub.subscription.unsubscribe();
     };
   }, []);
   const q = useQuery({
@@ -30,7 +34,13 @@ function useIsPremium(): boolean {
     staleTime: 60_000,
     retry: false,
   });
-  return !!q.data?.isPremium;
+  // Anonymous users are never premium → ready immediately.
+  if (authed === false) return { isPremium: false, ready: true };
+  // Authed but the premium check hasn't resolved yet — don't show ads.
+  if (authed === null || q.isLoading || q.isFetching) {
+    return { isPremium: false, ready: false };
+  }
+  return { isPremium: !!q.data?.isPremium, ready: true };
 }
 
 function pickAd(ads: Ad[], placement: AdPlacement): Ad | null {
@@ -44,7 +54,7 @@ export function AdSlot({
   placement: AdPlacement;
   className?: string;
 }) {
-  const isPremium = useIsPremium();
+  const { isPremium, ready } = usePremiumGate();
   const listFn = useServerFn(listActiveAds);
   const trackFn = useServerFn(recordAdEvent);
 
@@ -53,7 +63,7 @@ export function AdSlot({
     queryFn: () => listFn({ data: { placement } }),
     staleTime: 5 * 60_000,
     retry: false,
-    enabled: !isPremium,
+    enabled: ready && !isPremium,
   });
 
   const ads = (q.data?.ads ?? []) as Ad[];
@@ -61,15 +71,15 @@ export function AdSlot({
 
   const impressedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!ad || isPremium) return;
+    if (!ad || isPremium || !ready) return;
     if (impressedRef.current === ad.id) return;
     impressedRef.current = ad.id;
     trackFn({
       data: { ad_id: ad.id, placement, event_type: "impression" },
     }).catch(() => {});
-  }, [ad, isPremium, placement, trackFn]);
+  }, [ad, isPremium, ready, placement, trackFn]);
 
-  if (isPremium || !ad) return null;
+  if (!ready || isPremium || !ad) return null;
 
   const onClick = () => {
     trackFn({

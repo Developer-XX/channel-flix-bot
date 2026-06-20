@@ -31,6 +31,12 @@ function AdminGateLayout() {
     // times with backoff before showing the error UI.
     retry: 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 3000),
+    // Keep the gate cached across admin sub-route navigation so we don't
+    // flash "Verifying admin access…" each time the user clicks a section.
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   if (q.isLoading) {
