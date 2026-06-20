@@ -38,7 +38,7 @@ export function HowToDownload() {
   const ytId = cfg.type === "youtube" ? extractYouTubeId(cfg.url) : null;
 
   return (
-    <section className="mx-auto max-w-7xl px-4 md:px-6 py-10">
+    <section id="tutorial" className="mx-auto max-w-7xl px-4 md:px-6 py-10 scroll-mt-20" aria-labelledby="tutorial-heading" data-testid="tutorial-section">
       <div className="rounded-2xl border border-border bg-surface/60 backdrop-blur-sm overflow-hidden shadow-lg">
         <div className="px-6 md:px-8 pt-6 pb-4 border-b border-border/60 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-primary text-primary-foreground shrink-0">
