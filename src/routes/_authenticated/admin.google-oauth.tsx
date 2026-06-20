@@ -53,8 +53,11 @@ function GoogleOAuthAdminPage() {
   const validateSetup = useServerFn(validateGoogleOAuthSetup);
   const selfCheck = useServerFn(getGoogleOAuthSelfCheck);
   const probeFull = useServerFn(probeFullTokenExchange);
+  const smokeCallback = useServerFn(smokeTestCallbackHandler);
   const [exporting, setExporting] = useState(false);
   const [probing, setProbing] = useState(false);
+  const [smoking, setSmoking] = useState(false);
+  const [smokeResult, setSmokeResult] = useState<{ ok: boolean; message: string; errorCode?: string; latencyMs?: number } | null>(null);
 
 
   const cfgQ = useQuery({ queryKey: ["google-oauth-config"], queryFn: () => getCfg() });
