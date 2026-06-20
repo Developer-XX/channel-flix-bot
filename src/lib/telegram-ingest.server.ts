@@ -656,6 +656,27 @@ export async function revalidatePromotedForTitle(
       continue;
     }
 
+    // Sticky admin overrides: never auto-demote a file whose most recent
+    // decision for this (ingest, title) pair is a "manual" assignment or
+    // an admin-curated "alias" hit. Admins explicitly bound this file to
+    // the title — common for SxxPyEzz files where the parsed_title is
+    // just "S02P2E01" with no show name, scoring poorly against the
+    // master title on every resync.
+    const { data: lastDecisionRow } = await supabase
+      .from("match_audit_log")
+      .select("decision")
+      .eq("telegram_ingest_id", r.id)
+      .eq("master_title_id", title.id)
+      .in("decision", ["promoted", "manual", "alias", "demoted"])
+      .order("attempt_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastDecision = (lastDecisionRow as { decision?: string } | null)?.decision ?? null;
+    if (lastDecision === "manual" || lastDecision === "alias") {
+      kept++;
+      continue;
+    }
+
     // Look up the prior promotion audit so we can record the old score
     // alongside the new (demoting) score for clear change-tracking.
     const { data: prevAudit } = await supabase
