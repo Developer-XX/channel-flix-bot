@@ -143,17 +143,22 @@ function SeasonBlock({
             const seasonNum =
               typeof files[0]?.episodes?.seasons?.season_number === "number"
                 ? files[0]!.episodes!.seasons!.season_number
-                : null;
-            const episodeNum = typeof epNum === "number" ? epNum : null;
+                : (typeof season.seasonNumber === "number" ? season.seasonNumber : null);
+            // Decode part-encoded episode numbers (part*100 + episode).
+            const rawEp = typeof epNum === "number" ? epNum : null;
+            const partNum = rawEp != null && rawEp >= 100 ? Math.floor(rawEp / 100) : null;
+            const episodeNum = rawEp != null && rawEp >= 100 ? rawEp % 100 : rawEp;
+            const epLabel =
+              epNum === "other"
+                ? "Unassigned"
+                : files[0]?.episodes?.name?.trim()
+                  ? files[0]!.episodes!.name!
+                  : partNum != null
+                    ? `Part ${partNum} · Episode ${episodeNum}`
+                    : `Episode ${episodeNum}`;
             return (
               <div key={String(epNum)} className="px-3 sm:px-4 py-3 space-y-2 min-w-0">
-                <div className="text-sm font-medium truncate">
-                  {epNum === "other"
-                    ? "Unassigned"
-                    : files[0]?.episodes?.name?.trim()
-                      ? files[0]!.episodes!.name
-                      : `Episode ${epNum}`}
-                </div>
+                <div className="text-sm font-medium truncate">{epLabel}</div>
                 <div className="grid gap-2 xl:grid-cols-2 min-w-0">
                   {files.map((f) => (
                     <div
