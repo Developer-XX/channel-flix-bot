@@ -107,6 +107,8 @@ function EpisodeAuditPage() {
             not an error — ingest some Telegram files and refresh.
           </div>
         ) : (
+          <>
+
 
             {totals && (
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 p-3 text-xs">
