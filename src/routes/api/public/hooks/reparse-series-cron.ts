@@ -30,6 +30,21 @@ export const Route = createFileRoute("/api/public/hooks/reparse-series-cron")({
           return Response.json({ ok: true, skipped: true, reason: "disabled" });
         }
 
+        // Acquire the per-job lock so two cron runs (or a manual invocation
+        // overlapping with cron) cannot hammer the Telegram API in parallel.
+        const { data: gotLock } = await supabaseAdmin.rpc("try_acquire_cron_lock", {
+          _job_name: "reparse-series-cron",
+          _ttl_seconds: 600,
+          _holder: "cron",
+        });
+        if (gotLock !== true) {
+          return Response.json({
+            ok: true,
+            skipped: true,
+            reason: "another run is in progress",
+          });
+        }
+
         const limit = Math.max(1, Math.min(2000, await getSettingNumber("REPARSE_SERIES_CRON_LIMIT", 500)));
         const dryRun = (await getSetting("REPARSE_SERIES_CRON_DRYRUN"))?.toLowerCase() === "true";
 
@@ -65,6 +80,8 @@ export const Route = createFileRoute("/api/public/hooks/reparse-series-cron")({
           }
         } catch (e) {
           runError = (e as Error).message;
+        } finally {
+          try { await supabaseAdmin.rpc("release_cron_lock", { _job_name: "reparse-series-cron" }); } catch {}
         }
 
         const durationMs = Date.now() - t0;
@@ -76,6 +93,26 @@ export const Route = createFileRoute("/api/public/hooks/reparse-series-cron")({
           limit,
           duration_ms: durationMs,
         }, runError);
+
+        // Slow-run alert: re-parse should comfortably finish well under 60s.
+        const SLOW_DURATION_MS = 60_000;
+        const { openAdminAlert, maybeNotifyAdminsTelegram, resolveAdminAlerts } = await import("@/lib/audit.server");
+        if (durationMs > SLOW_DURATION_MS) {
+          const alertId = await openAdminAlert(supabaseAdmin, {
+            kind: "cron_slow",
+            severity: "warn",
+            subject: `reparse-series-cron avg duration high`,
+            details: { durationMs, scanned, changed },
+            source: "reparse-series-cron",
+          });
+          await maybeNotifyAdminsTelegram(supabaseAdmin, {
+            alertId,
+            kind: "cron_slow",
+            text: `🐢 <b>Cron slow</b>\nJob: <code>reparse-series-cron</code>\nDuration: <b>${durationMs}ms</b> · scanned ${scanned}`,
+          });
+        } else {
+          await resolveAdminAlerts(supabaseAdmin, "cron_slow", `reparse-series-cron avg duration high`);
+        }
 
         return Response.json({
           ok: runError === null,
