@@ -90,8 +90,12 @@ describe("shortener-admin.functions.ts queries the correct column", () => {
       join(__dirname, "..", "shortener-admin.functions.ts"),
       "utf8",
     );
-    expect(src).toMatch(/shortener_health_log/);
-    expect(src).toMatch(/checked_at/);
-    expect(src).not.toMatch(/created_at/);
+    // Strip comments so the in-file regression note doesn't trigger.
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/shortener_health_log/);
+    expect(code).toMatch(/checked_at/);
+    expect(code).not.toMatch(/created_at/);
   });
 });
