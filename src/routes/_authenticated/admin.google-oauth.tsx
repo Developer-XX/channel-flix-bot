@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, HelpCircle, Download, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, HelpCircle, Download, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,9 @@ import {
   startFullOAuthTest,
   listGoogleOAuthHealth,
   exportGoogleOAuthHealthCsv,
+  validateGoogleOAuthSetup,
+  getGoogleOAuthSelfCheck,
+  probeFullTokenExchange,
 } from "@/lib/google-oauth-admin.functions";
 
 // Map a server error code to the OAuth flow step that failed.
@@ -46,10 +49,16 @@ function GoogleOAuthAdminPage() {
   const startFull = useServerFn(startFullOAuthTest);
   const listLog = useServerFn(listGoogleOAuthHealth);
   const exportCsv = useServerFn(exportGoogleOAuthHealthCsv);
+  const validateSetup = useServerFn(validateGoogleOAuthSetup);
+  const selfCheck = useServerFn(getGoogleOAuthSelfCheck);
+  const probeFull = useServerFn(probeFullTokenExchange);
   const [exporting, setExporting] = useState(false);
+  const [probing, setProbing] = useState(false);
 
 
   const cfgQ = useQuery({ queryKey: ["google-oauth-config"], queryFn: () => getCfg() });
+  const setupQ = useQuery({ queryKey: ["google-oauth-setup"], queryFn: () => validateSetup(), refetchInterval: 60_000 });
+  const selfQ = useQuery({ queryKey: ["google-oauth-self-check"], queryFn: () => selfCheck(), refetchInterval: 60_000 });
   const logQ = useQuery({
     queryKey: ["google-oauth-health"],
     queryFn: () => listLog(),
@@ -87,10 +96,27 @@ function GoogleOAuthAdminPage() {
       toast.success("Saved");
       setClientSecret("");
       cfgQ.refetch();
+      setupQ.refetch();
+      selfQ.refetch();
     } catch (e: any) {
       toast.error(e?.message ?? "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onProbeFull() {
+    setProbing(true);
+    try {
+      const r = await probeFull();
+      logQ.refetch();
+      selfQ.refetch();
+      if (r.ok) toast.success(r.message);
+      else toast.error(r.message);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Probe failed");
+    } finally {
+      setProbing(false);
     }
   }
 
@@ -217,6 +243,30 @@ function GoogleOAuthAdminPage() {
       {/* Local diagnostics */}
       <DiagnosticsPanel clientId={clientId} clientSecret={clientSecret} redirectUri={redirectUri || defaultRedirect} latestError={logQ.data?.rows?.find((r: any) => r.status === "error") ?? null} />
 
+      {/* Self-check report */}
+      <SelfCheckReport
+        data={selfQ.data}
+        loading={selfQ.isFetching}
+        onRetest={() => selfQ.refetch()}
+      />
+
+      {/* Setup gate banner */}
+      {setupQ.data && !setupQ.data.enabled && (
+        <section data-testid="oauth-setup-gate" className="mt-6 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <div className="font-medium text-destructive flex items-center gap-2">
+            <XCircle className="h-4 w-4" /> Google OAuth is not ready
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Health checks are disabled until the saved configuration matches Google's requirements.
+          </p>
+          <ul className="mt-2 list-disc pl-5 text-xs space-y-1">
+            {setupQ.data.problems.map((p, i) => (
+              <li key={i}><span className="font-mono">[{p.field}]</span> {p.message}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Health checks */}
 
       <section className="mt-6 rounded-lg border border-border bg-card p-5 space-y-4">
@@ -227,7 +277,7 @@ function GoogleOAuthAdminPage() {
             <p className="text-xs text-muted-foreground">
               Verifies the Client ID format, that Google's discovery endpoint is reachable, and that Google recognizes the Client ID + redirect URI. No consent screen.
             </p>
-            <Button size="sm" onClick={onQuickCheck} disabled={checking || !cfg?.configured}>
+            <Button size="sm" onClick={onQuickCheck} disabled={checking || !setupQ.data?.enabled}>
               {checking && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Run quick check
             </Button>
             {quickResult && (
@@ -250,15 +300,21 @@ function GoogleOAuthAdminPage() {
           <div className="rounded-md border border-border p-4 space-y-2">
             <div className="font-medium text-sm">Full token exchange</div>
             <p className="text-xs text-muted-foreground">
-              Opens Google's consent screen and completes a real authorization-code exchange against the saved Client Secret. Most accurate test.
+              Two modes: a <strong>safe probe</strong> validates Client ID + Secret + Redirect URI against Google's token endpoint without consent, or run the full consent-screen flow.
             </p>
-            <Button size="sm" variant="secondary" onClick={onStartFull} disabled={fullBusy || !cfg?.configured}>
-              {fullBusy && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-              <ExternalLink className="h-3 w-3 mr-1" /> Run full OAuth test
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={onProbeFull} disabled={probing || !setupQ.data?.enabled}>
+                {probing && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Run safe probe
+              </Button>
+              <Button size="sm" variant="secondary" onClick={onStartFull} disabled={fullBusy || !setupQ.data?.enabled}>
+                {fullBusy && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                <ExternalLink className="h-3 w-3 mr-1" /> Full consent flow
+              </Button>
+            </div>
           </div>
         </div>
       </section>
+
 
       {/* History */}
       <section className="mt-6 rounded-lg border border-border bg-card p-5">
@@ -407,3 +463,114 @@ function DiagnosticsPanel({
   );
 }
 
+
+function StatusDot({ ok }: { ok: boolean | null | undefined }) {
+  if (ok === true) return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
+  if (ok === false) return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+  return <span className="h-2.5 w-2.5 inline-block rounded-full bg-muted" />;
+}
+
+function SelfCheckReport({
+  data,
+  loading,
+  onRetest,
+}: {
+  data: any;
+  loading: boolean;
+  onRetest: () => void;
+}) {
+  const s = data?.sections;
+  const rows: Array<{ key: string; label: string; ok: boolean | null; detail: React.ReactNode }> = s
+    ? [
+        {
+          key: "config",
+          label: "Saved configuration valid",
+          ok: s.config.ok,
+          detail: s.config.ok
+            ? `Updated ${s.config.updatedAt ? new Date(s.config.updatedAt).toLocaleString() : "—"}`
+            : (s.config.problems ?? []).map((p: any) => p.message).join(" · "),
+        },
+        {
+          key: "callback",
+          label: "Callback route ready",
+          ok: s.callback.ok,
+          detail: s.callback.ok
+            ? `Path ${s.callback.expectedPath}`
+            : `Expected ${s.callback.expectedPath}, got ${s.callback.actualPath ?? "—"}`,
+        },
+        {
+          key: "discovery",
+          label: "Google discovery reachable",
+          ok: s.discovery.ok,
+          detail: s.discovery.ok
+            ? `HTTP ${s.discovery.status} · ${s.discovery.latencyMs}ms`
+            : `${s.discovery.error ?? "unreachable"} (${s.discovery.latencyMs ?? "?"}ms)`,
+        },
+        {
+          key: "latest",
+          label: "Last health check",
+          ok: s.latestHealth ? s.latestHealth.ok : null,
+          detail: s.latestHealth
+            ? `${s.latestHealth.kind} · ${new Date(s.latestHealth.checkedAt).toLocaleString()} · ${s.latestHealth.latencyMs ?? "?"}ms${s.latestHealth.errorCode ? ` · ${s.latestHealth.errorCode}` : ""}`
+            : "No checks recorded yet",
+        },
+        {
+          key: "cron",
+          label: "Last cron run",
+          ok: s.lastCron ? s.lastCron.ok : null,
+          detail: s.lastCron
+            ? `${new Date(s.lastCron.checkedAt).toLocaleString()} · ${s.lastCron.latencyMs ?? "?"}ms${s.lastCron.errorCode ? ` · ${s.lastCron.errorCode}` : ""}`
+            : "Cron has not run yet",
+        },
+      ]
+    : [];
+
+  return (
+    <section data-testid="oauth-self-check" className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          Self-check report
+          {data && (
+            <span
+              data-testid="oauth-self-check-overall"
+              className={`text-xs rounded-full px-2 py-0.5 border ${
+                data.overall === "ok"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-600"
+              }`}
+            >
+              {data.overall === "ok" ? "All systems OK" : "Needs attention"}
+            </span>
+          )}
+        </h2>
+        <Button size="sm" variant="outline" onClick={onRetest} disabled={loading} data-testid="oauth-self-check-retest">
+          {loading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+          Re-test
+        </Button>
+      </div>
+      {!data && <div className="text-sm text-muted-foreground">Loading…</div>}
+      {data && (
+        <ul className="grid sm:grid-cols-2 gap-2">
+          {rows.map((r) => (
+            <li
+              key={r.key}
+              data-testid={`oauth-self-check-${r.key}`}
+              className="flex items-start gap-2 rounded-md border border-border p-2 text-xs"
+            >
+              <span className="mt-0.5"><StatusDot ok={r.ok} /></span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-foreground/90">{r.label}</div>
+                <div className="text-muted-foreground break-words">{r.detail}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {data && (
+        <div className="mt-3 text-[10px] text-muted-foreground">
+          Generated {new Date(data.generatedAt).toLocaleString()}
+        </div>
+      )}
+    </section>
+  );
+}
