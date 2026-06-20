@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { DownloadButton } from "@/components/DownloadButton";
+import { parseMedia } from "@/lib/telegram-parser";
 
 interface Props {
   titleId: string;
@@ -48,9 +49,19 @@ export function SeasonAccordion({ titleId }: Props) {
       { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> }
     >();
     for (const f of q.data ?? []) {
-      const sNum = f.episodes?.seasons?.season_number ?? "other";
-      const sName = f.episodes?.seasons?.name ?? null;
-      const eNum = f.episodes?.episode_number ?? "other";
+      let sNum: number | "other" = f.episodes?.seasons?.season_number ?? "other";
+      let sName: string | null = f.episodes?.seasons?.name ?? null;
+      let eNum: number | "other" = f.episodes?.episode_number ?? "other";
+      // Fallback: parse caption / filename when the row hasn't been linked to
+      // an episode row yet. Handles SxxPyEzz, SxxEyy, etc. so files don't
+      // pile up under "Unassigned" while the reparse cron catches up.
+      if (sNum === "other" || eNum === "other") {
+        const parsed = parseMedia(f.caption, f.file_name);
+        if (parsed.season != null && sNum === "other") sNum = parsed.season;
+        if (parsed.episode != null && eNum === "other") {
+          eNum = parsed.part != null ? parsed.part * 100 + parsed.episode : parsed.episode;
+        }
+      }
       if (!map.has(sNum)) map.set(sNum, { seasonNumber: sNum, seasonName: sName, episodes: new Map() });
       const season = map.get(sNum)!;
       if (!season.episodes.has(eNum)) season.episodes.set(eNum, []);
@@ -132,17 +143,22 @@ function SeasonBlock({
             const seasonNum =
               typeof files[0]?.episodes?.seasons?.season_number === "number"
                 ? files[0]!.episodes!.seasons!.season_number
-                : null;
-            const episodeNum = typeof epNum === "number" ? epNum : null;
+                : (typeof season.seasonNumber === "number" ? season.seasonNumber : null);
+            // Decode part-encoded episode numbers (part*100 + episode).
+            const rawEp = typeof epNum === "number" ? epNum : null;
+            const partNum = rawEp != null && rawEp >= 100 ? Math.floor(rawEp / 100) : null;
+            const episodeNum = rawEp != null && rawEp >= 100 ? rawEp % 100 : rawEp;
+            const epLabel =
+              epNum === "other"
+                ? "Unassigned"
+                : files[0]?.episodes?.name?.trim()
+                  ? files[0]!.episodes!.name!
+                  : partNum != null
+                    ? `Part ${partNum} · Episode ${episodeNum}`
+                    : `Episode ${episodeNum}`;
             return (
               <div key={String(epNum)} className="px-3 sm:px-4 py-3 space-y-2 min-w-0">
-                <div className="text-sm font-medium truncate">
-                  {epNum === "other"
-                    ? "Unassigned"
-                    : files[0]?.episodes?.name?.trim()
-                      ? files[0]!.episodes!.name
-                      : `Episode ${epNum}`}
-                </div>
+                <div className="text-sm font-medium truncate">{epLabel}</div>
                 <div className="grid gap-2 xl:grid-cols-2 min-w-0">
                   {files.map((f) => (
                     <div
