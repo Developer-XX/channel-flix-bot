@@ -18,9 +18,9 @@ export const getShortenerReport = createServerFn({ method: "GET" })
       supabaseAdmin.from("shortener_configs").select("*").order("priority", { ascending: true }),
       supabaseAdmin
         .from("shortener_health_log")
-        .select("provider, ok, latency_ms, created_at, error")
-        .gte("created_at", since30)
-        .order("created_at", { ascending: false })
+        .select("provider, ok, latency_ms, checked_at, error")
+        .gte("checked_at", since30)
+        .order("checked_at", { ascending: false })
         .limit(5000),
     ]);
 
