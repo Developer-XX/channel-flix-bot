@@ -90,6 +90,60 @@ export const getGoogleOAuthConfig = createServerFn({ method: "GET" })
     };
   });
 
+// -----------------------------------------------------------------------------
+// Shared validators (used by saveGoogleOAuthConfig + validateGoogleOAuthSetup)
+// -----------------------------------------------------------------------------
+const EXPECTED_CALLBACK_PATH = "/admin/google-oauth-callback";
+
+export type ConfigProblem = { field: "clientId" | "clientSecret" | "redirectUri"; code: string; message: string };
+
+export function validateCredentialShape(input: {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}): ConfigProblem[] {
+  const problems: ConfigProblem[] = [];
+  const id = input.clientId.trim();
+  const secret = input.clientSecret.trim();
+  const uri = input.redirectUri.trim();
+
+  if (!id) problems.push({ field: "clientId", code: "missing", message: "Client ID is required." });
+  else {
+    if (!/\.apps\.googleusercontent\.com$/i.test(id))
+      problems.push({ field: "clientId", code: "bad_suffix", message: "Client ID must end with .apps.googleusercontent.com" });
+    if (!/^\d{6,}-/.test(id))
+      problems.push({ field: "clientId", code: "bad_prefix", message: "Client ID must start with the numeric project number (e.g. 123456789-abc...)." });
+  }
+
+  if (!secret) problems.push({ field: "clientSecret", code: "missing", message: "Client Secret is required." });
+  else if (secret.length < 10)
+    problems.push({ field: "clientSecret", code: "too_short", message: "Client Secret looks too short." });
+
+  if (!uri) {
+    problems.push({ field: "redirectUri", code: "missing", message: "Redirect URI is required." });
+  } else {
+    let parsed: URL | null = null;
+    try { parsed = new URL(uri); } catch { /* noop */ }
+    if (!parsed) {
+      problems.push({ field: "redirectUri", code: "invalid_url", message: "Redirect URI is not a valid URL." });
+    } else {
+      const isLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+      if (parsed.protocol !== "https:" && !isLocal)
+        problems.push({ field: "redirectUri", code: "not_https", message: "Redirect URI must use HTTPS (except localhost)." });
+      const path = parsed.pathname.replace(/\/$/, "");
+      if (path !== EXPECTED_CALLBACK_PATH)
+        problems.push({
+          field: "redirectUri",
+          code: "wrong_path",
+          message: `Redirect URI path must be exactly "${EXPECTED_CALLBACK_PATH}" (got "${parsed.pathname}").`,
+        });
+      if (parsed.search || parsed.hash)
+        problems.push({ field: "redirectUri", code: "extra_qs", message: "Redirect URI must not contain a query string or fragment." });
+    }
+  }
+  return problems;
+}
+
 const SaveSchema = z.object({
   clientId: z.string().trim().min(10).max(256),
   clientSecret: z.string().trim().min(8).max(256),
@@ -102,15 +156,25 @@ export const saveGoogleOAuthConfig = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
+
+    const problems = validateCredentialShape(data);
+    if (problems.length > 0) {
+      const err: any = new Error(
+        "Configuration rejected:\n" + problems.map((p) => `• [${p.field}] ${p.message}`).join("\n"),
+      );
+      err.problems = problems;
+      throw err;
+    }
+
     const { data: existing } = await supabase
       .from("google_oauth_credentials")
       .select("id")
       .limit(1)
       .maybeSingle();
     const payload = {
-      client_id: data.clientId,
-      client_secret: data.clientSecret,
-      redirect_uri: data.redirectUri,
+      client_id: data.clientId.trim(),
+      client_secret: data.clientSecret.trim(),
+      redirect_uri: data.redirectUri.trim(),
       updated_by: userId,
     };
     if (existing?.id) {
@@ -120,7 +184,46 @@ export const saveGoogleOAuthConfig = createServerFn({ method: "POST" })
       const { error } = await supabase.from("google_oauth_credentials").insert(payload);
       if (error) throw new Error(error.message);
     }
-    return { ok: true };
+    return { ok: true, problems: [] as ConfigProblem[] };
+  });
+
+// -----------------------------------------------------------------------------
+// Server-side completeness gate (used by UI to enable the admin section)
+// -----------------------------------------------------------------------------
+export const validateGoogleOAuthSetup = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const { data, error } = await supabase
+      .from("google_oauth_credentials")
+      .select("client_id, client_secret, redirect_uri, updated_at")
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data?.client_id || !data?.client_secret || !data?.redirect_uri) {
+      return {
+        enabled: false,
+        problems: [
+          { field: "clientId" as const, code: "not_configured", message: "Google OAuth credentials are not saved yet." },
+        ],
+        expectedCallbackPath: EXPECTED_CALLBACK_PATH,
+        redirectUri: null as string | null,
+        updatedAt: null as string | null,
+      };
+    }
+    const problems = validateCredentialShape({
+      clientId: data.client_id,
+      clientSecret: data.client_secret,
+      redirectUri: data.redirect_uri,
+    });
+    return {
+      enabled: problems.length === 0,
+      problems,
+      expectedCallbackPath: EXPECTED_CALLBACK_PATH,
+      redirectUri: data.redirect_uri as string,
+      updatedAt: data.updated_at as string,
+    };
   });
 
 // -----------------------------------------------------------------------------
