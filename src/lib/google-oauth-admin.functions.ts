@@ -738,8 +738,9 @@ export const getGoogleOAuthSelfCheck = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
+    // Self-check fetches Google discovery + DB queries; cap to 10/min per admin.
+    await enforceRateLimit(supabase, userId, "self_check", 60, 10);
 
-    // 1) saved-config validity
     const { data: cfg } = await supabase
       .from("google_oauth_credentials")
       .select("client_id, client_secret, redirect_uri, updated_at")
