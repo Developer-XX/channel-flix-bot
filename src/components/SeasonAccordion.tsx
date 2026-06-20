@@ -137,8 +137,11 @@ function SeasonBlock({
             return (
               <div key={String(epNum)} className="px-3 sm:px-4 py-3 space-y-2 min-w-0">
                 <div className="text-sm font-medium truncate">
-                  {epNum === "other" ? "Unassigned" : `Episode ${epNum}`}
-                  {files[0]?.episodes?.name ? ` — ${files[0].episodes.name}` : ""}
+                  {epNum === "other"
+                    ? "Unassigned"
+                    : files[0]?.episodes?.name?.trim()
+                      ? files[0]!.episodes!.name
+                      : `Episode ${epNum}`}
                 </div>
                 <div className="grid gap-2 xl:grid-cols-2 min-w-0">
                   {files.map((f) => (

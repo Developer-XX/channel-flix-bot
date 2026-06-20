@@ -8,6 +8,8 @@ export interface ParsedMedia {
   year: number | null;
   season: number | null;
   episode: number | null;
+  /** Multi-part season indicator. e.g. "S02P2E01" → season=2, part=2, episode=1. */
+  part: number | null;
   resolution: string | null; // "2160p" | "1080p" | "720p" | ...
   quality: string | null;    // "WEB-DL" | "BLURAY" | ...
   codec: string | null;      // "x265" | "x264" | "HEVC" | ...
@@ -61,9 +63,10 @@ const LANG_TOKENS = [
 const LANG_RE = new RegExp(`\\b(${LANG_TOKENS.join("|")})\\b`, "gi");
 const DUAL_RE = /\b(Dual[\s._-]?Audio|Multi[\s._-]?Audio|Multi|Dubbed|Subbed|Subtitled)\b/i;
 
-const SE_RE = /\bS(\d{1,2})[\s._-]?E(\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
+const SE_RE = /\bS(\d{1,2})(?:[\s._-]?(?:Part|Pt|P)[\s._-]?(\d{1,2}))?[\s._-]?E(\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
 const SEASON_ONLY_RE = /\bSeason[\s._-]?(\d{1,2})\b/i;
 const EPISODE_ONLY_RE = /\b(?:Episode|EP|Ep)[\s._-]?(\d{1,3})\b/i;
+const PART_ONLY_RE = /\b(?:Part|Pt)[\s._-]?(\d{1,2})\b/i;
 const YEAR_RE = /\b(19[5-9]\d|20[0-4]\d)\b/;
 
 // Category cues
@@ -154,16 +157,22 @@ export function parseSingleSource(raw: string): ParsedMedia {
 
   let season: number | null = null;
   let episode: number | null = null;
+  let part: number | null = null;
   const seMatch = text.match(SE_RE);
   if (seMatch) {
     season = parseInt(seMatch[1], 10);
-    const epStr = seMatch[2].match(/\d+/g);
+    if (seMatch[2]) part = parseInt(seMatch[2], 10);
+    const epStr = seMatch[3].match(/\d+/g);
     if (epStr) episode = parseInt(epStr[0], 10);
   } else {
     const so = text.match(SEASON_ONLY_RE);
     if (so) season = parseInt(so[1], 10);
     const eo = text.match(EPISODE_ONLY_RE);
     if (eo) episode = parseInt(eo[1], 10);
+  }
+  if (part == null) {
+    const po = text.match(PART_ONLY_RE);
+    if (po) part = parseInt(po[1], 10);
   }
 
   const yearMatch = text.match(YEAR_RE);
@@ -186,6 +195,7 @@ export function parseSingleSource(raw: string): ParsedMedia {
     year,
     season,
     episode,
+    part,
     resolution: res?.value ?? null,
     quality: quality?.value ?? null,
     codec: codec?.value ?? null,
@@ -214,7 +224,7 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
 
   if (!captionParsed && !fileParsed) {
     return {
-      title: "Untitled", year: null, season: null, episode: null,
+      title: "Untitled", year: null, season: null, episode: null, part: null,
       resolution: null, quality: null, codec: null, language: null, category: null,
     };
   }
@@ -246,6 +256,7 @@ export function parseMedia(rawCaption: string | null | undefined, fileName?: str
     year: pick("year"),
     season: pick("season"),
     episode: pick("episode"),
+    part: pick("part"),
     resolution: pick("resolution"),
     quality: pick("quality"),
     codec: pick("codec"),

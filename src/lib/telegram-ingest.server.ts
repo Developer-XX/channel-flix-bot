@@ -425,6 +425,7 @@ export async function ingestTelegramUpdate(
         language: parsed.language,
         season: parsed.season,
         episode: parsed.episode,
+        part: parsed.part,
       });
       await writeMatchAudit(supabase, {
         ingestId: ingestRow.id,
@@ -513,6 +514,7 @@ export async function autoPromoteToMediaFile(
     language: string | null;
     season: number | null;
     episode: number | null;
+    part?: number | null;
   },
 ): Promise<string | null> {
   let episodeId: string | null = null;
@@ -535,12 +537,24 @@ export async function autoPromoteToMediaFile(
     }
 
     if (seasonId && args.episode != null) {
+      // When the source declares a "Part" (e.g. S02P2E01 = Season 2 Part 2
+      // Episode 1), encode the part into the episode_number so Part 1 Ep 1
+      // (101) and Part 2 Ep 1 (201) don't collide within the same season.
+      const encodedEpisode =
+        args.part != null && args.part > 0
+          ? args.part * 100 + args.episode
+          : args.episode;
+      const episodeName =
+        args.part != null && args.part > 0
+          ? `Part ${args.part} — Episode ${args.episode}`
+          : null;
+
       const { data: existingEp } = await supabase
         .from("episodes")
         .select("id")
         .eq("title_id", args.titleId)
         .eq("season_id", seasonId)
-        .eq("episode_number", args.episode)
+        .eq("episode_number", encodedEpisode)
         .maybeSingle();
       episodeId = existingEp?.id ?? null;
       if (!episodeId) {
@@ -549,7 +563,8 @@ export async function autoPromoteToMediaFile(
           .insert({
             title_id: args.titleId,
             season_id: seasonId,
-            episode_number: args.episode,
+            episode_number: encodedEpisode,
+            name: episodeName,
           })
           .select("id")
           .single();
