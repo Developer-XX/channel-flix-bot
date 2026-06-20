@@ -104,7 +104,10 @@ export const getGoogleOAuthConfig = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
-    const { data, error } = await supabase
+    // client_secret column SELECT is revoked from authenticated; use service-role
+    // client after the admin check above.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
       .from("google_oauth_credentials")
       .select("id, client_id, client_secret, redirect_uri, updated_at, updated_by")
       .limit(1)
@@ -227,7 +230,8 @@ export const validateGoogleOAuthSetup = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
-    const { data, error } = await supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
       .from("google_oauth_credentials")
       .select("client_id, client_secret, redirect_uri, updated_at")
       .limit(1)
@@ -261,8 +265,11 @@ export const validateGoogleOAuthSetup = createServerFn({ method: "GET" })
 // -----------------------------------------------------------------------------
 // Shared health-check engine (works for both user-context and cron contexts)
 // -----------------------------------------------------------------------------
-async function loadCreds(supabase: any) {
-  const { data, error } = await supabase
+async function loadCreds(_supabase: any) {
+  // client_secret column SELECT is revoked from authenticated; always read
+  // via service-role. Caller already gated access (admin check or cron auth).
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
     .from("google_oauth_credentials")
     .select("client_id, client_secret, redirect_uri")
     .limit(1)
@@ -780,7 +787,8 @@ export const getGoogleOAuthSelfCheck = createServerFn({ method: "GET" })
     // Self-check fetches Google discovery + DB queries; cap to 10/min per admin.
     await enforceRateLimit(supabase, userId, "self_check", 60, 10);
 
-    const { data: cfg } = await supabase
+    const { supabaseAdmin: _adminA } = await import("@/integrations/supabase/client.server");
+    const { data: cfg } = await _adminA
       .from("google_oauth_credentials")
       .select("client_id, client_secret, redirect_uri, updated_at")
       .limit(1)
