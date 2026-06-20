@@ -85,7 +85,13 @@ function AdminShortenersPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      {q.isLoading ? (
+        <div data-testid="shortener-loading" className="p-6 text-sm text-muted-foreground">
+          Loading shortener report…
+        </div>
+      ) : null}
+
+      <div data-testid="shortener-table" className="grid gap-3 md:grid-cols-2">
         {q.data?.providers.map((p: any) => (
           <div key={p.provider} className="rounded-md border border-border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between">

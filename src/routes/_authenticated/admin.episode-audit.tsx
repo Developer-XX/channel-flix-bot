@@ -89,7 +89,8 @@ function EpisodeAuditPage() {
           </Button>
         </header>
         {stats.isLoading ? (
-          <div className="p-6 text-sm text-muted-foreground">Loading…</div>
+          <div data-testid="episode-audit-loading" className="p-6 text-sm text-muted-foreground">Loading…</div>
+
         ) : stats.error ? (
           <div
             data-testid="episode-audit-error-state"
