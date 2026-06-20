@@ -121,6 +121,7 @@ function AdminLayout() {
           <NavItem to="/admin/titles" icon={<Film className="h-4 w-4" />} label="Titles" />
           <NavItem to="/admin/requests" icon={<MessageSquare className="h-4 w-4" />} label="Requests" />
           <NavItem to="/admin/telegram" icon={<Send className="h-4 w-4" />} label="Telegram" />
+          <NavItem to="/admin/telegram-health" icon={<Activity className="h-4 w-4" />} label="Telegram health" />
           <NavItem to="/admin/bulk" icon={<Zap className="h-4 w-4" />} label="Bulk rematch" />
           <NavItem to="/admin/episode-audit" icon={<Stethoscope className="h-4 w-4" />} label="Episode audit" />
           <NavItem to="/admin/verification-limits" icon={<ShieldAlert className="h-4 w-4" />} label="Verification limits" />
@@ -158,6 +159,7 @@ function AdminLayout() {
             <MobileNavItem to="/admin/titles" label="Titles" />
             <MobileNavItem to="/admin/requests" label="Requests" />
             <MobileNavItem to="/admin/telegram" label="Telegram" />
+            <MobileNavItem to="/admin/telegram-health" label="TG health" />
             <MobileNavItem to="/admin/bulk" label="Bulk" />
             <MobileNavItem to="/admin/episode-audit" label="Episode audit" />
             <MobileNavItem to="/admin/verification-limits" label="Limits" />
