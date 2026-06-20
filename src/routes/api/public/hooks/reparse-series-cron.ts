@@ -30,6 +30,21 @@ export const Route = createFileRoute("/api/public/hooks/reparse-series-cron")({
           return Response.json({ ok: true, skipped: true, reason: "disabled" });
         }
 
+        // Acquire the per-job lock so two cron runs (or a manual invocation
+        // overlapping with cron) cannot hammer the Telegram API in parallel.
+        const { data: gotLock } = await supabaseAdmin.rpc("try_acquire_cron_lock", {
+          _job_name: "reparse-series-cron",
+          _ttl_seconds: 600,
+          _holder: "cron",
+        });
+        if (gotLock !== true) {
+          return Response.json({
+            ok: true,
+            skipped: true,
+            reason: "another run is in progress",
+          });
+        }
+
         const limit = Math.max(1, Math.min(2000, await getSettingNumber("REPARSE_SERIES_CRON_LIMIT", 500)));
         const dryRun = (await getSetting("REPARSE_SERIES_CRON_DRYRUN"))?.toLowerCase() === "true";
 
