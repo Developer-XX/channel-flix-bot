@@ -77,6 +77,12 @@ export function SeasonAccordion({ titleId }: Props) {
       if (!season.episodes.has(eNum)) season.episodes.set(eNum, []);
       season.episodes.get(eNum)!.push(f);
     }
+    // Sort files within each episode by resolution (480p → 720p → 1080p → 4K).
+    for (const group of map.values()) {
+      for (const files of group.episodes.values()) {
+        files.sort(compareByResolution);
+      }
+    }
     return Array.from(map.values()).sort((a, b) => {
       if (a.seasonNumber === "other") return 1;
       if (b.seasonNumber === "other") return -1;
