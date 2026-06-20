@@ -299,7 +299,7 @@ export async function evaluateTelegramSyncHealth(opts: { source: "cron" | "manua
     .from("admin_alerts")
     .select("id, occurrences")
     .eq("kind", kind)
-    .eq("subject", subject)
+    .eq("subject", subject!)
     .is("resolved_at", null)
     .maybeSingle();
 
@@ -388,5 +388,14 @@ export const runTelegramSyncHealthEval = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
-    return evaluateTelegramSyncHealth({ source: "manual" });
+    const result = await evaluateTelegramSyncHealth({ source: "manual" });
+    // Round-trip through JSON to satisfy server-fn serializability check
+    return JSON.parse(JSON.stringify(result)) as {
+      anomaly: boolean;
+      kind?: string;
+      subject?: string | null;
+      severity?: "warn" | "error";
+      alertId?: string;
+      details: Record<string, string | number | boolean | null>;
+    };
   });
