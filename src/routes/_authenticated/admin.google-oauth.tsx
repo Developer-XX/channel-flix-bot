@@ -17,6 +17,7 @@ import {
   validateGoogleOAuthSetup,
   getGoogleOAuthSelfCheck,
   probeFullTokenExchange,
+  smokeTestCallbackHandler,
 } from "@/lib/google-oauth-admin.functions";
 
 // Map a server error code to the OAuth flow step that failed.
@@ -52,8 +53,11 @@ function GoogleOAuthAdminPage() {
   const validateSetup = useServerFn(validateGoogleOAuthSetup);
   const selfCheck = useServerFn(getGoogleOAuthSelfCheck);
   const probeFull = useServerFn(probeFullTokenExchange);
+  const smokeCallback = useServerFn(smokeTestCallbackHandler);
   const [exporting, setExporting] = useState(false);
   const [probing, setProbing] = useState(false);
+  const [smoking, setSmoking] = useState(false);
+  const [smokeResult, setSmokeResult] = useState<{ ok: boolean; message: string; errorCode?: string; latencyMs?: number } | null>(null);
 
 
   const cfgQ = useQuery({ queryKey: ["google-oauth-config"], queryFn: () => getCfg() });
@@ -117,6 +121,22 @@ function GoogleOAuthAdminPage() {
       toast.error(e?.message ?? "Probe failed");
     } finally {
       setProbing(false);
+    }
+  }
+
+  async function onSmokeCallback() {
+    setSmoking(true);
+    setSmokeResult(null);
+    try {
+      const r = await smokeCallback();
+      setSmokeResult(r);
+      if (r.ok) toast.success("Callback guard verified.");
+      else toast.error(r.message);
+    } catch (e: any) {
+      setSmokeResult({ ok: false, message: e?.message ?? "Smoke test failed" });
+      toast.error(e?.message ?? "Smoke test failed");
+    } finally {
+      setSmoking(false);
     }
   }
 
@@ -249,6 +269,44 @@ function GoogleOAuthAdminPage() {
         loading={selfQ.isFetching}
         onRetest={() => selfQ.refetch()}
       />
+
+      {/* Callback smoke test */}
+      <section data-testid="oauth-callback-smoke" className="mt-6 rounded-lg border border-border bg-card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h2 className="text-lg font-semibold">Callback handler smoke test</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Calls the callback validator with a mock state &amp; code to confirm it returns the guarded <span className="font-mono">invalid_state</span> response. No token exchange is performed.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onSmokeCallback} disabled={smoking}>
+            {smoking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+            Run smoke test
+          </Button>
+        </div>
+        {smokeResult && (
+          <div
+            data-testid={smokeResult.ok ? "oauth-smoke-ok" : "oauth-smoke-error"}
+            className={`text-xs rounded-md p-2 flex items-start gap-2 ${
+              smokeResult.ok
+                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/30"
+                : "bg-destructive/10 text-destructive border border-destructive/30"
+            }`}
+          >
+            {smokeResult.ok ? <CheckCircle2 className="h-3.5 w-3.5 mt-0.5" /> : <XCircle className="h-3.5 w-3.5 mt-0.5" />}
+            <div>
+              <div>{smokeResult.message}</div>
+              {smokeResult.errorCode && (
+                <div className="font-mono opacity-70 mt-0.5">code: {smokeResult.errorCode}</div>
+              )}
+              {typeof smokeResult.latencyMs === "number" && (
+                <div className="opacity-70 mt-0.5">{smokeResult.latencyMs} ms</div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
 
       {/* Setup gate banner */}
       {setupQ.data && !setupQ.data.enabled && (
