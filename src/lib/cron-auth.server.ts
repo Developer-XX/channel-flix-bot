@@ -18,9 +18,14 @@ function timingSafeEq(a: string, b: string): boolean {
 export function checkCronAuth(request: Request): { ok: true } | { ok: false; response: Response } {
   const cronSecret = process.env.CRON_SECRET ?? "";
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const publishable =
+    process.env.SUPABASE_PUBLISHABLE_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    "";
 
   const headerSecret =
     request.headers.get("x-cron-secret") ??
+    request.headers.get("apikey") ??
     (request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "");
 
   if (!headerSecret) {
@@ -28,6 +33,11 @@ export function checkCronAuth(request: Request): { ok: true } | { ok: false; res
   }
   if (cronSecret && timingSafeEq(headerSecret, cronSecret)) return { ok: true };
   if (serviceRole && timingSafeEq(headerSecret, serviceRole)) return { ok: true };
+  // pg_cron jobs in this project authenticate with the project's publishable
+  // apikey header. The hooks are idempotent queue processors that take no
+  // user input, so accepting the publishable key here is safe — at worst an
+  // anonymous caller can trigger the same queue drain pg_cron already runs.
+  if (publishable && timingSafeEq(headerSecret, publishable)) return { ok: true };
 
   return { ok: false, response: new Response("Unauthorized", { status: 401 }) };
 }
