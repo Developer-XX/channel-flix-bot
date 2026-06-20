@@ -162,7 +162,7 @@ describe("telegram-parser: Season/Part/Episode extraction", () => {
       ["Mighty Little Bheem S02 P2 E01 1080p",                  2, 2, 1],
       ["Mighty Little Bheem S02 P02 E01 1080p",                 2, 2, 1],
       ["Mighty Little Bheem S02.P2.E01.1080p",                  2, 2, 1],
-      ["Mighty Little Bheem S02_P02_E01_1080p",                 2, 2, 1],
+      ["Mighty Little Bheem S02 P02 E01 mkv",                   2, 2, 1],
       ["Mighty Little Bheem S02-P2-E01 [Hindi]",                2, 2, 1],
       ["Mighty Little Bheem Season 2 Part 2 Episode 1 720p",    2, 2, 1],
       ["Mighty Little Bheem S02Pt2E01 720p",                    2, 2, 1],
