@@ -34,7 +34,10 @@ const PAGES = [
 async function snapshotTable(page: Page, testId: string) {
   const table = page.getByTestId(testId).first();
   await expect(table).toBeVisible({ timeout: 15_000 });
-  const rows = table.locator("tbody tr");
+  // Prefer rendered table rows; fall back to direct children (covers
+  // card-grid containers like /admin/shorteners that aren't <table>s).
+  let rows = table.locator("tbody tr");
+  if ((await rows.count()) === 0) rows = table.locator("> *");
   const count = await rows.count();
   const firstRowText = count > 0 ? ((await rows.first().innerText()).trim() ?? "") : "";
   return { count, firstRowText };
