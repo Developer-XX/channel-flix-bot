@@ -12,8 +12,6 @@ export type TableDiagnostic = {
   checked_at: string;
 };
 
-type RpcFn = (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-
 export const getTablePermissionDiagnostic = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -21,8 +19,8 @@ export const getTablePermissionDiagnostic = createServerFn({ method: "GET" })
   )
   .handler(async ({ context, data }): Promise<TableDiagnostic> => {
     await requireAdminAccess(context);
-    const rpc = context.supabase.rpc as unknown as RpcFn;
-    const { data: out, error } = await rpc("diagnose_table_permissions", { _table: data.table });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: out, error } = await (context.supabase as any).rpc("diagnose_table_permissions", { _table: data.table });
     if (error) throw error as Error;
     return out as TableDiagnostic;
   });
@@ -31,8 +29,8 @@ export const runTelegramIngestGrantsCheck = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
-    const rpc = context.supabase.rpc as unknown as RpcFn;
-    const { data, error } = await rpc("check_telegram_ingest_grants");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (context.supabase as any).rpc("check_telegram_ingest_grants");
     if (error) throw error as Error;
     return data as { drift: boolean; missing: Array<{ role: string; privilege: string }>; actual: Record<string, string[]> };
   });
