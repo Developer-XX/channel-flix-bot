@@ -690,6 +690,27 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_job_locks: {
+        Row: {
+          expires_at: string
+          holder: string | null
+          job_name: string
+          locked_at: string
+        }
+        Insert: {
+          expires_at: string
+          holder?: string | null
+          job_name: string
+          locked_at?: string
+        }
+        Update: {
+          expires_at?: string
+          holder?: string | null
+          job_name?: string
+          locked_at?: string
+        }
+        Relationships: []
+      }
       cron_job_status: {
         Row: {
           consecutive_failures: number
@@ -2713,6 +2734,7 @@ export type Database = {
         Args: { _phase: string; _request_id: string; _value: number }
         Returns: undefined
       }
+      release_cron_lock: { Args: { _job_name: string }; Returns: undefined }
       rl_hit: {
         Args: { _key: string; _limit: number; _window_sec: number }
         Returns: {
@@ -2721,6 +2743,10 @@ export type Database = {
           reset_at: string
           used: number
         }[]
+      }
+      try_acquire_cron_lock: {
+        Args: { _holder?: string; _job_name: string; _ttl_seconds?: number }
+        Returns: boolean
       }
       wipe_application_data: { Args: never; Returns: Json }
     }
