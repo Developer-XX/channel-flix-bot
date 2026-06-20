@@ -161,10 +161,8 @@ function SeasonBlock({
               typeof files[0]?.episodes?.seasons?.season_number === "number"
                 ? files[0]!.episodes!.seasons!.season_number
                 : (typeof season.seasonNumber === "number" ? season.seasonNumber : null);
-            // Decode part-encoded episode numbers (part*100 + episode).
-            const rawEp = typeof epNum === "number" ? epNum : null;
-            const partNum = rawEp != null && rawEp >= 100 ? Math.floor(rawEp / 100) : null;
-            const episodeNum = rawEp != null && rawEp >= 100 ? rawEp % 100 : rawEp;
+            const episodeNum = typeof epNum === "number" ? epNum : null;
+            const partNum = season.part && season.part > 1 ? season.part : null;
             const epLabel =
               epNum === "other"
                 ? "Unassigned"
