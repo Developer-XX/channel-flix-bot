@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { DownloadButton } from "@/components/DownloadButton";
+import { parseMedia } from "@/lib/telegram-parser";
 
 interface Props {
   titleId: string;
