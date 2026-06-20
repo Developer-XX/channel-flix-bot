@@ -49,9 +49,19 @@ export function SeasonAccordion({ titleId }: Props) {
       { seasonNumber: number | "other"; seasonName: string | null; episodes: Map<number | "other", FileRow[]> }
     >();
     for (const f of q.data ?? []) {
-      const sNum = f.episodes?.seasons?.season_number ?? "other";
-      const sName = f.episodes?.seasons?.name ?? null;
-      const eNum = f.episodes?.episode_number ?? "other";
+      let sNum: number | "other" = f.episodes?.seasons?.season_number ?? "other";
+      let sName: string | null = f.episodes?.seasons?.name ?? null;
+      let eNum: number | "other" = f.episodes?.episode_number ?? "other";
+      // Fallback: parse caption / filename when the row hasn't been linked to
+      // an episode row yet. Handles SxxPyEzz, SxxEyy, etc. so files don't
+      // pile up under "Unassigned" while the reparse cron catches up.
+      if (sNum === "other" || eNum === "other") {
+        const parsed = parseMedia(f.caption, f.file_name);
+        if (parsed.season != null && sNum === "other") sNum = parsed.season;
+        if (parsed.episode != null && eNum === "other") {
+          eNum = parsed.part != null ? parsed.part * 100 + parsed.episode : parsed.episode;
+        }
+      }
       if (!map.has(sNum)) map.set(sNum, { seasonNumber: sNum, seasonName: sName, episodes: new Map() });
       const season = map.get(sNum)!;
       if (!season.episodes.has(eNum)) season.episodes.set(eNum, []);
