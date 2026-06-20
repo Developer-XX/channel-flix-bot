@@ -49,10 +49,16 @@ function GoogleOAuthAdminPage() {
   const startFull = useServerFn(startFullOAuthTest);
   const listLog = useServerFn(listGoogleOAuthHealth);
   const exportCsv = useServerFn(exportGoogleOAuthHealthCsv);
+  const validateSetup = useServerFn(validateGoogleOAuthSetup);
+  const selfCheck = useServerFn(getGoogleOAuthSelfCheck);
+  const probeFull = useServerFn(probeFullTokenExchange);
   const [exporting, setExporting] = useState(false);
+  const [probing, setProbing] = useState(false);
 
 
   const cfgQ = useQuery({ queryKey: ["google-oauth-config"], queryFn: () => getCfg() });
+  const setupQ = useQuery({ queryKey: ["google-oauth-setup"], queryFn: () => validateSetup(), refetchInterval: 60_000 });
+  const selfQ = useQuery({ queryKey: ["google-oauth-self-check"], queryFn: () => selfCheck(), refetchInterval: 60_000 });
   const logQ = useQuery({
     queryKey: ["google-oauth-health"],
     queryFn: () => listLog(),
