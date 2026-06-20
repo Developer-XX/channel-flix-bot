@@ -93,7 +93,32 @@ export const reparseSeriesParts = createServerFn({ method: "POST" })
         caption_or_file: (r.caption ?? r.file_name ?? "").slice(0, 160),
       });
 
-      if (data.dryRun) continue;
+      if (data.dryRun) {
+        // Even in dry-run, peek to determine whether the season/episode rows
+        // would need to be created so admins can preview the full impact.
+        const titleId = r.matched_title_id as string;
+        const { data: existingSeason } = await supabaseAdmin
+          .from("seasons")
+          .select("id")
+          .eq("title_id", titleId)
+          .eq("season_number", parsed.season)
+          .maybeSingle();
+        if (!existingSeason?.id) {
+          seasonsCreated++;
+          episodesCreated++; // a missing season implies a missing episode too
+        } else {
+          const { data: existingEp } = await supabaseAdmin
+            .from("episodes")
+            .select("id")
+            .eq("title_id", titleId)
+            .eq("season_id", existingSeason.id)
+            .eq("episode_number", encodedEpisode)
+            .maybeSingle();
+          if (!existingEp?.id) episodesCreated++;
+        }
+        if (r.promoted_media_file_id) relinkedFiles++;
+        continue;
+      }
 
       // Update parsed_* on the ingest row.
       await supabaseAdmin
