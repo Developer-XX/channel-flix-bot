@@ -1,0 +1,1 @@
+REVOKE SELECT (confirmation_code) ON public.pending_destructive_actions FROM authenticated, anon;
