@@ -8,6 +8,7 @@ import { parseMedia } from "@/lib/telegram-parser";
 const JOB_NAME = "episode-audit-alerts";
 const UNASSIGNED_THRESHOLD = 10; // open alert if ≥10 unassigned in a channel
 const PARSE_FAIL_THRESHOLD = 10; // open alert if ≥10 parse-no-episode in 14d
+const PART_MISMATCH_THRESHOLD = 5; // open alert if ≥5 SxxPyy files are mis-grouped
 
 function authorize(request: Request): Response | null {
   const apikey = request.headers.get("apikey") ?? request.headers.get("x-cron-key");
