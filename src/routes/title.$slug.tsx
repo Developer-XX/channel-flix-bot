@@ -304,7 +304,7 @@ function TitlePage() {
 
         <HowToDownload />
 
-        <section className="mx-auto max-w-7xl px-4 md:px-6 py-8">
+        <section id="request-title" className="mx-auto max-w-7xl px-4 md:px-6 py-8 scroll-mt-20" data-testid="request-title-section">
           <div className="rounded-2xl bg-gradient-to-br from-surface to-background border border-border p-8 text-center">
             <p className="text-sm text-muted-foreground mb-2">Don't see what you want?</p>
             <h3 className="font-display text-2xl font-bold">Request a title</h3>
