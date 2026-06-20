@@ -425,6 +425,7 @@ export async function ingestTelegramUpdate(
         language: parsed.language,
         season: parsed.season,
         episode: parsed.episode,
+        part: parsed.part,
       });
       await writeMatchAudit(supabase, {
         ingestId: ingestRow.id,
