@@ -696,3 +696,252 @@ export async function runCronHealthCheck(supabaseAdmin: any) {
   await maybeEmitOAuthAlert(supabaseAdmin, "cron");
   return result;
 }
+
+// -----------------------------------------------------------------------------
+// Admin self-check report — route availability, callback handler readiness,
+// discovery reachability, last cron / last health status.
+// -----------------------------------------------------------------------------
+export const getGoogleOAuthSelfCheck = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+
+    // 1) saved-config validity
+    const { data: cfg } = await supabase
+      .from("google_oauth_credentials")
+      .select("client_id, client_secret, redirect_uri, updated_at")
+      .limit(1)
+      .maybeSingle();
+    const configProblems = cfg?.client_id && cfg?.client_secret && cfg?.redirect_uri
+      ? validateCredentialShape({
+          clientId: cfg.client_id,
+          clientSecret: cfg.client_secret,
+          redirectUri: cfg.redirect_uri,
+        })
+      : [{ field: "clientId" as const, code: "not_configured", message: "Credentials not saved." }];
+
+    // 2) callback-route readiness: parse redirect URI and confirm it points at the
+    //    integrated /admin/google-oauth-callback page that this app ships.
+    let callbackReady = false;
+    let callbackPath: string | null = null;
+    try {
+      if (cfg?.redirect_uri) {
+        const u = new URL(cfg.redirect_uri);
+        callbackPath = u.pathname.replace(/\/$/, "");
+        callbackReady = callbackPath === "/admin/google-oauth-callback";
+      }
+    } catch {}
+
+    // 3) discovery reachability (fast, no creds needed)
+    const discStart = Date.now();
+    let discoveryOk = false;
+    let discoveryStatus: number | null = null;
+    let discoveryMs: number | null = null;
+    let discoveryError: string | null = null;
+    try {
+      const r = await fetchWithRetry(GOOGLE_DISCOVERY, { method: "GET" }, { timeoutMs: 5_000, retries: 1, label: "self-check-discovery" });
+      discoveryStatus = r.status;
+      discoveryOk = r.ok;
+      discoveryMs = Date.now() - discStart;
+    } catch (e: any) {
+      discoveryError = e?.message ?? String(e);
+      discoveryMs = Date.now() - discStart;
+    }
+
+    // 4) latest health entry (any kind), and latest cron entry specifically
+    const { data: latest } = await supabase
+      .from("google_oauth_health_log")
+      .select("checked_at, kind, status, error_code, error_message, latency_ms, details")
+      .in("kind", ["quick", "full"])
+      .order("checked_at", { ascending: false })
+      .limit(1);
+    const latestRow = (latest ?? [])[0] ?? null;
+
+    const { data: lastCron } = await supabase
+      .from("google_oauth_health_log")
+      .select("checked_at, status, error_code, error_message, latency_ms, details")
+      .eq("kind", "quick")
+      .contains("details", { source: "cron" })
+      .order("checked_at", { ascending: false })
+      .limit(1);
+    const lastCronRow = (lastCron ?? [])[0] ?? null;
+
+    const allOk = configProblems.length === 0 && callbackReady && discoveryOk && latestRow?.status !== "error";
+
+    return {
+      generatedAt: new Date().toISOString(),
+      overall: allOk ? "ok" : "attention",
+      sections: {
+        config: {
+          ok: configProblems.length === 0,
+          updatedAt: cfg?.updated_at ?? null,
+          problems: configProblems,
+        },
+        callback: {
+          ok: callbackReady,
+          expectedPath: "/admin/google-oauth-callback",
+          actualPath: callbackPath,
+        },
+        discovery: {
+          ok: discoveryOk,
+          status: discoveryStatus,
+          latencyMs: discoveryMs,
+          error: discoveryError,
+        },
+        latestHealth: latestRow
+          ? {
+              ok: latestRow.status === "ok",
+              kind: latestRow.kind,
+              checkedAt: latestRow.checked_at,
+              errorCode: latestRow.error_code,
+              errorMessage: latestRow.error_message,
+              latencyMs: latestRow.latency_ms,
+            }
+          : null,
+        lastCron: lastCronRow
+          ? {
+              ok: lastCronRow.status === "ok",
+              checkedAt: lastCronRow.checked_at,
+              errorCode: lastCronRow.error_code,
+              errorMessage: lastCronRow.error_message,
+              latencyMs: lastCronRow.latency_ms,
+            }
+          : null,
+      },
+    };
+  });
+
+// -----------------------------------------------------------------------------
+// Safe "full token exchange" probe — no user consent required.
+// Runs discovery, then posts an intentionally-invalid authorization_code to the
+// token endpoint. Google replies:
+//   * invalid_grant  → client_id + client_secret are valid (Google accepted them
+//                       and only rejected the fake code). PROBE PASS.
+//   * invalid_client → client credentials wrong. FAIL.
+//   * redirect_uri_mismatch → URI not whitelisted in Cloud Console. FAIL.
+// Result is recorded into google_oauth_health_log as kind=full, source=probe.
+// -----------------------------------------------------------------------------
+export const probeFullTokenExchange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    await assertAdmin(supabase, userId);
+    const started = Date.now();
+
+    // Discovery first.
+    try {
+      const disc = await fetchWithRetry(GOOGLE_DISCOVERY, { method: "GET" }, { timeoutMs: 5_000, retries: 2, label: "probe-discovery" });
+      if (!disc.ok) {
+        const msg = `Google discovery returned HTTP ${disc.status}`;
+        await logHealth(supabase, userId, {
+          kind: "full",
+          status: "error",
+          error_code: "discovery_failed",
+          error_message: msg,
+          latency_ms: Date.now() - started,
+          details: { source: "probe" },
+        });
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await maybeEmitOAuthAlert(supabaseAdmin, "manual");
+        return { ok: false, errorCode: "discovery_failed", message: msg, latencyMs: Date.now() - started };
+      }
+    } catch (e: any) {
+      const msg = e?.message ?? "discovery error";
+      await logHealth(supabase, userId, {
+        kind: "full",
+        status: "error",
+        error_code: "discovery_failed",
+        error_message: msg,
+        latency_ms: Date.now() - started,
+        details: { source: "probe" },
+      });
+      return { ok: false, errorCode: "discovery_failed", message: msg, latencyMs: Date.now() - started };
+    }
+
+    let creds;
+    try { creds = await loadCreds(supabase); }
+    catch (e: any) {
+      const msg = e?.message ?? "missing credentials";
+      await logHealth(supabase, userId, {
+        kind: "full",
+        status: "error",
+        error_code: "missing_credentials",
+        error_message: msg,
+        latency_ms: Date.now() - started,
+        details: { source: "probe" },
+      });
+      return { ok: false, errorCode: "missing_credentials", message: msg, latencyMs: Date.now() - started };
+    }
+
+    const fakeCode = `probe-${crypto.randomUUID()}`;
+    const body = new URLSearchParams({
+      code: fakeCode,
+      client_id: creds.client_id,
+      client_secret: creds.client_secret,
+      redirect_uri: creds.redirect_uri,
+      grant_type: "authorization_code",
+    });
+
+    let res: Response;
+    try {
+      res = await fetchWithRetry(
+        GOOGLE_TOKEN_ENDPOINT,
+        { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: body.toString() },
+        { timeoutMs: 10_000, retries: 2, baseDelayMs: 400, label: "probe-token-exchange" },
+      );
+    } catch (e: any) {
+      const msg = e?.message ?? "Network error contacting Google";
+      await logHealth(supabase, userId, {
+        kind: "full",
+        status: "error",
+        error_code: "network_error",
+        error_message: msg,
+        latency_ms: Date.now() - started,
+        details: { source: "probe" },
+      });
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await maybeEmitOAuthAlert(supabaseAdmin, "manual");
+      return { ok: false, errorCode: "network_error", message: msg, latencyMs: Date.now() - started };
+    }
+
+    const json: any = await res.json().catch(() => ({}));
+    const latency = Date.now() - started;
+    const code = String(json.error ?? `http_${res.status}`);
+
+    // invalid_grant from Google means: client_id + secret + redirect_uri all OK,
+    // only the authorization code was bad — which is exactly what we sent.
+    if (code === "invalid_grant") {
+      await logHealth(supabase, userId, {
+        kind: "full",
+        status: "ok",
+        latency_ms: latency,
+        details: { source: "probe", probe: "invalid_grant_expected" },
+      });
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await maybeEmitOAuthAlert(supabaseAdmin, "manual");
+      return {
+        ok: true,
+        message: "Safe probe passed — Google accepted the Client ID, Secret, and Redirect URI.",
+        latencyMs: latency,
+      };
+    }
+
+    const desc = json.error_description ?? `Google returned HTTP ${res.status}`;
+    let friendly = desc;
+    if (code === "invalid_client") friendly = "Client ID or Client Secret is incorrect.";
+    else if (code === "redirect_uri_mismatch") friendly = "Redirect URI is not registered in Google Cloud Console.";
+    else if (code === "unauthorized_client") friendly = "OAuth client is not authorized for this grant type.";
+
+    await logHealth(supabase, userId, {
+      kind: "full",
+      status: "error",
+      error_code: code,
+      error_message: friendly,
+      latency_ms: latency,
+      details: { source: "probe", http: res.status, raw: json },
+    });
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await maybeEmitOAuthAlert(supabaseAdmin, "manual");
+    return { ok: false, errorCode: code, message: friendly, latencyMs: latency };
+  });
