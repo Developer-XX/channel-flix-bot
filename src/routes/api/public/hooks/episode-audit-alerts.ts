@@ -29,16 +29,33 @@ export const Route = createFileRoute("/api/public/hooks/episode-audit-alerts")({
         const start = Date.now();
 
         try {
-          // Files: unassigned per channel
+          // Files: unassigned per channel + SxxPyy mis-grouping per channel.
           const { data: files } = await supabaseAdmin
             .from("media_files")
-            .select("channel_id, episode_id")
+            .select(
+              "channel_id, episode_id, caption, file_name, episodes(episode_number, seasons(season_number))",
+            )
             .eq("is_active", true);
 
           const unassignedByCh = new Map<string, number>();
+          const partMismatchByCh = new Map<string, number>();
           for (const f of (files as any[]) ?? []) {
-            if (!f.channel_id || f.episode_id) continue;
-            unassignedByCh.set(f.channel_id, (unassignedByCh.get(f.channel_id) ?? 0) + 1);
+            if (!f.channel_id) continue;
+            if (!f.episode_id) {
+              unassignedByCh.set(f.channel_id, (unassignedByCh.get(f.channel_id) ?? 0) + 1);
+              continue;
+            }
+            // Compare parser expectation vs current grouping for part-bearing files.
+            const text = `${f.caption ?? ""} ${f.file_name ?? ""}`;
+            if (!/\bS\d{1,2}[\s._-]?P/i.test(text) && !/\bPart[\s._-]?\d/i.test(text)) continue;
+            const parsed = parseMedia(f.caption, f.file_name);
+            if (parsed.part == null || parsed.season == null || parsed.episode == null) continue;
+            const expectedEnc = parsed.part * 100 + parsed.episode;
+            const curSeason = f.episodes?.seasons?.season_number ?? null;
+            const curEp = f.episodes?.episode_number ?? null;
+            if (curSeason !== parsed.season || curEp !== expectedEnc) {
+              partMismatchByCh.set(f.channel_id, (partMismatchByCh.get(f.channel_id) ?? 0) + 1);
+            }
           }
 
           // Ingest: parse-no-episode per channel (last 14d)
