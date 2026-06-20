@@ -45,6 +45,9 @@ function GoogleOAuthAdminPage() {
   const quick = useServerFn(quickCheckGoogleOAuth);
   const startFull = useServerFn(startFullOAuthTest);
   const listLog = useServerFn(listGoogleOAuthHealth);
+  const exportCsv = useServerFn(exportGoogleOAuthHealthCsv);
+  const [exporting, setExporting] = useState(false);
+
 
   const cfgQ = useQuery({ queryKey: ["google-oauth-config"], queryFn: () => getCfg() });
   const logQ = useQuery({
@@ -119,6 +122,28 @@ function GoogleOAuthAdminPage() {
     }
   }
 
+  async function onExportCsv() {
+    setExporting(true);
+    try {
+      const r = await exportCsv({ data: { days: 30 } });
+      const blob = new Blob([r.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = r.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${r.rowCount} rows`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto">
       <div className="flex items-center gap-2">
@@ -189,7 +214,11 @@ function GoogleOAuthAdminPage() {
         </div>
       </section>
 
+      {/* Local diagnostics */}
+      <DiagnosticsPanel clientId={clientId} clientSecret={clientSecret} redirectUri={redirectUri || defaultRedirect} latestError={logQ.data?.rows?.find((r: any) => r.status === "error") ?? null} />
+
       {/* Health checks */}
+
       <section className="mt-6 rounded-lg border border-border bg-card p-5 space-y-4">
         <h2 className="text-lg font-semibold">Health checks</h2>
         <div className="grid sm:grid-cols-2 gap-3">
