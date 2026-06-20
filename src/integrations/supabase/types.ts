@@ -1012,6 +1012,75 @@ export type Database = {
           },
         ]
       }
+      google_oauth_credentials: {
+        Row: {
+          client_id: string | null
+          client_secret: string | null
+          created_at: string
+          id: string
+          redirect_uri: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string
+          id?: string
+          redirect_uri?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string
+          id?: string
+          redirect_uri?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      google_oauth_health_log: {
+        Row: {
+          checked_at: string
+          checked_by: string | null
+          details: Json
+          error_code: string | null
+          error_message: string | null
+          id: string
+          kind: string
+          latency_ms: number | null
+          state_token: string | null
+          status: string
+        }
+        Insert: {
+          checked_at?: string
+          checked_by?: string | null
+          details?: Json
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          kind: string
+          latency_ms?: number | null
+          state_token?: string | null
+          status: string
+        }
+        Update: {
+          checked_at?: string
+          checked_by?: string | null
+          details?: Json
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          kind?: string
+          latency_ms?: number | null
+          state_token?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       homepage_slides: {
         Row: {
           created_at: string
@@ -2696,6 +2765,17 @@ export type Database = {
             Returns: Json
           }
       diagnose_table_permissions: { Args: { _table: string }; Returns: Json }
+      get_google_oauth_latest_health: {
+        Args: never
+        Returns: {
+          checked_at: string
+          error_code: string
+          error_message: string
+          kind: string
+          latency_ms: number
+          status: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
