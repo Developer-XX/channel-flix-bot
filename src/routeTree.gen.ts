@@ -70,6 +70,7 @@ import { Route as ApiPublicHooksProcessDownloadQueueRouteImport } from './routes
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
 import { Route as ApiPublicHooksInterstitialHealthRouteImport } from './routes/api/public/hooks/interstitial-health'
 import { Route as ApiPublicHooksInterstitialBeaconRouteImport } from './routes/api/public/hooks/interstitial-beacon'
+import { Route as ApiPublicHooksGoogleOauthHealthcheckRouteImport } from './routes/api/public/hooks/google-oauth-healthcheck'
 import { Route as ApiPublicHooksEpisodeAuditAlertsRouteImport } from './routes/api/public/hooks/episode-audit-alerts'
 
 const TrustRoute = TrustRouteImport.update({
@@ -411,6 +412,12 @@ const ApiPublicHooksInterstitialBeaconRoute =
     path: '/api/public/hooks/interstitial-beacon',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksGoogleOauthHealthcheckRoute =
+  ApiPublicHooksGoogleOauthHealthcheckRouteImport.update({
+    id: '/api/public/hooks/google-oauth-healthcheck',
+    path: '/api/public/hooks/google-oauth-healthcheck',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksEpisodeAuditAlertsRoute =
   ApiPublicHooksEpisodeAuditAlertsRouteImport.update({
     id: '/api/public/hooks/episode-audit-alerts',
@@ -466,6 +473,7 @@ export interface FileRoutesByFullPath {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
+  '/api/public/hooks/google-oauth-healthcheck': typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -528,6 +536,7 @@ export interface FileRoutesByTo {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
+  '/api/public/hooks/google-oauth-healthcheck': typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -593,6 +602,7 @@ export interface FileRoutesById {
   '/api/public/health': typeof ApiPublicHealthRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/api/public/hooks/episode-audit-alerts': typeof ApiPublicHooksEpisodeAuditAlertsRoute
+  '/api/public/hooks/google-oauth-healthcheck': typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   '/api/public/hooks/interstitial-beacon': typeof ApiPublicHooksInterstitialBeaconRoute
   '/api/public/hooks/interstitial-health': typeof ApiPublicHooksInterstitialHealthRoute
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -658,6 +668,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin/'
     | '/api/public/hooks/episode-audit-alerts'
+    | '/api/public/hooks/google-oauth-healthcheck'
     | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -720,6 +731,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/admin'
     | '/api/public/hooks/episode-audit-alerts'
+    | '/api/public/hooks/google-oauth-healthcheck'
     | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -784,6 +796,7 @@ export interface FileRouteTypes {
     | '/api/public/health'
     | '/_authenticated/admin/'
     | '/api/public/hooks/episode-audit-alerts'
+    | '/api/public/hooks/google-oauth-healthcheck'
     | '/api/public/hooks/interstitial-beacon'
     | '/api/public/hooks/interstitial-health'
     | '/api/public/hooks/maybe-rebuild-indexes'
@@ -816,6 +829,7 @@ export interface RootRouteChildren {
   ApiPublicClientErrorsRoute: typeof ApiPublicClientErrorsRoute
   ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicHooksEpisodeAuditAlertsRoute: typeof ApiPublicHooksEpisodeAuditAlertsRoute
+  ApiPublicHooksGoogleOauthHealthcheckRoute: typeof ApiPublicHooksGoogleOauthHealthcheckRoute
   ApiPublicHooksInterstitialBeaconRoute: typeof ApiPublicHooksInterstitialBeaconRoute
   ApiPublicHooksInterstitialHealthRoute: typeof ApiPublicHooksInterstitialHealthRoute
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
@@ -1261,6 +1275,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksInterstitialBeaconRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/google-oauth-healthcheck': {
+      id: '/api/public/hooks/google-oauth-healthcheck'
+      path: '/api/public/hooks/google-oauth-healthcheck'
+      fullPath: '/api/public/hooks/google-oauth-healthcheck'
+      preLoaderRoute: typeof ApiPublicHooksGoogleOauthHealthcheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/episode-audit-alerts': {
       id: '/api/public/hooks/episode-audit-alerts'
       path: '/api/public/hooks/episode-audit-alerts'
@@ -1384,6 +1405,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicClientErrorsRoute: ApiPublicClientErrorsRoute,
   ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicHooksEpisodeAuditAlertsRoute: ApiPublicHooksEpisodeAuditAlertsRoute,
+  ApiPublicHooksGoogleOauthHealthcheckRoute:
+    ApiPublicHooksGoogleOauthHealthcheckRoute,
   ApiPublicHooksInterstitialBeaconRoute: ApiPublicHooksInterstitialBeaconRoute,
   ApiPublicHooksInterstitialHealthRoute: ApiPublicHooksInterstitialHealthRoute,
   ApiPublicHooksMaybeRebuildIndexesRoute:

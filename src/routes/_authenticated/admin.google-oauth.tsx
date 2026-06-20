@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, HelpCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, HelpCircle, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,27 @@ import {
   quickCheckGoogleOAuth,
   startFullOAuthTest,
   listGoogleOAuthHealth,
+  exportGoogleOAuthHealthCsv,
 } from "@/lib/google-oauth-admin.functions";
+
+// Map a server error code to the OAuth flow step that failed.
+const STEP_BY_CODE: Record<string, string> = {
+  invalid_client_id_format: "Step 1 · Client ID format",
+  discovery_failed: "Step 2 · Google discovery reachable",
+  redirect_uri_mismatch: "Step 3 · Authorization endpoint (redirect URI)",
+  invalid_client: "Step 3 · Authorization endpoint (client recognition)",
+  exception: "Network / runtime",
+  network_error: "Step 4 · Token exchange (network)",
+  invalid_grant: "Step 4 · Token exchange (authorization code)",
+  invalid_state: "Step 4 · Token exchange (state)",
+  state_expired: "Step 4 · Token exchange (state expired)",
+  missing_credentials: "Step 0 · Credentials saved",
+};
+function stepFor(code?: string | null) {
+  if (!code) return "—";
+  return STEP_BY_CODE[code] ?? `Other · ${code}`;
+}
+
 
 export const Route = createFileRoute("/_authenticated/admin/google-oauth")({
   component: GoogleOAuthAdminPage,
@@ -25,6 +45,9 @@ function GoogleOAuthAdminPage() {
   const quick = useServerFn(quickCheckGoogleOAuth);
   const startFull = useServerFn(startFullOAuthTest);
   const listLog = useServerFn(listGoogleOAuthHealth);
+  const exportCsv = useServerFn(exportGoogleOAuthHealthCsv);
+  const [exporting, setExporting] = useState(false);
+
 
   const cfgQ = useQuery({ queryKey: ["google-oauth-config"], queryFn: () => getCfg() });
   const logQ = useQuery({
@@ -99,6 +122,28 @@ function GoogleOAuthAdminPage() {
     }
   }
 
+  async function onExportCsv() {
+    setExporting(true);
+    try {
+      const r = await exportCsv({ data: { days: 30 } });
+      const blob = new Blob([r.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = r.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${r.rowCount} rows`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+
   return (
     <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto">
       <div className="flex items-center gap-2">
@@ -169,7 +214,11 @@ function GoogleOAuthAdminPage() {
         </div>
       </section>
 
+      {/* Local diagnostics */}
+      <DiagnosticsPanel clientId={clientId} clientSecret={clientSecret} redirectUri={redirectUri || defaultRedirect} latestError={logQ.data?.rows?.find((r: any) => r.status === "error") ?? null} />
+
       {/* Health checks */}
+
       <section className="mt-6 rounded-lg border border-border bg-card p-5 space-y-4">
         <h2 className="text-lg font-semibold">Health checks</h2>
         <div className="grid sm:grid-cols-2 gap-3">
@@ -213,7 +262,13 @@ function GoogleOAuthAdminPage() {
 
       {/* History */}
       <section className="mt-6 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-lg font-semibold mb-3">Recent health checks</h2>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-lg font-semibold">Recent health checks</h2>
+          <Button size="sm" variant="outline" onClick={onExportCsv} disabled={exporting}>
+            {exporting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
+            Export CSV (30d)
+          </Button>
+        </div>
         {logQ.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {logQ.data?.rows?.length === 0 && (
           <div data-testid="oauth-health-empty" className="text-sm text-muted-foreground">No checks yet.</div>
@@ -227,6 +282,7 @@ function GoogleOAuthAdminPage() {
                   <th className="py-1 pr-3">Kind</th>
                   <th className="py-1 pr-3">Status</th>
                   <th className="py-1 pr-3">Latency</th>
+                  <th className="py-1 pr-3">Failing step</th>
                   <th className="py-1">Detail</th>
                 </tr>
               </thead>
@@ -237,6 +293,7 @@ function GoogleOAuthAdminPage() {
                     <td className="py-1.5 pr-3">{r.kind}</td>
                     <td className={`py-1.5 pr-3 ${r.status === "ok" ? "text-emerald-600" : "text-destructive"}`}>{r.status}</td>
                     <td className="py-1.5 pr-3">{r.latency_ms ?? "—"} ms</td>
+                    <td className="py-1.5 pr-3 text-xs">{r.status === "ok" ? "—" : stepFor(r.error_code)}</td>
                     <td className="py-1.5 text-xs text-muted-foreground">
                       {r.error_code ? <span className="font-mono">{r.error_code}</span> : null}
                       {r.error_message ? <span> · {r.error_message}</span> : null}
@@ -248,6 +305,105 @@ function GoogleOAuthAdminPage() {
           </div>
         )}
       </section>
+
     </div>
   );
 }
+
+type DiagCheck = { label: string; ok: boolean | null; hint?: string };
+
+function DiagnosticsPanel({
+  clientId,
+  clientSecret,
+  redirectUri,
+  latestError,
+}: {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  latestError: { error_code: string | null; error_message: string | null; checked_at: string } | null;
+}) {
+  const checks: DiagCheck[] = [
+    {
+      label: "Client ID format",
+      ok: clientId ? /\.apps\.googleusercontent\.com$/i.test(clientId.trim()) : null,
+      hint: "Must end with .apps.googleusercontent.com",
+    },
+    {
+      label: "Client ID has numeric prefix",
+      ok: clientId ? /^\d{6,}-/.test(clientId.trim()) : null,
+      hint: "Google OAuth web clients start with the project number, e.g. 123456789-abc...",
+    },
+    {
+      label: "Client Secret format",
+      ok: clientSecret ? /^GOCSPX-[\w-]{10,}$/.test(clientSecret.trim()) : null,
+      hint: "New Google secrets start with GOCSPX-. (Older legacy secrets are also accepted but won't pass this hint.)",
+    },
+    {
+      label: "Redirect URI is HTTPS",
+      ok: redirectUri ? /^https:\/\//i.test(redirectUri.trim()) : null,
+      hint: "Google requires HTTPS for non-localhost redirect URIs.",
+    },
+    {
+      label: "Redirect URI path is correct",
+      ok: redirectUri ? /\/admin\/google-oauth-callback\/?$/.test(redirectUri.trim()) : null,
+      hint: "Should end with /admin/google-oauth-callback",
+    },
+    {
+      label: "No trailing whitespace",
+      ok: clientId || clientSecret ? clientId.trim() === clientId && clientSecret.trim() === clientSecret : null,
+      hint: "Copy-paste from Google Cloud Console can leave invisible whitespace.",
+    },
+  ];
+
+  return (
+    <section className="mt-6 rounded-lg border border-border bg-card p-5">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <AlertCircle className="h-4 w-4" /> Diagnostics
+        </h2>
+        <span className="text-xs text-muted-foreground">Runs locally as you type — no network calls.</span>
+      </div>
+      <ul className="grid sm:grid-cols-2 gap-2">
+        {checks.map((c) => (
+          <li
+            key={c.label}
+            className={`flex items-start gap-2 rounded-md border p-2 text-xs ${
+              c.ok === null
+                ? "border-border text-muted-foreground"
+                : c.ok
+                ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"
+                : "border-destructive/40 bg-destructive/5 text-destructive"
+            }`}
+          >
+            {c.ok === null ? (
+              <span className="h-3.5 w-3.5 mt-0.5 inline-block rounded-full border border-current opacity-50" />
+            ) : c.ok ? (
+              <CheckCircle2 className="h-3.5 w-3.5 mt-0.5" />
+            ) : (
+              <XCircle className="h-3.5 w-3.5 mt-0.5" />
+            )}
+            <div className="flex-1">
+              <div className="font-medium text-foreground/90">{c.label}</div>
+              {c.ok === false && c.hint && <div className="opacity-80 mt-0.5">{c.hint}</div>}
+              {c.ok === null && <div className="opacity-60 mt-0.5">Fill in the field to validate</div>}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {latestError && (
+        <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
+          <div className="font-medium text-destructive">Last server-side failure</div>
+          <div className="mt-1">
+            <span className="font-mono">{latestError.error_code ?? "error"}</span> · {latestError.error_message ?? "(no message)"}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            Failing step: <strong>{stepFor(latestError.error_code)}</strong> · {new Date(latestError.checked_at).toLocaleString()}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
