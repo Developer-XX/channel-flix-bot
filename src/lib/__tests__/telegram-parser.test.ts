@@ -80,4 +80,74 @@ describe("telegram-parser: Season/Part/Episode extraction", () => {
     expect(p.part).toBeNull();
     expect(p.year).toBe(2023);
   });
+
+  // ---- Real-world regression fixtures from Telegram captions/filenames ----
+
+  it("parses [Animex] tagged caption with hyphenated part: Show.S01-P02-E07", () => {
+    const p = parseSingleSource("[Animex] Show.S01-P02-E07.1080p.WEB-DL.Hindi");
+    expect(p.season).toBe(1);
+    expect(p.part).toBe(2);
+    expect(p.episode).toBe(7);
+    expect(p.resolution).toBe("1080p");
+    expect(p.language).toBe("Hindi");
+  });
+
+  it("parses bracketed quality block before SxxPnEyy", () => {
+    const p = parseSingleSource("Show Name [Dual Audio] (Hindi+English) S02P3E04 720p HEVC");
+    expect(p.season).toBe(2);
+    expect(p.part).toBe(3);
+    expect(p.episode).toBe(4);
+    expect(p.codec).toBe("x265");
+  });
+
+  it("parses S02 P02 E03 with spaces only", () => {
+    const p = parseSingleSource("Show Name S02 P02 E03 1080p WEB-DL");
+    expect(p.season).toBe(2);
+    expect(p.part).toBe(2);
+    expect(p.episode).toBe(3);
+  });
+
+  it("parses underscore separators: Show_S03_P1_E12", () => {
+    const p = parseSingleSource("Show_Name_S03_P1_E12_720p.mkv");
+    expect(p.season).toBe(3);
+    expect(p.part).toBe(1);
+    expect(p.episode).toBe(12);
+  });
+
+  it("does not treat episode P-letter as part when no marker (S01E05)", () => {
+    const p = parseSingleSource("Doraemon S01E05 [Hindi] 480p");
+    expect(p.season).toBe(1);
+    expect(p.part).toBeNull();
+    expect(p.episode).toBe(5);
+  });
+
+  it("ignores P inside title words (Pirates) — no spurious part", () => {
+    const p = parseSingleSource("Pirates Show S04E02 1080p");
+    expect(p.season).toBe(4);
+    expect(p.part).toBeNull();
+    expect(p.episode).toBe(2);
+  });
+
+  it("standalone Part with Episode keyword: Show S05 Part 1 Episode 22", () => {
+    const p = parseSingleSource("Show S05 Part 1 Episode 22 720p");
+    expect(p.season).toBe(5);
+    expect(p.part).toBe(1);
+    expect(p.episode).toBe(22);
+  });
+
+  it("episode-range pattern (S01P2E01E02) returns first episode only", () => {
+    const p = parseSingleSource("Show S01P2E01E02 1080p");
+    expect(p.season).toBe(1);
+    expect(p.part).toBe(2);
+    expect(p.episode).toBe(1);
+  });
+
+  it("parses real Telegram caption with leading channel banner emoji", () => {
+    const p = parseMedia("🔥 Premium Show 🔥\nS02P02E09\n📺 720p Hindi WEB-DL");
+    expect(p.season).toBe(2);
+    expect(p.part).toBe(2);
+    expect(p.episode).toBe(9);
+    expect(p.resolution).toBe("720p");
+    expect(p.language).toBe("Hindi");
+  });
 });
