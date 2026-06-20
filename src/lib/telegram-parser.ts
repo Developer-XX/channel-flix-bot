@@ -157,16 +157,22 @@ export function parseSingleSource(raw: string): ParsedMedia {
 
   let season: number | null = null;
   let episode: number | null = null;
+  let part: number | null = null;
   const seMatch = text.match(SE_RE);
   if (seMatch) {
     season = parseInt(seMatch[1], 10);
-    const epStr = seMatch[2].match(/\d+/g);
+    if (seMatch[2]) part = parseInt(seMatch[2], 10);
+    const epStr = seMatch[3].match(/\d+/g);
     if (epStr) episode = parseInt(epStr[0], 10);
   } else {
     const so = text.match(SEASON_ONLY_RE);
     if (so) season = parseInt(so[1], 10);
     const eo = text.match(EPISODE_ONLY_RE);
     if (eo) episode = parseInt(eo[1], 10);
+  }
+  if (part == null) {
+    const po = text.match(PART_ONLY_RE);
+    if (po) part = parseInt(po[1], 10);
   }
 
   const yearMatch = text.match(YEAR_RE);
@@ -189,6 +195,7 @@ export function parseSingleSource(raw: string): ParsedMedia {
     year,
     season,
     episode,
+    part,
     resolution: res?.value ?? null,
     quality: quality?.value ?? null,
     codec: codec?.value ?? null,
