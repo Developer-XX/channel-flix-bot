@@ -158,4 +158,49 @@ describe("revalidatePromotedForTitle — score drop reclassifies file", () => {
     expect(state.mediaFiles[0].is_active).toBe(true);
     expect(state.audits.length).toBe(0);
   });
+
+  it("never demotes a file whose latest decision is 'manual' (admin override is sticky)", async () => {
+    // Reproduces the S02P2E01 bug: an admin manually assigns a file
+    // whose parsed_title is "S02P2E01" (no show name). The resync cron
+    // rescores it against the master title "The Bear", scores ~0, and
+    // would demote it on every deploy. Manual assignments must stick.
+    const title = { id: "title-3", title: "The Bear", release_year: 2022, category: "series" };
+    const state = {
+      ingest: [
+        {
+          id: "ingest-3",
+          parsed_title: "S02P2E01", // no real show name — will score ~0
+          parsed_year: null,
+          parsed_category: "series",
+          parsed_season: 2,
+          parsed_episode: 201,
+          promoted_media_file_id: "mf-3",
+          matched_title_id: "title-3",
+          deleted_at: null,
+          match_status: "matched",
+        },
+      ],
+      audits: [
+        {
+          telegram_ingest_id: "ingest-3",
+          master_title_id: "title-3",
+          decision: "manual",
+          scores: { total: 1 },
+          attempt_at: "2025-06-01T00:00:00Z",
+        },
+      ],
+      mediaFiles: [{ id: "mf-3", is_active: true }],
+    };
+    const supabase = makeStub(state);
+    const result = await revalidatePromotedForTitle(
+      supabase as any,
+      title,
+      { ...DEFAULT_MATCHING_SETTINGS, threshold: 0.6 },
+    );
+    expect(result.demoted).toBe(0);
+    expect(result.kept).toBe(1);
+    expect(state.mediaFiles[0].is_active).toBe(true);
+    expect(state.ingest[0].match_status).toBe("matched");
+    expect(state.ingest[0].matched_title_id).toBe("title-3");
+  });
 });
