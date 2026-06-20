@@ -14,6 +14,9 @@ import {
   startFullOAuthTest,
   listGoogleOAuthHealth,
   exportGoogleOAuthHealthCsv,
+  validateGoogleOAuthSetup,
+  getGoogleOAuthSelfCheck,
+  probeFullTokenExchange,
 } from "@/lib/google-oauth-admin.functions";
 
 // Map a server error code to the OAuth flow step that failed.
