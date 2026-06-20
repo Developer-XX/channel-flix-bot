@@ -1,0 +1,144 @@
+name: admin-dashboards-smoke
+
+# Runs the admin-dashboards Playwright suites (smoke, pagination, failure)
+# on every PR. We spin up Postgres 16 and Redis 7 as service containers,
+# point the app at a throwaway Supabase-compatible Postgres, run the
+# deterministic seed (scripts/seed-e2e-shortener-audit.ts), and then run
+# Playwright headless against the local dev server.
+#
+# Required secrets (configured at the repo level):
+#   SUPABASE_URL                — points at the preview / CI Supabase
+#   SUPABASE_SERVICE_ROLE_KEY   — service role for seeding
+#   SUPABASE_PUBLISHABLE_KEY    — anon/publishable key for the app
+#   TEST_USER / TEST_PASS       — admin-grade test account
+#
+# If those secrets are absent, the seed + Playwright steps fall back to
+# the in-job Postgres only and the tests with `test.skip(!hasCredentials)`
+# will self-skip — the workflow still passes.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: admin-dashboards-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Local service URLs for any code paths that read them in CI.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/app_test
+      REDIS_URL: redis://localhost:6379
+      # Supabase config — secrets fall through to empty strings when not
+      # configured, and the Playwright specs self-skip in that case.
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      TEST_USER: ${{ secrets.TEST_USER }}
+      TEST_PASS: ${{ secrets.TEST_PASS }}
+      E2E_BASE_URL: http://localhost:8080
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Wait for Postgres + Redis
+        run: |
+          for i in {1..30}; do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            sleep 1
+          done
+          for i in {1..30}; do
+            (echo > /dev/tcp/localhost/6379) >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - name: Seed deterministic shortener + audit data
+        if: env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
+        run: bun run scripts/seed-e2e-shortener-audit.ts
+
+      - name: Build app
+        run: bun run build
+
+      - name: Start dev server
+        run: |
+          bun run dev > dev-server.log 2>&1 &
+          echo $! > .dev-server.pid
+          # Wait up to 60s for the server to come up.
+          for i in {1..60}; do
+            curl -sf http://localhost:8080 > /dev/null && exit 0
+            sleep 1
+          done
+          echo "::error::dev server failed to start"
+          tail -200 dev-server.log
+          exit 1
+
+      - name: Run admin-dashboards Playwright suites
+        run: |
+          bunx playwright test \
+            tests/e2e/admin-dashboards-smoke.spec.ts \
+            tests/e2e/admin-dashboards-pagination.spec.ts \
+            tests/e2e/admin-dashboards-failure.spec.ts
+
+      - name: Stop dev server
+        if: always()
+        run: |
+          if [ -f .dev-server.pid ]; then
+            kill "$(cat .dev-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report
+          retention-days: 14
+
+      - name: Upload dev-server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-server-log-${{ github.run_id }}
+          path: dev-server.log
+          retention-days: 7
