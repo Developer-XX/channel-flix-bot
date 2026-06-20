@@ -860,7 +860,10 @@ export const probeFullTokenExchange = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context as any;
     await assertAdmin(supabase, userId);
+    // Safe probe actually hits Google's token endpoint; cap to 5 per 5 min per admin.
+    await enforceRateLimit(supabase, userId, "safe_probe", 300, 5);
     const started = Date.now();
+
 
     // Discovery first.
     try {
