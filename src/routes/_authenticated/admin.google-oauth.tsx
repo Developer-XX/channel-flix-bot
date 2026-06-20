@@ -124,6 +124,22 @@ function GoogleOAuthAdminPage() {
     }
   }
 
+  async function onSmokeCallback() {
+    setSmoking(true);
+    setSmokeResult(null);
+    try {
+      const r = await smokeCallback();
+      setSmokeResult(r);
+      if (r.ok) toast.success("Callback guard verified.");
+      else toast.error(r.message);
+    } catch (e: any) {
+      setSmokeResult({ ok: false, message: e?.message ?? "Smoke test failed" });
+      toast.error(e?.message ?? "Smoke test failed");
+    } finally {
+      setSmoking(false);
+    }
+  }
+
   async function onQuickCheck() {
     setChecking(true);
     setQuickResult(null);
