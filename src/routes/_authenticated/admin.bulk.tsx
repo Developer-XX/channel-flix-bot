@@ -584,18 +584,6 @@ function Metric({ label, value, tone }: { label: string; value: React.ReactNode;
   );
 }
 
-function ReparseDryRunFooter() {
-  return null;
-}
-
-// Spacer keeps original component layout below intact.
-function _layoutSpacer() {
-  return (
-    <></>
-  );
-    </div>
-  );
-}
 
 function ReparseSeriesPartsPanel() {
   const fn = useServerFn(reparseSeriesParts);
