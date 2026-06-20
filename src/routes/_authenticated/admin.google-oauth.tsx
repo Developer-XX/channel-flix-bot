@@ -262,7 +262,13 @@ function GoogleOAuthAdminPage() {
 
       {/* History */}
       <section className="mt-6 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-lg font-semibold mb-3">Recent health checks</h2>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-lg font-semibold">Recent health checks</h2>
+          <Button size="sm" variant="outline" onClick={onExportCsv} disabled={exporting}>
+            {exporting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
+            Export CSV (30d)
+          </Button>
+        </div>
         {logQ.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {logQ.data?.rows?.length === 0 && (
           <div data-testid="oauth-health-empty" className="text-sm text-muted-foreground">No checks yet.</div>
@@ -276,6 +282,7 @@ function GoogleOAuthAdminPage() {
                   <th className="py-1 pr-3">Kind</th>
                   <th className="py-1 pr-3">Status</th>
                   <th className="py-1 pr-3">Latency</th>
+                  <th className="py-1 pr-3">Failing step</th>
                   <th className="py-1">Detail</th>
                 </tr>
               </thead>
@@ -286,6 +293,7 @@ function GoogleOAuthAdminPage() {
                     <td className="py-1.5 pr-3">{r.kind}</td>
                     <td className={`py-1.5 pr-3 ${r.status === "ok" ? "text-emerald-600" : "text-destructive"}`}>{r.status}</td>
                     <td className="py-1.5 pr-3">{r.latency_ms ?? "—"} ms</td>
+                    <td className="py-1.5 pr-3 text-xs">{r.status === "ok" ? "—" : stepFor(r.error_code)}</td>
                     <td className="py-1.5 text-xs text-muted-foreground">
                       {r.error_code ? <span className="font-mono">{r.error_code}</span> : null}
                       {r.error_message ? <span> · {r.error_message}</span> : null}
@@ -297,6 +305,7 @@ function GoogleOAuthAdminPage() {
           </div>
         )}
       </section>
+
     </div>
   );
 }
