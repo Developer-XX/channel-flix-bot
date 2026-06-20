@@ -243,6 +243,30 @@ function GoogleOAuthAdminPage() {
       {/* Local diagnostics */}
       <DiagnosticsPanel clientId={clientId} clientSecret={clientSecret} redirectUri={redirectUri || defaultRedirect} latestError={logQ.data?.rows?.find((r: any) => r.status === "error") ?? null} />
 
+      {/* Self-check report */}
+      <SelfCheckReport
+        data={selfQ.data}
+        loading={selfQ.isFetching}
+        onRetest={() => selfQ.refetch()}
+      />
+
+      {/* Setup gate banner */}
+      {setupQ.data && !setupQ.data.enabled && (
+        <section data-testid="oauth-setup-gate" className="mt-6 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <div className="font-medium text-destructive flex items-center gap-2">
+            <XCircle className="h-4 w-4" /> Google OAuth is not ready
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Health checks are disabled until the saved configuration matches Google's requirements.
+          </p>
+          <ul className="mt-2 list-disc pl-5 text-xs space-y-1">
+            {setupQ.data.problems.map((p, i) => (
+              <li key={i}><span className="font-mono">[{p.field}]</span> {p.message}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Health checks */}
 
       <section className="mt-6 rounded-lg border border-border bg-card p-5 space-y-4">
@@ -253,7 +277,7 @@ function GoogleOAuthAdminPage() {
             <p className="text-xs text-muted-foreground">
               Verifies the Client ID format, that Google's discovery endpoint is reachable, and that Google recognizes the Client ID + redirect URI. No consent screen.
             </p>
-            <Button size="sm" onClick={onQuickCheck} disabled={checking || !cfg?.configured}>
+            <Button size="sm" onClick={onQuickCheck} disabled={checking || !setupQ.data?.enabled}>
               {checking && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Run quick check
             </Button>
             {quickResult && (
@@ -276,15 +300,21 @@ function GoogleOAuthAdminPage() {
           <div className="rounded-md border border-border p-4 space-y-2">
             <div className="font-medium text-sm">Full token exchange</div>
             <p className="text-xs text-muted-foreground">
-              Opens Google's consent screen and completes a real authorization-code exchange against the saved Client Secret. Most accurate test.
+              Two modes: a <strong>safe probe</strong> validates Client ID + Secret + Redirect URI against Google's token endpoint without consent, or run the full consent-screen flow.
             </p>
-            <Button size="sm" variant="secondary" onClick={onStartFull} disabled={fullBusy || !cfg?.configured}>
-              {fullBusy && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-              <ExternalLink className="h-3 w-3 mr-1" /> Run full OAuth test
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={onProbeFull} disabled={probing || !setupQ.data?.enabled}>
+                {probing && <Loader2 className="h-3 w-3 mr-1 animate-spin" />} Run safe probe
+              </Button>
+              <Button size="sm" variant="secondary" onClick={onStartFull} disabled={fullBusy || !setupQ.data?.enabled}>
+                {fullBusy && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                <ExternalLink className="h-3 w-3 mr-1" /> Full consent flow
+              </Button>
+            </div>
           </div>
         </div>
       </section>
+
 
       {/* History */}
       <section className="mt-6 rounded-lg border border-border bg-card p-5">
