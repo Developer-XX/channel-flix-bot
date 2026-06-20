@@ -1,7 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { PlayCircle } from "lucide-react";
+import { ArrowDown, PlayCircle } from "lucide-react";
 import { getTutorialConfig } from "@/lib/tutorial.functions";
+import { Button } from "@/components/ui/button";
+
+function scrollToRequest(e: React.MouseEvent<HTMLAnchorElement>) {
+  const el = document.getElementById("request-title");
+  if (el) {
+    e.preventDefault();
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
 
 function extractYouTubeId(url: string): string | null {
   try {
