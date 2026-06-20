@@ -44,8 +44,8 @@ export function HowToDownload() {
           <div className="grid h-10 w-10 place-items-center rounded-lg bg-gradient-primary text-primary-foreground shrink-0">
             <PlayCircle className="h-5 w-5" />
           </div>
-          <div className="min-w-0">
-            <h2 className="font-display text-xl md:text-2xl font-bold">{cfg.title}</h2>
+          <div className="min-w-0 flex-1">
+            <h2 id="tutorial-heading" className="font-display text-xl md:text-2xl font-bold">{cfg.title}</h2>
             {cfg.description && (
               <p className="text-sm text-muted-foreground mt-0.5">{cfg.description}</p>
             )}
