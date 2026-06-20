@@ -46,7 +46,44 @@ function AdminShortenersPage() {
         out of the rotation immediately; lower priority numbers go first.
       </p>
 
-      {q.error && <div className="text-destructive text-sm">{(q.error as Error).message}</div>}
+      {q.error ? (
+        <div
+          data-testid="shortener-error-state"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+        >
+          <div className="font-semibold">Could not load shortener report</div>
+          <div className="mt-1 text-xs opacity-90 break-all">
+            {(q.error as Error).message}
+          </div>
+          <div className="mt-2 text-xs opacity-80">
+            This is a backend error — the query failed. Check the admin error log.
+          </div>
+        </div>
+      ) : !q.isLoading && (q.data?.providers.length ?? 0) === 0 ? (
+        <div
+          data-testid="shortener-empty-state"
+          className="rounded-md border border-border bg-muted/30 p-4 text-sm"
+        >
+          <div className="font-semibold">No shortener providers configured</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Add rows to <code>shortener_configs</code> to start rotating providers.
+          </div>
+        </div>
+      ) : !q.isLoading && (q.data?.sampleCount ?? 0) === 0 ? (
+        <div
+          data-testid="shortener-empty-state"
+          className="rounded-md border border-amber-500/40 bg-amber-500/5 p-4 text-sm"
+        >
+          <div className="font-semibold text-amber-600 dark:text-amber-400">
+            No health samples in the last 30 days
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Providers are listed below but success rate, latency, and attempt
+            counts will stay blank until <code>shortener_health_log</code>
+            receives entries (run a token verification, then refresh).
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2">
         {q.data?.providers.map((p: any) => (
@@ -68,9 +105,10 @@ function AdminShortenersPage() {
               <Stat label="Success (30d)" value={p.successRate30 != null ? `${p.successRate30}%` : "—"} />
               <Stat label="Avg latency 7d" value={p.avgLatencyMs7 != null ? `${p.avgLatencyMs7}ms` : "—"} />
               <Stat label="Avg latency 30d" value={p.avgLatencyMs30 != null ? `${p.avgLatencyMs30}ms` : "—"} />
-              <Stat label="Attempts 7d" value={String(p.attempts7)} />
-              <Stat label="Attempts 30d" value={String(p.attempts30)} />
+              <Stat label="Attempts 7d" value={String(p.attempts7)} testId="shortener-attempts-7d" />
+              <Stat label="Attempts 30d" value={String(p.attempts30)} testId="shortener-attempts-30d" />
             </div>
+
 
             <div className="flex items-end gap-2">
               <label className="text-xs flex-1">
