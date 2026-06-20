@@ -222,7 +222,7 @@ function EpisodeAuditPage() {
           <div className="p-6 text-sm text-muted-foreground">Loading…</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs" data-testid="episode-audit-table">
               <thead className="bg-surface/40 sticky top-0">
                 <tr className="text-left">
                   <th className="px-3 py-2">Title</th>
