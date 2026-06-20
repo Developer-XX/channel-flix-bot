@@ -2328,6 +2328,51 @@ export type Database = {
           },
         ]
       }
+      telegram_sync_steps: {
+        Row: {
+          channel_id: number | null
+          created_at: string
+          details: Json
+          error_code: string | null
+          error_message: string | null
+          id: string
+          latency_ms: number | null
+          run_id: string
+          source: string
+          status: string
+          step: string
+          update_id: number | null
+        }
+        Insert: {
+          channel_id?: number | null
+          created_at?: string
+          details?: Json
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          run_id: string
+          source: string
+          status: string
+          step: string
+          update_id?: number | null
+        }
+        Update: {
+          channel_id?: number | null
+          created_at?: string
+          details?: Json
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          run_id?: string
+          source?: string
+          status?: string
+          step?: string
+          update_id?: number | null
+        }
+        Relationships: []
+      }
       telegram_user_links: {
         Row: {
           created_at: string
