@@ -10,6 +10,12 @@ import { toast } from "sonner";
 import { Loader2, Play, CheckCircle2, XCircle, AlertCircle, RotateCw, Download, Trash2 } from "lucide-react";
 import { startBulkRematch, getBulkJobStatus, retryFailedFromJob, deleteBulkJobs } from "@/lib/bulk.functions";
 import { reparseSeriesParts } from "@/lib/reparse-series.functions";
+import {
+  previewMessageDeletes,
+  getDeleteCronMetrics,
+  getReparseCronConfig,
+  setReparseCronConfig,
+} from "@/lib/admin-deletes.functions";
 import { useQueryClient } from "@tanstack/react-query";
 
 
@@ -368,9 +374,216 @@ function BulkRematchPage() {
       )}
 
       <ReparseSeriesPartsPanel />
+      <ReparseCronSchedulePanel />
+      <MessageDeletesPanel />
     </div>
   );
 }
+
+function MessageDeletesPanel() {
+  const previewFn = useServerFn(previewMessageDeletes);
+  const metricsFn = useServerFn(getDeleteCronMetrics);
+  const [busy, setBusy] = useState(false);
+  const [includeFuture, setIncludeFuture] = useState(false);
+  const [limit, setLimit] = useState(50);
+  const [result, setResult] = useState<any>(null);
+  const metrics = useQuery({
+    queryKey: ["delete-cron-metrics"],
+    queryFn: () => metricsFn(),
+    refetchInterval: 15000,
+  });
+
+  async function loadPreview() {
+    setBusy(true);
+    try {
+      const r = await previewFn({ data: { limit, includeFuture } });
+      setResult(r);
+      toast.success(`Previewed ${r.count} deletion target${r.count === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to preview");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function download(format: "csv" | "json") {
+    if (!result?.targets?.length) {
+      toast.error("Run preview first");
+      return;
+    }
+    let blob: Blob;
+    if (format === "json") {
+      blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
+    } else {
+      const header = ["id", "chat_id", "message_id", "delete_at", "attempts", "overdue_seconds", "last_error"];
+      const esc = (v: any) => {
+        const s = String(v ?? "");
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const lines = [header.join(",")];
+      for (const t of result.targets) {
+        lines.push([t.id, t.chat_id, t.message_id, t.delete_at, t.attempts, t.overdue_seconds, t.last_error].map(esc).join(","));
+      }
+      blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `message-deletes-dryrun-${Date.now()}.${format}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const m: any = metrics.data;
+  const summary: any = m?.last_summary ?? {};
+
+  return (
+    <div className="mt-6 rounded-xl border border-border bg-surface/40 p-4">
+      <h2 className="text-base font-semibold mb-1">Private-chat auto-delete</h2>
+      <p className="text-xs text-muted-foreground mb-3">
+        Preview which scheduled deletions would run next and export the list for verification.
+        Telemetry below comes from the most recent <code>process-message-deletes</code> cron run.
+      </p>
+
+      <div className="flex flex-wrap items-end gap-2 mb-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Limit</Label>
+          <Input
+            type="number"
+            min={1}
+            max={500}
+            value={limit}
+            onChange={(e) => setLimit(Math.max(1, Math.min(500, Number(e.target.value) || 50)))}
+            className="w-24"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={includeFuture} onChange={(e) => setIncludeFuture(e.target.checked)} />
+          Include future
+        </label>
+        <Button size="sm" variant="outline" onClick={loadPreview} disabled={busy}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Preview targets"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => download("csv")} disabled={!result?.count}>
+          <Download className="h-3.5 w-3.5 mr-1.5" /> CSV
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => download("json")} disabled={!result?.count}>
+          <Download className="h-3.5 w-3.5 mr-1.5" /> JSON
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-3">
+        <Metric label="Last run" value={m?.last_run_at ? new Date(m.last_run_at).toLocaleString() : "—"} />
+        <Metric label="Processed" value={summary.processed ?? 0} />
+        <Metric label="Deleted" value={summary.deleted ?? 0} tone="ok" />
+        <Metric label="Failed" value={summary.failed ?? 0} tone={summary.failed ? "err" : undefined} />
+        <Metric label="429 rate-limited" value={summary.rate_limited_429 ?? 0} tone={summary.rate_limited_429 ? "warn" : undefined} />
+        <Metric label="Retry-After total" value={`${summary.retry_after_ms_total ?? 0} ms`} />
+        <Metric label="Retry attempts" value={summary.retry_attempts_total ?? 0} />
+        <Metric label="Avg/msg" value={`${summary.avg_ms_per_message ?? 0} ms`} />
+      </div>
+
+      {result && (
+        <pre className="max-h-64 overflow-auto rounded bg-background/60 p-2 text-[11px]">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function ReparseCronSchedulePanel() {
+  const getCfg = useServerFn(getReparseCronConfig);
+  const setCfg = useServerFn(setReparseCronConfig);
+  const qc = useQueryClient();
+  const cfg = useQuery({
+    queryKey: ["reparse-cron-config"],
+    queryFn: () => getCfg(),
+  });
+  const [enabled, setEnabled] = useState(false);
+  const [limit, setLimit] = useState(500);
+  const [dryRun, setDryRun] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // hydrate when loaded
+  const data: any = cfg.data;
+  if (data && !cfg.isFetching && limit === 500 && enabled === false && !dryRun && data.limit !== 500) {
+    // one-time hydrate
+    setEnabled(!!data.enabled);
+    setLimit(data.limit);
+    setDryRun(!!data.dryRun);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await setCfg({ data: { enabled, limit, dryRun } });
+      toast.success("Re-parse cron config saved");
+      qc.invalidateQueries({ queryKey: ["reparse-cron-config"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const status: any = data?.status;
+  const summary: any = status?.last_summary ?? {};
+
+  return (
+    <div className="mt-6 rounded-xl border border-border bg-surface/40 p-4">
+      <h2 className="text-base font-semibold mb-1">Re-parse cron schedule</h2>
+      <p className="text-xs text-muted-foreground mb-3">
+        Runs the SxxPnEyy backfill periodically for newly ingested or re-cropped TV series files.
+        The schedule itself is managed by <code>pg_cron</code>; this toggle enables/disables work per run.
+      </p>
+      <div className="flex flex-wrap items-end gap-3 mb-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          Enabled
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
+          Dry-run only
+        </label>
+        <div className="space-y-1">
+          <Label className="text-xs">Rows per run</Label>
+          <Input
+            type="number"
+            min={1}
+            max={2000}
+            value={limit}
+            onChange={(e) => setLimit(Math.max(1, Math.min(2000, Number(e.target.value) || 500)))}
+            className="w-28"
+          />
+        </div>
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+        </Button>
+      </div>
+      {status && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <Metric label="Last run" value={status.last_run_at ? new Date(status.last_run_at).toLocaleString() : "—"} />
+          <Metric label="Scanned" value={summary.scanned ?? 0} />
+          <Metric label="Changed" value={summary.changed ?? 0} tone={summary.changed ? "warn" : undefined} />
+          <Metric label="Updated" value={summary.updated_ingest ?? 0} tone="ok" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "ok" | "warn" | "err" }) {
+  const color =
+    tone === "ok" ? "text-emerald-500" : tone === "warn" ? "text-amber-500" : tone === "err" ? "text-red-500" : "";
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`text-sm font-mono ${color}`}>{value}</div>
+    </div>
+  );
+}
+
 
 function ReparseSeriesPartsPanel() {
   const fn = useServerFn(reparseSeriesParts);

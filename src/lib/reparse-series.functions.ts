@@ -18,6 +18,8 @@ const Input = z.object({
   offset: z.number().int().min(0).default(0),
   /** Restrict to a single title when set. */
   titleId: z.string().uuid().nullable().optional(),
+  /** Max sample rows returned in the dry-run preview. */
+  sampleLimit: z.number().int().min(0).max(500).default(25),
 });
 
 type ReparsedRow = {
@@ -91,7 +93,32 @@ export const reparseSeriesParts = createServerFn({ method: "POST" })
         caption_or_file: (r.caption ?? r.file_name ?? "").slice(0, 160),
       });
 
-      if (data.dryRun) continue;
+      if (data.dryRun) {
+        // Even in dry-run, peek to determine whether the season/episode rows
+        // would need to be created so admins can preview the full impact.
+        const titleId = r.matched_title_id as string;
+        const { data: existingSeason } = await supabaseAdmin
+          .from("seasons")
+          .select("id")
+          .eq("title_id", titleId)
+          .eq("season_number", parsed.season)
+          .maybeSingle();
+        if (!existingSeason?.id) {
+          seasonsCreated++;
+          episodesCreated++; // a missing season implies a missing episode too
+        } else {
+          const { data: existingEp } = await supabaseAdmin
+            .from("episodes")
+            .select("id")
+            .eq("title_id", titleId)
+            .eq("season_id", existingSeason.id)
+            .eq("episode_number", encodedEpisode)
+            .maybeSingle();
+          if (!existingEp?.id) episodesCreated++;
+        }
+        if (r.promoted_media_file_id) relinkedFiles++;
+        continue;
+      }
 
       // Update parsed_* on the ingest row.
       await supabaseAdmin
@@ -175,6 +202,6 @@ export const reparseSeriesParts = createServerFn({ method: "POST" })
       seasons_created: seasonsCreated,
       episodes_created: episodesCreated,
       next_offset: (rows ?? []).length === data.limit ? data.offset + data.limit : null,
-      samples: changed.slice(0, 25),
+      samples: changed.slice(0, data.sampleLimit),
     };
   });

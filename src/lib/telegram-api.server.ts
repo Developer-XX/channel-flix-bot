@@ -122,13 +122,20 @@ export async function copyMessage(args: {
 }
 
 // Delete a message previously sent to a chat. Best-effort; returns ok flag.
+// On failure also returns Telegram HTTP status and retryAfterMs (parsed from
+// 429 flood-control responses) so callers can record rate-limit telemetry.
 export async function deleteMessage(chatId: number | string, messageId: number):
-  Promise<{ ok: true } | { ok: false; error: string }> {
+  Promise<{ ok: true } | { ok: false; error: string; status?: number; retryAfterMs?: number }> {
   try {
     await callTg("deleteMessage", { chat_id: chatId, message_id: messageId });
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, error: String(e?.message ?? e) };
+    return {
+      ok: false,
+      error: String(e?.message ?? e),
+      status: typeof e?.status === "number" ? e.status : undefined,
+      retryAfterMs: typeof e?.retryAfterMs === "number" ? e.retryAfterMs : undefined,
+    };
   }
 }
 
