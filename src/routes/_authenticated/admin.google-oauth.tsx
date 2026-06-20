@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, HelpCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Loader2, ExternalLink, HelpCircle, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,27 @@ import {
   quickCheckGoogleOAuth,
   startFullOAuthTest,
   listGoogleOAuthHealth,
+  exportGoogleOAuthHealthCsv,
 } from "@/lib/google-oauth-admin.functions";
+
+// Map a server error code to the OAuth flow step that failed.
+const STEP_BY_CODE: Record<string, string> = {
+  invalid_client_id_format: "Step 1 · Client ID format",
+  discovery_failed: "Step 2 · Google discovery reachable",
+  redirect_uri_mismatch: "Step 3 · Authorization endpoint (redirect URI)",
+  invalid_client: "Step 3 · Authorization endpoint (client recognition)",
+  exception: "Network / runtime",
+  network_error: "Step 4 · Token exchange (network)",
+  invalid_grant: "Step 4 · Token exchange (authorization code)",
+  invalid_state: "Step 4 · Token exchange (state)",
+  state_expired: "Step 4 · Token exchange (state expired)",
+  missing_credentials: "Step 0 · Credentials saved",
+};
+function stepFor(code?: string | null) {
+  if (!code) return "—";
+  return STEP_BY_CODE[code] ?? `Other · ${code}`;
+}
+
 
 export const Route = createFileRoute("/_authenticated/admin/google-oauth")({
   component: GoogleOAuthAdminPage,
