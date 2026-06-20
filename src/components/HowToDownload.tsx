@@ -73,6 +73,21 @@ export function HowToDownload() {
             )}
           </div>
         </div>
+        </div>
+        <div className="px-6 md:px-8 pb-6 pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-border/60">
+          <p className="text-sm text-muted-foreground">Ready? Request a title we don't have yet.</p>
+          <a
+            href="#request-title"
+            onClick={scrollToRequest}
+            data-testid="tutorial-cta-request"
+            className="inline-flex"
+          >
+            <Button className="bg-gradient-primary text-primary-foreground border-0 w-full sm:w-auto">
+              Request a title
+              <ArrowDown className="ml-2 h-4 w-4" />
+            </Button>
+          </a>
+        </div>
       </div>
     </section>
   );
