@@ -108,10 +108,9 @@ function TitlePage() {
         .select("id, file_name, caption, quality, resolution, language, file_size")
         .eq("title_id", titleQ.data!.id)
         .eq("is_active", true)
-        .order("resolution", { ascending: false, nullsFirst: false })
-        .order("quality", { ascending: false, nullsFirst: false })
         .order("file_name", { ascending: true });
-      return data ?? [];
+      // Client-side sort by resolution: 480p → 720p → 1080p → 4K.
+      return (data ?? []).slice().sort(compareByResolution);
     },
   });
 
