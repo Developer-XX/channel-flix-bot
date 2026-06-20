@@ -302,6 +302,8 @@ function TitlePage() {
           </section>
         )}
 
+        <HowToDownload />
+
         <section className="mx-auto max-w-7xl px-4 md:px-6 py-8">
           <div className="rounded-2xl bg-gradient-to-br from-surface to-background border border-border p-8 text-center">
             <p className="text-sm text-muted-foreground mb-2">Don't see what you want?</p>
@@ -312,8 +314,6 @@ function TitlePage() {
             </Link>
           </div>
         </section>
-
-        <HowToDownload />
       </main>
       <OnboardingTutorial />
       <SiteFooter />
