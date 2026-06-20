@@ -70,7 +70,12 @@ export const listTelegramIngest = createServerFn({ method: "GET" })
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     await purgeExpiredSoftDeletes();
-    let q = context.supabase
+    // Use service-role client: column-level GRANTs revoke SELECT on sensitive
+    // columns (telegram_file_id, telegram_message_id, raw_update) from the
+    // authenticated role, so the admin UI must read via supabaseAdmin after
+    // the admin check above.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let q = supabaseAdmin
       .from("telegram_ingest")
       .select(
         "id, channel_id, telegram_channel_id, telegram_message_id, file_name, caption, mime_type, file_size, duration_seconds, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_codec, parsed_language, parsed_category, match_status, matched_title_id, match_score, promoted_media_file_id, last_error, created_at, deleted_at",
