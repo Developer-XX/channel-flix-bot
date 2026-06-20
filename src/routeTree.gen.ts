@@ -60,6 +60,7 @@ import { Route as ApiPublicSectionKeyRouteImport } from './routes/api/public/sec
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
+import { Route as ApiPublicHooksReparseSeriesCronRouteImport } from './routes/api/public/hooks/reparse-series-cron'
 import { Route as ApiPublicHooksProcessMessageDeletesRouteImport } from './routes/api/public/hooks/process-message-deletes'
 import { Route as ApiPublicHooksProcessDownloadQueueRouteImport } from './routes/api/public/hooks/process-download-queue'
 import { Route as ApiPublicHooksMaybeRebuildIndexesRouteImport } from './routes/api/public/hooks/maybe-rebuild-indexes'
@@ -345,6 +346,12 @@ const ApiPublicHooksShortenerAlertsRoute =
     path: '/api/public/hooks/shortener-alerts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksReparseSeriesCronRoute =
+  ApiPublicHooksReparseSeriesCronRouteImport.update({
+    id: '/api/public/hooks/reparse-series-cron',
+    path: '/api/public/hooks/reparse-series-cron',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksProcessMessageDeletesRoute =
   ApiPublicHooksProcessMessageDeletesRouteImport.update({
     id: '/api/public/hooks/process-message-deletes',
@@ -424,6 +431,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
+  '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
@@ -480,6 +488,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
+  '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
@@ -539,6 +548,7 @@ export interface FileRoutesById {
   '/api/public/hooks/maybe-rebuild-indexes': typeof ApiPublicHooksMaybeRebuildIndexesRoute
   '/api/public/hooks/process-download-queue': typeof ApiPublicHooksProcessDownloadQueueRoute
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
+  '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
@@ -598,6 +608,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
+    | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
@@ -654,6 +665,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
+    | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
@@ -712,6 +724,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/maybe-rebuild-indexes'
     | '/api/public/hooks/process-download-queue'
     | '/api/public/hooks/process-message-deletes'
+    | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/s/$token'
@@ -742,6 +755,7 @@ export interface RootRouteChildren {
   ApiPublicHooksMaybeRebuildIndexesRoute: typeof ApiPublicHooksMaybeRebuildIndexesRoute
   ApiPublicHooksProcessDownloadQueueRoute: typeof ApiPublicHooksProcessDownloadQueueRoute
   ApiPublicHooksProcessMessageDeletesRoute: typeof ApiPublicHooksProcessMessageDeletesRoute
+  ApiPublicHooksReparseSeriesCronRoute: typeof ApiPublicHooksReparseSeriesCronRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
@@ -1111,6 +1125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksShortenerAlertsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/reparse-series-cron': {
+      id: '/api/public/hooks/reparse-series-cron'
+      path: '/api/public/hooks/reparse-series-cron'
+      fullPath: '/api/public/hooks/reparse-series-cron'
+      preLoaderRoute: typeof ApiPublicHooksReparseSeriesCronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/process-message-deletes': {
       id: '/api/public/hooks/process-message-deletes'
       path: '/api/public/hooks/process-message-deletes'
@@ -1259,6 +1280,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksProcessDownloadQueueRoute,
   ApiPublicHooksProcessMessageDeletesRoute:
     ApiPublicHooksProcessMessageDeletesRoute,
+  ApiPublicHooksReparseSeriesCronRoute: ApiPublicHooksReparseSeriesCronRoute,
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
