@@ -417,11 +417,18 @@ export const requestDownload = createServerFn({ method: "POST" })
       delivered_at: result.ok ? new Date().toISOString() : null,
       verification_status: "verified",
       verification_provider: ver.lastProvider,
+      shortener_used: ver.lastProvider ?? null,
+      category: fileCategory,
+      force_join_required: forceJoin.required,
+      force_join_status: forceJoin.required ? (forceJoin.passed ? "joined" : "not_joined") : "not_required",
+      force_join_channels: (forceJoin.channels.length ? forceJoin.channels : null) as never,
+      failure_reason: result.ok ? null : result.kind,
       bot_user_id: botUserId,
       idempotency_key: idemKey,
       attempt_count: history.length,
       attempt_history: history,
     });
+
 
     // Bump per-title download counter so admin "Most downloaded" reflects reality.
     if (result.ok && file.title_id) {
