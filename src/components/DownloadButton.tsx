@@ -203,7 +203,7 @@ export function DownloadButton({
       }
       setTimeout(tick, POLL_MS);
     };
-    setTimeout(tick, 3_500); // small head-start so Telegram registers the join
+    setTimeout(tick, 6_000); // small head-start so Telegram registers the join
   }
 
   function cancelJoinPolling() {
