@@ -445,8 +445,9 @@ export const setTelegramWebhook = createServerFn({ method: "POST" })
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const { getSetting } = await import("@/lib/runtime-settings.server");
+    const token = (await getSetting("TELEGRAM_BOT_TOKEN")) ?? process.env.TELEGRAM_BOT_TOKEN;
+    const secret = (await getSetting("TELEGRAM_WEBHOOK_SECRET")) ?? process.env.TELEGRAM_WEBHOOK_SECRET;
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     if (!secret) throw new Error("TELEGRAM_WEBHOOK_SECRET is not configured");
     const url = `${data.baseUrl.replace(/\/$/, "")}/api/public/telegram/webhook`;
@@ -468,7 +469,8 @@ export const getTelegramWebhookInfo = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const { getSetting } = await import("@/lib/runtime-settings.server");
+    const token = (await getSetting("TELEGRAM_BOT_TOKEN")) ?? process.env.TELEGRAM_BOT_TOKEN;
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
     const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
     const body = await res.json();
