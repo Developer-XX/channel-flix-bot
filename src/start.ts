@@ -5,6 +5,81 @@ import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 import { serverFnErrorLogger } from "@/lib/server-fn-error-logger";
 
 /**
+ * Emit a single-line JSON log record. PM2 captures stdout/stderr verbatim,
+ * so JSON-per-line is easy to ship into Loki/Datadog/CloudWatch later.
+ */
+function logJson(level: "info" | "warn" | "error", fields: Record<string, unknown>) {
+  const line = JSON.stringify({ level, ts: new Date().toISOString(), ...fields });
+  (level === "error" ? process.stderr : process.stdout).write(line + "\n");
+}
+
+function newRequestId(): string {
+  // Cheap, collision-resistant enough for request correlation.
+  return (
+    Date.now().toString(36) +
+    "-" +
+    Math.random().toString(36).slice(2, 10)
+  );
+}
+
+/**
+ * Structured access log + request-id propagation.
+ * - Honors inbound `x-request-id` (e.g. from Nginx) or mints a new one.
+ * - Echoes it back on the response so clients/upstreams can correlate.
+ * - Logs method, path, status, duration, ip, ua.
+ */
+const requestLogger = createMiddleware().server(async ({ next, request }) => {
+  const start = Date.now();
+  const reqId = request.headers.get("x-request-id") || newRequestId();
+  const url = (() => {
+    try {
+      return new URL(request.url);
+    } catch {
+      return null;
+    }
+  })();
+
+  let response: Response;
+  try {
+    response = await next();
+  } catch (err) {
+    logJson("error", {
+      msg: "request_failed",
+      request_id: reqId,
+      method: request.method,
+      path: url?.pathname,
+      duration_ms: Date.now() - start,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+
+  // Attach the id on the way out (clone headers — Response headers may be immutable).
+  try {
+    response.headers.set("x-request-id", reqId);
+  } catch {
+    /* immutable headers — ignore */
+  }
+
+  logJson(response.status >= 500 ? "error" : "info", {
+    msg: "request",
+    request_id: reqId,
+    method: request.method,
+    path: url?.pathname,
+    status: response.status,
+    duration_ms: Date.now() - start,
+    ip:
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      null,
+    ua: request.headers.get("user-agent"),
+  });
+
+  return response;
+});
+
+
+/**
  * Map an arbitrary error to an HTTP status + machine code.
  * Centralized so /_serverFn/* RPC responses are predictable.
  */
@@ -69,5 +144,6 @@ export const startInstance = createStart(() => ({
   // attachSupabaseAuth must run first (so the bearer is attached for
   // requireSupabaseAuth); the error logger wraps everything beneath.
   functionMiddleware: [attachSupabaseAuth, serverFnErrorLogger],
-  requestMiddleware: [errorMiddleware],
+  // requestLogger runs OUTSIDE errorMiddleware so it sees the final status code.
+  requestMiddleware: [requestLogger, errorMiddleware],
 }));
