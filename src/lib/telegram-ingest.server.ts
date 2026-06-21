@@ -639,8 +639,9 @@ export async function revalidatePromotedForTitle(
 
   const { data: rows } = await supabase
     .from("telegram_ingest")
-    .select("id, parsed_title, parsed_year, parsed_category, parsed_season, parsed_episode, promoted_media_file_id, deleted_at")
+    .select("id, parsed_title, parsed_year, parsed_category, parsed_season, parsed_episode, promoted_media_file_id, deleted_at, match_locked")
     .eq("matched_title_id", title.id)
+    .eq("match_locked", false)
     .not("promoted_media_file_id", "is", null)
     .is("deleted_at", null);
 
