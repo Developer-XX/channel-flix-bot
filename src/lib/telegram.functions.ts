@@ -218,8 +218,10 @@ export const promoteIngest = createServerFn({ method: "POST" })
         match_status: "matched",
         matched_title_id: data.titleId,
         promoted_media_file_id: file.id,
+        match_locked: true,
+        match_score: 1.0,
         last_error: null,
-      })
+      } as any)
       .eq("id", data.ingestId);
     if (e3) throw e3;
     return { ok: true, fileId: file.id };
