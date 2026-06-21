@@ -92,7 +92,7 @@ export const exportAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
-      .object({ maxRowsPerTable: z.number().int().positive().max(500_000).optional() })
+      .object({ maxRowsPerTable: z.number().int().positive().max(5_000_000).optional() })
       .parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
