@@ -39,9 +39,9 @@ const requestLogger = createMiddleware().server(async ({ next, request }) => {
     }
   })();
 
-  let response: Response;
+  let result: Awaited<ReturnType<typeof next>>;
   try {
-    response = await next();
+    result = await next();
   } catch (err) {
     logJson("error", {
       msg: "request_failed",
@@ -54,7 +54,7 @@ const requestLogger = createMiddleware().server(async ({ next, request }) => {
     throw err;
   }
 
-  // Attach the id on the way out (clone headers — Response headers may be immutable).
+  const response = result.response;
   try {
     response.headers.set("x-request-id", reqId);
   } catch {
@@ -75,7 +75,7 @@ const requestLogger = createMiddleware().server(async ({ next, request }) => {
     ua: request.headers.get("user-agent"),
   });
 
-  return response;
+  return result;
 });
 
 
