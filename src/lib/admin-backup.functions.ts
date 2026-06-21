@@ -15,7 +15,9 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import { requireAdminAccess } from "@/lib/admin-auth";
 
 // Order matters for restore: parents before children (FK references).
@@ -140,10 +142,17 @@ type LiveSchemaProbe = {
   columns: Map<string, Map<string, LiveColumnMeta>>;
   tableErrors: Record<string, string>;
 };
+type BackupTableRows = Record<string, Array<Record<string, unknown>>>;
+type ColumnRpcRow = {
+  table_name: string;
+  column_name: string;
+  is_nullable: string;
+  column_default: string | null;
+};
 
 async function loadLiveSchemaProbe(
-  supabaseAdmin: any,
-  tables: Record<string, any[]>,
+  supabaseAdmin: SupabaseClient<Database>,
+  tables: BackupTableRows,
 ): Promise<LiveSchemaProbe> {
   const columns = new Map<string, Map<string, LiveColumnMeta>>();
   const tableErrors: Record<string, string> = {};
@@ -157,8 +166,8 @@ async function loadLiveSchemaProbe(
   );
 
   if (!colsErr) {
-    for (const row of (colsData as any[] | null) ?? []) {
-      const tn = row.table_name as string;
+    for (const row of (colsData as ColumnRpcRow[] | null) ?? []) {
+      const tn = row.table_name;
       if (!columns.has(tn)) columns.set(tn, new Map());
       columns.get(tn)!.set(row.column_name, {
         nullable: row.is_nullable === "YES",
@@ -187,9 +196,9 @@ async function loadLiveSchemaProbe(
       continue;
     }
 
-    const sample = (tables[t] ?? []).find((row) => row && typeof row === "object") as
-      | Record<string, unknown>
-      | undefined;
+    const sample = (tables[t] ?? []).find(
+      (row) => row && typeof row === "object",
+    );
     const tableCols = new Map<string, LiveColumnMeta>();
     for (const c of Object.keys(sample ?? { id: null })) {
       tableCols.set(c, { nullable: true, hasDefault: true });
