@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Send, Loader2, Copy, ExternalLink } from "lucide-react";
+import { Send, Loader2, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
 import { startVerification } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
 import { triggerInterstitial } from "@/components/InterstitialController";
+
 
 interface Props {
   mediaFileId: string;
@@ -43,15 +44,35 @@ export function DownloadButton({
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
+  // Force-join dialog state. When the server returns must_join_channel we
+  // open a modal listing every required channel and start a polling loop
+  // that re-tries `requestDownload` every few seconds — as soon as the user
+  // taps Join in Telegram, the next poll succeeds and the file is sent.
+  const [joinState, setJoinState] = useState<
+    | null
+    | {
+        rule: "and" | "or";
+        channels: Array<{ id: string; title: string; joinUrl: string; status: string }>;
+        joined: Set<string>;
+        secondsLeft: number;
+        polling: boolean;
+      }
+  >(null);
+  const joinPollRef = useRef<{ stop: boolean; cid: string } | null>(null);
+
   useEffect(() => {
     if (!cooldownUntil) return;
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, [cooldownUntil]);
 
-  const cooldownLeftSec =
-    cooldownUntil && cooldownUntil > now ? Math.ceil((cooldownUntil - now) / 1000) : 0;
-  const isCoolingDown = cooldownLeftSec > 0;
+  // Stop any active force-join polling when the dialog is dismissed or the
+  // component unmounts.
+  useEffect(() => {
+    return () => {
+      if (joinPollRef.current) joinPollRef.current.stop = true;
+    };
+  }, []);
 
   function newCorrelationId(): string {
     try {
@@ -60,6 +81,12 @@ export function DownloadButton({
       return Math.random().toString(36).slice(2, 14);
     }
   }
+
+  const cooldownLeftSec =
+    cooldownUntil && cooldownUntil > now ? Math.ceil((cooldownUntil - now) / 1000) : 0;
+  const isCoolingDown = cooldownLeftSec > 0;
+
+
 
   function failWith(message: string, cid: string, detail?: string) {
     setErrorState({ message, detail, cid });
@@ -114,9 +141,79 @@ export function DownloadButton({
     return null;
   }
 
+  // Auto re-check loop after the user clicks "Open channel" and joins. Polls
+  // requestDownload every 4 seconds for up to ~3 minutes. The first call
+  // that succeeds — i.e. the bot's getChatMember sees the user joined —
+  // delivers the file and we close the dialog.
+  function startJoinPolling(fileId: string, cid: string) {
+    if (joinPollRef.current) joinPollRef.current.stop = true;
+    const handle = { stop: false, cid };
+    joinPollRef.current = handle;
+    const start = Date.now();
+    const MAX_MS = 180_000;
+    const POLL_MS = 10_000; // stay well under the 10-req/min server rate limit
+
+    const tick = async () => {
+      if (handle.stop) return;
+      const elapsed = Date.now() - start;
+      const secondsLeft = Math.max(0, Math.ceil((MAX_MS - elapsed) / 1000));
+      setJoinState((s) => (s ? { ...s, secondsLeft, polling: true } : s));
+      if (elapsed > MAX_MS) {
+        setJoinState((s) => (s ? { ...s, polling: false } : s));
+        return;
+      }
+      try {
+        const r: any = await reqDownload({ data: { mediaFileId: fileId } });
+        if (handle.stop) return;
+        if (r.ok) {
+          const cd = Number(r.cooldownSec ?? 0);
+          if (cd > 0) setCooldownUntil(Date.now() + cd * 1000);
+          toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
+          setJoinState(null);
+          handle.stop = true;
+          return;
+        }
+        if (r.reason === "must_join_channel") {
+          // Refresh per-channel status so the dialog shows green checks for
+          // channels they've already joined.
+          const channels = Array.isArray(r.channels) && r.channels.length
+            ? r.channels
+            : null;
+          if (channels) {
+            setJoinState((s) =>
+              s
+                ? {
+                    ...s,
+                    channels,
+                    joined: new Set(channels.filter((c: any) => c.status === "joined").map((c: any) => c.id)),
+                  }
+                : s,
+            );
+          }
+        } else {
+          // Different terminal error — stop polling and surface it.
+          setJoinState(null);
+          handle.stop = true;
+          failWith(`Couldn't deliver: ${r.reason ?? "unknown"}`, cid, (r as any)?.detail);
+          return;
+        }
+      } catch (e: any) {
+        // Network/auth blip — keep polling but note it.
+        console.warn("[force-join poll] error:", e?.message);
+      }
+      setTimeout(tick, POLL_MS);
+    };
+    setTimeout(tick, 6_000); // small head-start so Telegram registers the join
+  }
+
+  function cancelJoinPolling() {
+    if (joinPollRef.current) joinPollRef.current.stop = true;
+    setJoinState(null);
+  }
 
   async function handleClick() {
     setLoading(true);
+
     const cid = newCorrelationId();
     setErrorState(null);
     try {
@@ -219,18 +316,21 @@ export function DownloadButton({
       }
       if (r.reason === "must_join_channel") {
         const rr = r as any;
-        const url: string = rr.joinUrl || "";
-        const title: string = rr.channelTitle || "the main channel";
-        toast.message(`Join ${title} on Telegram to download files`, {
-          description: url ? "Opening the channel — tap Join, then try the download again." : "Ask the admin for the channel link.",
-          action: url
-            ? { label: "Open channel", onClick: () => window.open(url, "_blank", "noopener,noreferrer") }
-            : undefined,
-        });
-        if (url) {
-          try { window.open(url, "_blank", "noopener,noreferrer"); } catch { /* popup blocked */ }
+        const channels: Array<{ id: string; title: string; joinUrl: string; status: string }> =
+          Array.isArray(rr.channels) && rr.channels.length
+            ? rr.channels
+            : [{ id: "legacy", title: rr.channelTitle || "Main channel", joinUrl: rr.joinUrl || "", status: "not_joined" }];
+        const rule: "and" | "or" = rr.rule === "or" ? "or" : "and";
+        const joined = new Set<string>(channels.filter((c) => c.status === "joined").map((c) => c.id));
+        setJoinState({ rule, channels, joined, secondsLeft: 180, polling: true });
+        // Auto-open the first not-joined channel for one-tap join.
+        const first = channels.find((c) => c.status !== "joined" && c.joinUrl);
+        if (first?.joinUrl) {
+          try { window.open(first.joinUrl, "_blank", "noopener,noreferrer"); } catch { /* popup blocked */ }
         }
+        startJoinPolling(activeFileId, cid);
         return;
+
       }
       // Note: cooldown is now handled server-side as a transparent re-use of
       // the prior delivery within DOWNLOAD_RESEND_COOLDOWN_SECONDS — the
@@ -328,6 +428,73 @@ export function DownloadButton({
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!joinState}
+        onOpenChange={(open) => {
+          if (!open) cancelJoinPolling();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join to download</DialogTitle>
+            <DialogDescription>
+              {joinState?.rule === "or"
+                ? "Join at least one of these Telegram channels — the bot will deliver your file automatically."
+                : "Join all of these Telegram channels — the bot will deliver your file automatically once you've joined."}
+            </DialogDescription>
+          </DialogHeader>
+          {joinState && (
+            <div className="space-y-3">
+              <ul className="space-y-2">
+                {joinState.channels.map((c) => {
+                  const ok = c.status === "joined";
+                  return (
+                    <li
+                      key={c.id}
+                      className={`flex items-center justify-between gap-2 rounded-md border p-2 ${ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-surface/40"}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {ok ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        ) : (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                        )}
+                        <span className="text-sm truncate">{c.title}</span>
+                      </div>
+                      {!ok && c.joinUrl && (
+                        <Button asChild size="sm" variant="outline">
+                          <a href={c.joinUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-4 w-4 mr-1.5" /> Open
+                          </a>
+                        </Button>
+                      )}
+                      {ok && <span className="text-[11px] text-emerald-400">Joined ✓</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="rounded-md border border-border bg-surface/40 px-3 py-2 text-[12px] text-muted-foreground">
+                {joinState.polling ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 inline animate-spin" />
+                    Waiting for you to join — we'll auto-send the file when ready.{" "}
+                    {joinState.secondsLeft > 0 && <span>({joinState.secondsLeft}s)</span>}
+                  </>
+                ) : (
+                  <>Timed out waiting. Close this dialog and click Download again.</>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" variant="ghost" onClick={cancelJoinPolling}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
+
   );
 }

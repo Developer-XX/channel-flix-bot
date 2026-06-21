@@ -18,6 +18,8 @@ import {
   Activity,
 } from "lucide-react";
 import { getAdminAnalytics, type AdminAnalytics } from "@/lib/admin-analytics.functions";
+import { getDeliveryAudit, type DeliveryAuditRow } from "@/lib/delivery-audit.functions";
+
 import { exportBlockedBrowsingCsv } from "@/lib/blocked-browsing-export.functions";
 import { getAdPerfSummary } from "@/lib/ad-perf.functions";
 import { getGoogleOAuthLatestHealth } from "@/lib/google-oauth-admin.functions";
@@ -106,6 +108,9 @@ function AnalyticsPage() {
         </StatGrid>
         {a?.downloadsByDay && <DailyBars data={a.downloadsByDay} />}
       </Section>
+
+      <DeliveryAuditWidget />
+
 
       {/* Auto-delete cron (process-message-deletes) */}
       <Section title="Auto-delete (delivered messages)" icon={<XCircle className="h-4 w-4" />}>
@@ -547,5 +552,117 @@ function GoogleOAuthHealthWidget() {
     </section>
   );
 }
+
+function DeliveryAuditWidget() {
+  const [status, setStatus] = useState<"all" | "delivered" | "blocked" | "failed">("all");
+  const q = useQuery({
+    queryKey: ["delivery-audit", status],
+    queryFn: () => getDeliveryAudit({ data: { limit: 50, status } }),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const rows = q.data?.rows ?? [];
+  const summary = q.data?.summary;
+  return (
+    <section className="mt-8 rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <h2 className="font-display text-lg font-bold flex items-center gap-2">
+          <FileDown className="h-4 w-4" /> Delivery audit (last 24h)
+        </h2>
+        <div className="flex gap-1 text-xs">
+          {(["all", "delivered", "blocked", "failed"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatus(s)}
+              className={`px-2 py-1 rounded-md border ${status === s ? "border-primary bg-primary/15" : "border-border bg-surface/40 text-muted-foreground hover:text-foreground"}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+      {summary && (
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+          <SummaryStat label="Total 24h" value={summary.total24h} />
+          <SummaryStat label="Delivered" value={summary.delivered24h} tone="ok" />
+          <SummaryStat label="Blocked" value={summary.blocked24h} tone="warn" />
+          <SummaryStat label="Failed" value={summary.failed24h} tone="err" />
+          <SummaryStat label="Force-join blocks" value={summary.forceJoinBlocked24h} tone="warn" />
+        </div>
+      )}
+      {summary && summary.topReasons.length > 0 && (
+        <div className="mt-3 text-xs">
+          <span className="text-muted-foreground">Top reasons:</span>{" "}
+          {summary.topReasons.map((r: { reason: string; count: number }) => (
+            <span key={r.reason} className="inline-block mr-2 px-2 py-0.5 rounded-md border border-border bg-surface/40">
+              {r.reason} <b>{r.count}</b>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-muted-foreground border-b border-border">
+              <th className="py-2 pr-2">When</th>
+              <th className="py-2 pr-2">Status</th>
+              <th className="py-2 pr-2">Join</th>
+              <th className="py-2 pr-2">Shortener</th>
+              <th className="py-2 pr-2">Category</th>
+              <th className="py-2 pr-2">Reason / Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {q.isLoading && (
+              <tr><td colSpan={6} className="py-3 text-muted-foreground">Loading…</td></tr>
+            )}
+            {!q.isLoading && rows.length === 0 && (
+              <tr><td colSpan={6} className="py-3 text-muted-foreground">No download attempts yet.</td></tr>
+            )}
+            {rows.map((r: DeliveryAuditRow) => (
+
+              <tr key={r.id} className="border-b border-border/40 align-top">
+                <td className="py-1.5 pr-2 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
+                <td className="py-1.5 pr-2">
+                  <span className={
+                    r.delivery_status === "delivered" ? "text-emerald-500" :
+                    r.delivery_status === "blocked" ? "text-amber-500" :
+                    "text-red-400"
+                  }>
+                    {r.delivery_status ?? "?"}
+                  </span>
+                </td>
+                <td className="py-1.5 pr-2">
+                  {r.force_join_required
+                    ? <span className={r.force_join_status === "joined" ? "text-emerald-500" : "text-amber-500"}>{r.force_join_status ?? "?"}</span>
+                    : <span className="text-muted-foreground">—</span>}
+                </td>
+                <td className="py-1.5 pr-2">{r.shortener_used ?? <span className="text-muted-foreground">—</span>}</td>
+                <td className="py-1.5 pr-2">{r.category ?? <span className="text-muted-foreground">—</span>}</td>
+                <td className="py-1.5 pr-2 max-w-[300px] truncate" title={r.delivery_error ?? r.failure_reason ?? ""}>
+                  {r.failure_reason ?? r.delivery_error ?? <span className="text-muted-foreground">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function SummaryStat({ label, value, tone }: { label: string; value: number; tone?: "ok" | "warn" | "err" }) {
+  const color =
+    tone === "ok" ? "text-emerald-500" :
+    tone === "warn" ? "text-amber-500" :
+    tone === "err" ? "text-red-400" : "";
+  return (
+    <div className="rounded-md border border-border bg-surface/40 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`font-display text-lg font-semibold ${color}`}>{value}</div>
+    </div>
+  );
+}
+
 
 
