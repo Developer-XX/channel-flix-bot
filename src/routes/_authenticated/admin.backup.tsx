@@ -42,7 +42,7 @@ function BackupPage() {
   async function runHealthCheck() {
     setHealth({ status: "checking" });
     try {
-      const res: any = await doHealth({ data: {} });
+      const res: any = await doHealth();
       if (res?.ok) {
         setHealth({ status: "ok", schema_version: res.schema_version, tables: res.tables, checked_at: res.checked_at });
       } else {
