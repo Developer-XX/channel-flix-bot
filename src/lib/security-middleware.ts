@@ -103,15 +103,21 @@ async function rateLimit(request: Request, pathname: string): Promise<Response |
   const key = `ip:${ip}|${request.method}:/${segs}`;
 
   try {
-    const { data, error } = await client.rpc("rl_hit", {
+    // rl_hit isn't in the generated types; cast to any to keep this middleware
+    // independent of regenerating Database types.
+    const { data, error } = await (client.rpc as any)("rl_hit", {
       _key: key,
       _window_sec: RATE_WINDOW_SEC,
       _limit: RATE_LIMIT,
     });
     if (error) return null;
-    const row = Array.isArray(data) ? data[0] : data;
+    const row: { allowed?: boolean; reset_at?: string } | null = Array.isArray(data)
+      ? (data[0] as any)
+      : (data as any);
     if (row && row.allowed === false) {
-      const resetAt = row.reset_at ? new Date(row.reset_at).getTime() : Date.now() + RATE_WINDOW_SEC * 1000;
+      const resetAt = row.reset_at
+        ? new Date(row.reset_at).getTime()
+        : Date.now() + RATE_WINDOW_SEC * 1000;
       const retry = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
       return new Response(
         JSON.stringify({
