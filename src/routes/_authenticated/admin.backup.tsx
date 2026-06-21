@@ -29,9 +29,11 @@ function BackupPage() {
   const doImport = useServerFn(importAllData);
   const doHealth = useServerFn(checkBackupHealth);
   const doSelfTest = useServerFn(runBackupSelfTest);
+  const doCompleteness = useServerFn(backupCompletenessReport);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [lastArchive, setLastArchive] = useState<any>(null);
   const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any; integrity?: any } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
@@ -39,6 +41,8 @@ function BackupPage() {
   const [health, setHealth] = useState<HealthState>({ status: "checking" });
   const [selfTesting, setSelfTesting] = useState(false);
   const [selfTestResult, setSelfTestResult] = useState<any>(null);
+  const [completenessRunning, setCompletenessRunning] = useState(false);
+  const [completeness, setCompleteness] = useState<any>(null);
 
   async function runHealthCheck() {
     setHealth({ status: "checking" });
