@@ -750,6 +750,22 @@ export const importAllData = createServerFn({ method: "POST" })
     const authUsers = await loadExistingAuthUserIds(supabaseAdmin, tables);
     const restoredKeys = new Map<string, Set<string>>();
     const processed = new Set<string>();
+    const replaceDeleteFailed = new Set<string>();
+
+    if (data.mode === "replace") {
+      for (const t of [...EXPORT_TABLES].reverse()) {
+        if (report[t]?.error) continue;
+        const conflictColumn = conflictColumnFor(t);
+        const { error: delErr } = await supabaseAdmin
+          .from(t as never)
+          .delete()
+          .not(conflictColumn, "is", null);
+        if (delErr && !/column .* does not exist/i.test(delErr.message)) {
+          failed[t] = `delete failed: ${delErr.message}`;
+          replaceDeleteFailed.add(t);
+        }
+      }
+    }
 
     for (const t of EXPORT_TABLES) {
       const rows = (tables[t] ?? []) as any[];
@@ -760,6 +776,11 @@ export const importAllData = createServerFn({ method: "POST" })
       }
       if (report[t]?.error) {
         failed[t] = report[t].error!;
+        processed.add(t);
+        restoredKeys.set(t, new Set());
+        continue;
+      }
+      if (replaceDeleteFailed.has(t)) {
         processed.add(t);
         restoredKeys.set(t, new Set());
         continue;
@@ -790,27 +811,29 @@ export const importAllData = createServerFn({ method: "POST" })
           continue;
         }
 
-        if (data.mode === "replace") {
-          const { error: delErr } = await supabaseAdmin
-            .from(t as never)
-            .delete()
-            .not(conflictColumn, "is", null);
-          if (delErr && !/column .* does not exist/i.test(delErr.message)) {
-            failed[t] = `delete failed: ${delErr.message}`;
-            continue;
-          }
-        }
-
         const CHUNK = 500;
         let writtenForTable = 0;
+        const rowErrors: string[] = [];
         for (let i = 0; i < sanitizedRows.length; i += CHUNK) {
           const chunk = sanitizedRows.slice(i, i + CHUNK);
           const { error: upErr } = await supabaseAdmin
             .from(t as never)
             .upsert(chunk as never, { onConflict: conflictColumn });
           if (upErr) {
-            failed[t] = upErr.message;
-            break;
+            for (const row of chunk) {
+              const { error: rowErr } = await supabaseAdmin
+                .from(t as never)
+                .upsert(row as never, { onConflict: conflictColumn });
+              if (rowErr) {
+                rowErrors.push(rowErr.message);
+                skipped[t] = (skipped[t] ?? 0) + 1;
+                continue;
+              }
+              writtenForTable += 1;
+              const id = asKey(row[conflictColumn]) ?? asKey(row.id);
+              if (id) restoredForTable.add(id);
+            }
+            continue;
           }
           writtenForTable += chunk.length;
           for (const row of chunk) {
@@ -819,6 +842,9 @@ export const importAllData = createServerFn({ method: "POST" })
           }
         }
         inserted[t] = writtenForTable;
+        if (rowErrors.length > 0) {
+          failed[t] = `${rowErrors.length} row(s) skipped after restore fallback; first error: ${rowErrors[0]}`;
+        }
         restoredKeys.set(t, restoredForTable);
         processed.add(t);
       } catch (e) {
