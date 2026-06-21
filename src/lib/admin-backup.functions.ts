@@ -84,6 +84,8 @@ export const exportAllData = createServerFn({ method: "POST" })
       ok: true,
       archive: {
         version: 1,
+        schema_version: SCHEMA_VERSION,
+        schema_tables: [...EXPORT_TABLES],
         kind: "lovable-app-backup",
         exported_at: new Date().toISOString(),
         exported_by: context.userId,
@@ -97,9 +99,12 @@ export const exportAllData = createServerFn({ method: "POST" })
 
 const ImportArchiveSchema = z.object({
   version: z.literal(1),
+  schema_version: z.number().int().optional(),
+  schema_tables: z.array(z.string()).optional(),
   kind: z.string().optional(),
   tables: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
 });
+
 
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
