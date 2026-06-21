@@ -19,7 +19,7 @@ function BackupPage() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  const [importResult, setImportResult] = useState<{ inserted: Record<string, number>; failed: Record<string, string> } | null>(null);
+  const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
   const [confirm, setConfirm] = useState("");
