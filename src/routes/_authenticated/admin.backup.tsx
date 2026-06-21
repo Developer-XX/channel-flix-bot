@@ -11,6 +11,7 @@ import {
   importAllData,
   checkBackupHealth,
   runBackupSelfTest,
+  backupCompletenessReport,
 } from "@/lib/admin-backup.functions";
 import { Download, Upload, AlertTriangle, Database, ShieldCheck, Loader2, RefreshCw } from "lucide-react";
 
@@ -28,9 +29,11 @@ function BackupPage() {
   const doImport = useServerFn(importAllData);
   const doHealth = useServerFn(checkBackupHealth);
   const doSelfTest = useServerFn(runBackupSelfTest);
+  const doCompleteness = useServerFn(backupCompletenessReport);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [lastArchive, setLastArchive] = useState<any>(null);
   const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any; integrity?: any } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
@@ -38,6 +41,8 @@ function BackupPage() {
   const [health, setHealth] = useState<HealthState>({ status: "checking" });
   const [selfTesting, setSelfTesting] = useState(false);
   const [selfTestResult, setSelfTestResult] = useState<any>(null);
+  const [completenessRunning, setCompletenessRunning] = useState(false);
+  const [completeness, setCompleteness] = useState<any>(null);
 
   async function runHealthCheck() {
     setHealth({ status: "checking" });
@@ -66,6 +71,7 @@ function BackupPage() {
     try {
       const res = await doExport({ data: {} });
       setCounts(res.archive.counts);
+      setLastArchive(res.archive);
       const blob = new Blob([JSON.stringify(res.archive, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -76,10 +82,38 @@ function BackupPage() {
       a.remove();
       URL.revokeObjectURL(url);
       toast.success("Backup downloaded");
+      // Auto-run completeness report right after export.
+      runCompleteness(res.archive);
     } catch (e: any) {
       toast.error(e?.message ?? "Export failed");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function runCompleteness(archive: any) {
+    setCompletenessRunning(true);
+    setCompleteness(null);
+    try {
+      const res: any = await doCompleteness({ data: { archive } });
+      setCompleteness(res);
+      if (res?.summary?.overall_status === "ok") toast.success("Completeness check passed");
+      else toast.warning(`Completeness check: drift in ${res?.summary?.tables_drift} table(s)`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Completeness check failed");
+    } finally {
+      setCompletenessRunning(false);
+    }
+  }
+
+  async function handleCompletenessFromFile() {
+    if (!file) { toast.error("Pick a backup file first"); return; }
+    try {
+      const text = await file.text();
+      const archive = JSON.parse(text);
+      await runCompleteness(archive);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not parse file");
     }
   }
 
@@ -214,6 +248,85 @@ function BackupPage() {
           )}
         </Card>
       )}
+
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="font-semibold text-sm">Backup completeness report</h2>
+            <p className="text-xs text-muted-foreground">
+              Compares per-table row counts and verifies Telegram file metadata
+              (telegram_ingest / media_files / file_unique_id) between an
+              archive and the live database.
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" disabled={completenessRunning || !lastArchive} onClick={() => lastArchive && runCompleteness(lastArchive)}>
+              {completenessRunning ? "Checking…" : "Recheck last export"}
+            </Button>
+            <Button size="sm" variant="outline" disabled={completenessRunning || !file} onClick={handleCompletenessFromFile}>
+              Check uploaded file
+            </Button>
+          </div>
+        </div>
+
+        {completeness && (
+          <div className="text-xs space-y-2 pt-2 border-t border-border">
+            <div className={`rounded-md p-2 border ${completeness.summary?.overall_status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-amber-500/10 border-amber-500/30"}`}>
+              <div className="font-semibold">
+                Overall: {completeness.summary?.overall_status === "ok" ? "complete ✓" : "drift detected"}
+              </div>
+              <div>
+                {completeness.summary?.tables_ok}/{completeness.summary?.tables_checked} tables ok ·
+                {" "}{completeness.summary?.tables_drift} drift ·
+                {" "}{completeness.summary?.tables_skipped} skipped
+              </div>
+              <div>
+                Total rows — archive: {completeness.summary?.total_archive_rows?.toLocaleString?.()} ·
+                {" "}live: {completeness.summary?.total_live_rows?.toLocaleString?.()}
+              </div>
+            </div>
+
+            <div className={`rounded-md p-2 border ${completeness.file_metadata_check?.status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}>
+              <div className="font-semibold">Telegram file metadata</div>
+              <div>
+                ingest file_unique_id: {completeness.file_metadata_check?.ingest_with_file_unique_id?.toLocaleString?.()} ·
+                {" "}media file_unique_id: {completeness.file_metadata_check?.media_with_file_unique_id?.toLocaleString?.()}
+              </div>
+              {completeness.file_metadata_check?.ingest_orphans_without_media > 0 && (
+                <div className="text-destructive">
+                  Orphans (ingest with no matching media row): {completeness.file_metadata_check.ingest_orphans_without_media}
+                  {completeness.file_metadata_check.sample_orphans?.length > 0 && (
+                    <span className="font-mono"> · sample: {completeness.file_metadata_check.sample_orphans.join(", ")}</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <details>
+              <summary className="cursor-pointer font-semibold">Per-table breakdown</summary>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 mt-2">
+                {completeness.tables?.map((r: any) => (
+                  <div key={r.table} className={`rounded border p-2 font-mono ${r.status === "ok" ? "border-border" : r.status === "skipped" ? "border-muted bg-muted/30" : "border-amber-500/40 bg-amber-500/5"}`}>
+                    <div className="font-semibold">{r.table} <span className="text-muted-foreground">[{r.key_columns?.join(", ")}]</span></div>
+                    <div>archive: {r.archive_rows} · live: {r.live_rows} · Δ {r.delta}</div>
+                    {(r.keys_missing_in_live > 0 || r.keys_missing_in_archive > 0) && (
+                      <div className="text-amber-500">
+                        missing in live: {r.keys_missing_in_live} · missing in archive: {r.keys_missing_in_archive}
+                      </div>
+                    )}
+                    {r.sample_missing_in_live?.length > 0 && (
+                      <div className="text-muted-foreground truncate">sample missing live: {r.sample_missing_in_live.join(", ")}</div>
+                    )}
+                    {r.note && <div className="text-destructive">{r.note}</div>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          </div>
+        )}
+      </Card>
+
+
 
 
 

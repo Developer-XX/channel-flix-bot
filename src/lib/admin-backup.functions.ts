@@ -112,6 +112,195 @@ const ImportArchiveSchema = z.object({
   tables: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
 });
 
+// Tables + key columns the completeness report inspects in detail.
+// For each table we sample the archive and compare against live rows by the
+// listed unique key, so admins can confirm Telegram file metadata round-trips.
+const KEY_COLUMNS: Record<string, string[]> = {
+  telegram_ingest: ["file_unique_id", "telegram_channel_id", "telegram_message_id"],
+  media_files: ["file_unique_id", "file_id"],
+  telegram_channels: ["telegram_chat_id"],
+  episodes: ["id"],
+  seasons: ["id"],
+  master_titles: ["id"],
+};
+
+export const backupCompletenessReport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({
+      archive: ImportArchiveSchema,
+      sampleSize: z.number().int().positive().max(5000).optional().default(500),
+    }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    type Row = {
+      table: string;
+      archive_rows: number;
+      live_rows: number;
+      delta: number;
+      key_columns: string[];
+      keys_checked: number;
+      keys_missing_in_live: number;
+      keys_missing_in_archive: number;
+      sample_missing_in_live: string[];
+      sample_missing_in_archive: string[];
+      status: "ok" | "drift" | "skipped";
+      note?: string;
+    };
+
+    const rows: Row[] = [];
+    const archiveTables = data.archive.tables;
+    const allTables = new Set<string>([
+      ...EXPORT_TABLES,
+      ...Object.keys(archiveTables),
+    ]);
+
+    for (const t of allTables) {
+      const archiveRows = (archiveTables[t] ?? []) as any[];
+      const { count: liveCountRaw, error: countErr } = await supabaseAdmin
+        .from(t as never)
+        .select("*", { count: "exact", head: true });
+
+      if (countErr) {
+        rows.push({
+          table: t,
+          archive_rows: archiveRows.length,
+          live_rows: 0,
+          delta: archiveRows.length,
+          key_columns: [],
+          keys_checked: 0,
+          keys_missing_in_live: 0,
+          keys_missing_in_archive: 0,
+          sample_missing_in_live: [],
+          sample_missing_in_archive: [],
+          status: "skipped",
+          note: countErr.message,
+        });
+        continue;
+      }
+
+      const liveCount = liveCountRaw ?? 0;
+      const keyCols = KEY_COLUMNS[t] ?? ["id"];
+      const primaryKey = keyCols[0];
+
+      // Sample key values from the archive and check existence in live.
+      const sample = archiveRows.slice(0, data.sampleSize);
+      const archiveKeys = sample
+        .map((r) => r?.[primaryKey])
+        .filter((v) => v != null);
+
+      let missingInLive = 0;
+      const sampleMissingInLive: string[] = [];
+      if (archiveKeys.length > 0) {
+        const CHUNK = 500;
+        const liveKeys = new Set<string>();
+        for (let i = 0; i < archiveKeys.length; i += CHUNK) {
+          const slice = archiveKeys.slice(i, i + CHUNK);
+          const { data: hits } = await supabaseAdmin
+            .from(t as never)
+            .select(primaryKey)
+            .in(primaryKey, slice as any);
+          for (const h of (hits ?? []) as any[]) {
+            liveKeys.add(String(h[primaryKey]));
+          }
+        }
+        for (const k of archiveKeys) {
+          if (!liveKeys.has(String(k))) {
+            missingInLive++;
+            if (sampleMissingInLive.length < 5) sampleMissingInLive.push(String(k));
+          }
+        }
+      }
+
+      // Reverse direction: sample live keys, check if absent from archive.
+      let missingInArchive = 0;
+      const sampleMissingInArchive: string[] = [];
+      const { data: liveSample } = await supabaseAdmin
+        .from(t as never)
+        .select(primaryKey)
+        .limit(data.sampleSize);
+      const archiveKeySet = new Set(
+        archiveRows.map((r) => String(r?.[primaryKey])).filter((v) => v !== "undefined"),
+      );
+      for (const r of (liveSample ?? []) as any[]) {
+        const k = r?.[primaryKey];
+        if (k != null && !archiveKeySet.has(String(k))) {
+          missingInArchive++;
+          if (sampleMissingInArchive.length < 5) sampleMissingInArchive.push(String(k));
+        }
+      }
+
+      const delta = archiveRows.length - liveCount;
+      const status: Row["status"] =
+        delta === 0 && missingInLive === 0 && missingInArchive === 0 ? "ok" : "drift";
+
+      rows.push({
+        table: t,
+        archive_rows: archiveRows.length,
+        live_rows: liveCount,
+        delta,
+        key_columns: keyCols,
+        keys_checked: archiveKeys.length,
+        keys_missing_in_live: missingInLive,
+        keys_missing_in_archive: missingInArchive,
+        sample_missing_in_live: sampleMissingInLive,
+        sample_missing_in_archive: sampleMissingInArchive,
+        status,
+      });
+    }
+
+    // Targeted check: every telegram_ingest row in the archive that has a
+    // file_unique_id must map to a media_files row with that same value.
+    const ingestRows = (archiveTables["telegram_ingest"] ?? []) as any[];
+    const mediaRows = (archiveTables["media_files"] ?? []) as any[];
+    const mediaUids = new Set(
+      mediaRows.map((r) => r?.file_unique_id).filter((v) => v != null).map(String),
+    );
+    const ingestUids = ingestRows
+      .map((r) => r?.file_unique_id)
+      .filter((v) => v != null)
+      .map(String);
+    const orphanIngestUids = ingestUids.filter((u) => !mediaUids.has(u));
+
+    const fileMetadataCheck = {
+      ingest_with_file_unique_id: ingestUids.length,
+      media_with_file_unique_id: mediaUids.size,
+      ingest_orphans_without_media: orphanIngestUids.length,
+      sample_orphans: orphanIngestUids.slice(0, 5),
+      status:
+        orphanIngestUids.length === 0
+          ? ("ok" as const)
+          : ("drift" as const),
+    };
+
+    const summary = {
+      tables_checked: rows.length,
+      tables_ok: rows.filter((r) => r.status === "ok").length,
+      tables_drift: rows.filter((r) => r.status === "drift").length,
+      tables_skipped: rows.filter((r) => r.status === "skipped").length,
+      total_archive_rows: rows.reduce((a, r) => a + r.archive_rows, 0),
+      total_live_rows: rows.reduce((a, r) => a + r.live_rows, 0),
+      overall_status:
+        rows.every((r) => r.status === "ok") && fileMetadataCheck.status === "ok"
+          ? ("ok" as const)
+          : ("drift" as const),
+    };
+
+    return {
+      ok: true,
+      generated_at: new Date().toISOString(),
+      schema_version: SCHEMA_VERSION,
+      archive_schema_version: data.archive.schema_version ?? 1,
+      summary,
+      tables: rows,
+      file_metadata_check: fileMetadataCheck,
+    };
+  });
+
+
 
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
