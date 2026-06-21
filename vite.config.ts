@@ -14,6 +14,17 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Force-on nitro with the Node.js server preset for self-hosted VPS deployments
+  // (PM2 + Nginx). Build output → dist/server/index.mjs + dist/public/.
+  // Override via NITRO_PRESET env var if deploying elsewhere.
+  nitro: {
+    preset: process.env.NITRO_PRESET || "node-server",
+    output: {
+      dir: "dist",
+      serverDir: "dist/server",
+      publicDir: "dist/public",
+    },
+  },
   vite: {
     define: {
       __BUILD_ID__: JSON.stringify(BUILD_ID),
