@@ -824,13 +824,19 @@ export type Database = {
           attempt_count: number
           attempt_history: Json
           bot_user_id: number | null
+          category: string | null
           created_at: string
           delivered_at: string | null
           delivery_error: string | null
           delivery_status: string | null
+          failure_reason: string | null
           file_id: string | null
+          force_join_channels: Json | null
+          force_join_required: boolean
+          force_join_status: string | null
           id: string
           idempotency_key: string | null
+          shortener_used: string | null
           source: string | null
           title_id: string | null
           user_id: string | null
@@ -841,13 +847,19 @@ export type Database = {
           attempt_count?: number
           attempt_history?: Json
           bot_user_id?: number | null
+          category?: string | null
           created_at?: string
           delivered_at?: string | null
           delivery_error?: string | null
           delivery_status?: string | null
+          failure_reason?: string | null
           file_id?: string | null
+          force_join_channels?: Json | null
+          force_join_required?: boolean
+          force_join_status?: string | null
           id?: string
           idempotency_key?: string | null
+          shortener_used?: string | null
           source?: string | null
           title_id?: string | null
           user_id?: string | null
@@ -858,13 +870,19 @@ export type Database = {
           attempt_count?: number
           attempt_history?: Json
           bot_user_id?: number | null
+          category?: string | null
           created_at?: string
           delivered_at?: string | null
           delivery_error?: string | null
           delivery_status?: string | null
+          failure_reason?: string | null
           file_id?: string | null
+          force_join_channels?: Json | null
+          force_join_required?: boolean
+          force_join_status?: string | null
           id?: string
           idempotency_key?: string | null
+          shortener_used?: string | null
           source?: string | null
           title_id?: string | null
           user_id?: string | null
@@ -1011,6 +1029,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      force_join_channels: {
+        Row: {
+          categories: string[]
+          chat_id: string
+          created_at: string
+          id: string
+          invite_url: string | null
+          is_active: boolean
+          priority: number
+          rule_group: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          categories?: string[]
+          chat_id: string
+          created_at?: string
+          id?: string
+          invite_url?: string | null
+          is_active?: boolean
+          priority?: number
+          rule_group?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          categories?: string[]
+          chat_id?: string
+          created_at?: string
+          id?: string
+          invite_url?: string | null
+          is_active?: boolean
+          priority?: number
+          rule_group?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       google_oauth_credentials: {
         Row: {
