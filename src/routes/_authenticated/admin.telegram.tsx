@@ -1016,6 +1016,10 @@ function ChannelWizard() {
   const [pickedChannels, setPickedChannels] = useState<Set<string>>(new Set());
   const [resyncing, setResyncing] = useState(false);
   const [resyncingAll, setResyncingAll] = useState(false);
+  // Per-channel results from the most recent "Re-scan all channels" run.
+  type RescanRow = { id: string; name: string; status: "pending" | "running" | "ok" | "failed"; scanned?: number; backfilled?: number; metadataUpdated?: number; error?: string };
+  const [rescanProgress, setRescanProgress] = useState<{ rows: RescanRow[]; done: number; total: number } | null>(null);
+
   const togglePick = (id: string) => setPickedChannels((prev) => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
