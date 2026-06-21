@@ -1113,23 +1113,39 @@ function ChannelWizard() {
               variant="default"
               disabled={resyncingAll || resyncing}
               onClick={async () => {
+                const all = (channels.data ?? []).filter((c: any) => c.is_active !== false);
+                if (all.length === 0) { toast.message("No active channels to re-scan."); return; }
                 setResyncingAll(true);
-                try {
-                  const r = await resyncAll();
-                  toast.success(
-                    `Re-scanned ${r.channels} channel(s) · scanned ${r.scanned} · backfilled ${r.backfillProcessed} · metadata updated ${r.metadataUpdated}`,
-                  );
-                  channels.refetch();
-                } catch (e: any) {
-                  toast.error(e?.message ?? "Re-scan failed");
-                } finally {
-                  setResyncingAll(false);
+                const initial: RescanRow[] = all.map((c: any) => ({ id: c.id, name: c.name ?? c.channel_id ?? c.id, status: "pending" }));
+                setRescanProgress({ rows: initial, done: 0, total: all.length });
+                let done = 0;
+                for (const ch of all) {
+                  setRescanProgress((p) => p ? { ...p, rows: p.rows.map((r) => r.id === ch.id ? { ...r, status: "running" } : r) } : p);
+                  try {
+                    const r: any = await resync({ data: { channelIds: [ch.id] } });
+                    setRescanProgress((p) => p ? { ...p, rows: p.rows.map((row) => row.id === ch.id ? { ...row, status: "ok", scanned: r.scanned, backfilled: r.backfillProcessed, metadataUpdated: r.metadataUpdated } : row) } : p);
+                  } catch (e: any) {
+                    setRescanProgress((p) => p ? { ...p, rows: p.rows.map((row) => row.id === ch.id ? { ...row, status: "failed", error: e?.message ?? "failed" } : row) } : p);
+                  }
+                  done++;
+                  setRescanProgress((p) => p ? { ...p, done } : p);
                 }
+                const okCount = (initial.length); // we'll re-read state below
+                setRescanProgress((p) => {
+                  if (!p) return p;
+                  const ok = p.rows.filter((r) => r.status === "ok").length;
+                  const fail = p.rows.filter((r) => r.status === "failed").length;
+                  toast.success(`Re-scan complete · ${ok} ok · ${fail} failed`);
+                  return p;
+                });
+                setResyncingAll(false);
+                channels.refetch();
               }}
-              title="Re-scan every active channel and rebuild website indexes — useful after a restore"
+              title="Re-scan every active channel one at a time so you can see per-channel progress and failures"
             >
-              {resyncingAll ? "Re-scanning all…" : "🔄 Re-scan all channels"}
+              {resyncingAll ? `Re-scanning ${rescanProgress?.done ?? 0}/${rescanProgress?.total ?? 0}…` : "🔄 Re-scan all channels"}
             </Button>
+
             <Button
               size="sm"
               variant="secondary"
