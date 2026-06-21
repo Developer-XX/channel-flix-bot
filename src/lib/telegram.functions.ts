@@ -1507,8 +1507,9 @@ export const reparseChannelFromCaptions = createServerFn({ method: "POST" })
 
     let q = supabaseAdmin
       .from("telegram_ingest")
-      .select("id, caption, file_name, matched_title_id, promoted_media_file_id, telegram_file_id, telegram_message_id, channel_id, mime_type, file_size, duration_seconds")
+      .select("id, caption, file_name, matched_title_id, promoted_media_file_id, telegram_file_id, telegram_message_id, channel_id, mime_type, file_size, duration_seconds, match_locked")
       .is("deleted_at", null)
+      .eq("match_locked", false)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
     if (data.channelRowId) q = q.eq("channel_id", data.channelRowId);
