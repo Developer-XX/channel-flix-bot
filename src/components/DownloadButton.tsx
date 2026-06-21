@@ -246,18 +246,21 @@ export function DownloadButton({
       }
       if (r.reason === "must_join_channel") {
         const rr = r as any;
-        const url: string = rr.joinUrl || "";
-        const title: string = rr.channelTitle || "the main channel";
-        toast.message(`Join ${title} on Telegram to download files`, {
-          description: url ? "Opening the channel — tap Join, then try the download again." : "Ask the admin for the channel link.",
-          action: url
-            ? { label: "Open channel", onClick: () => window.open(url, "_blank", "noopener,noreferrer") }
-            : undefined,
-        });
-        if (url) {
-          try { window.open(url, "_blank", "noopener,noreferrer"); } catch { /* popup blocked */ }
+        const channels: Array<{ id: string; title: string; joinUrl: string; status: string }> =
+          Array.isArray(rr.channels) && rr.channels.length
+            ? rr.channels
+            : [{ id: "legacy", title: rr.channelTitle || "Main channel", joinUrl: rr.joinUrl || "", status: "not_joined" }];
+        const rule: "and" | "or" = rr.rule === "or" ? "or" : "and";
+        const joined = new Set<string>(channels.filter((c) => c.status === "joined").map((c) => c.id));
+        setJoinState({ rule, channels, joined, secondsLeft: 180, polling: true });
+        // Auto-open the first not-joined channel for one-tap join.
+        const first = channels.find((c) => c.status !== "joined" && c.joinUrl);
+        if (first?.joinUrl) {
+          try { window.open(first.joinUrl, "_blank", "noopener,noreferrer"); } catch { /* popup blocked */ }
         }
+        startJoinPolling(activeFileId, cid);
         return;
+
       }
       // Note: cooldown is now handled server-side as a transparent re-use of
       // the prior delivery within DOWNLOAD_RESEND_COOLDOWN_SECONDS — the
