@@ -133,11 +133,7 @@ export const importAllData = createServerFn({ method: "POST" })
     const report: Record<string, TableReport> = {};
 
     // Load live schema info once for all involved tables.
-    const { data: schemaRows, error: schemaErr } = await supabaseAdmin
-      .rpc("__noop_force_no_rpc" as never)
-      .then(() => ({ data: null as any, error: null as any }))
-      .catch(() => ({ data: null, error: null }));
-    void schemaRows; void schemaErr; // keep TS happy if unused
+    // (information_schema lookup below)
 
     // Use information_schema via a direct select.
     const { data: colsData } = await supabaseAdmin
