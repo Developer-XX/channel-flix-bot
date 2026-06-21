@@ -313,7 +313,7 @@ function sanitizeRowForRestore(
     nullInvalidPublic("channel_id", "telegram_channels");
     nullInvalidPublic("episode_id", "episodes");
     const episodeId = asKey(out.episode_id);
-    if (!validPublicId("master_titles", out.title_id) && episodeId) {
+    if ((!out.title_id || !validPublicId("master_titles", out.title_id)) && episodeId) {
       out.title_id = opts.episodeTitleById.get(episodeId) ?? null;
     }
     nullInvalidPublic("title_id", "master_titles");
