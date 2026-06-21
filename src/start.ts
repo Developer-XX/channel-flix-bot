@@ -3,6 +3,7 @@ import { createStart, createMiddleware } from "@tanstack/react-start";
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
 import { serverFnErrorLogger } from "@/lib/server-fn-error-logger";
+import { securityMiddleware } from "@/lib/security-middleware";
 
 /**
  * Emit a single-line JSON log record. PM2 captures stdout/stderr verbatim,
@@ -144,6 +145,8 @@ export const startInstance = createStart(() => ({
   // attachSupabaseAuth must run first (so the bearer is attached for
   // requireSupabaseAuth); the error logger wraps everything beneath.
   functionMiddleware: [attachSupabaseAuth, serverFnErrorLogger],
-  // requestLogger runs OUTSIDE errorMiddleware so it sees the final status code.
-  requestMiddleware: [requestLogger, errorMiddleware],
+  // Order matters: requestLogger (outermost — sees final status) →
+  // securityMiddleware (rate limit + headers, outside errorMiddleware so
+  // headers are applied even on error responses) → errorMiddleware.
+  requestMiddleware: [requestLogger, securityMiddleware, errorMiddleware],
 }));

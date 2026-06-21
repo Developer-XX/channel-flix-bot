@@ -66,42 +66,53 @@ export const exportAllData = createServerFn({ method: "POST" })
     z.object({ maxRowsPerTable: z.number().int().positive().max(500_000).optional() }).parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
-    await requireAdminAccess(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const cap = data.maxRowsPerTable ?? DEFAULT_MAX_ROWS_PER_TABLE;
+    try {
+      await requireAdminAccess(context);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const cap = data.maxRowsPerTable ?? DEFAULT_MAX_ROWS_PER_TABLE;
 
-    const tables: Record<string, any[]> = {};
-    const counts: Record<string, number> = {};
-    const skipped: Record<string, string> = {};
+      const tables: Record<string, any[]> = {};
+      const counts: Record<string, number> = {};
+      const skipped: Record<string, string> = {};
 
-    for (const t of EXPORT_TABLES) {
-      const { data: rows, error } = await supabaseAdmin
-        .from(t as never)
-        .select("*")
-        .limit(cap);
-      if (error) {
-        skipped[t] = error.message;
-        continue;
+      for (const t of EXPORT_TABLES) {
+        const { data: rows, error } = await supabaseAdmin
+          .from(t as never)
+          .select("*")
+          .limit(cap);
+        if (error) {
+          skipped[t] = error.message;
+          continue;
+        }
+        tables[t] = (rows ?? []) as any[];
+        counts[t] = (rows ?? []).length;
       }
-      tables[t] = (rows ?? []) as any[];
-      counts[t] = (rows ?? []).length;
-    }
 
-    return {
-      ok: true,
-      archive: {
-        version: 1,
-        schema_version: SCHEMA_VERSION,
-        schema_tables: [...EXPORT_TABLES],
-        kind: "lovable-app-backup",
-        exported_at: new Date().toISOString(),
-        exported_by: context.userId,
-        row_cap: cap,
-        counts,
-        skipped,
-        tables,
-      },
-    };
+      return {
+        ok: true,
+        archive: {
+          version: 1,
+          schema_version: SCHEMA_VERSION,
+          schema_tables: [...EXPORT_TABLES],
+          kind: "lovable-app-backup",
+          exported_at: new Date().toISOString(),
+          exported_by: context.userId,
+          row_cap: cap,
+          counts,
+          skipped,
+          tables,
+        },
+      };
+    } catch (err) {
+      const { notifyOpsAlert } = await import("@/lib/ops-alert.server");
+      notifyOpsAlert({
+        level: "error",
+        source: "backup.export",
+        message: "exportAllData failed",
+        details: { error: err instanceof Error ? err.message : String(err), userId: context.userId },
+      });
+      throw err;
+    }
   });
 
 const ImportArchiveSchema = z.object({

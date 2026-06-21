@@ -306,9 +306,19 @@ export async function consumeToken(args: {
     .select("token, user_id, media_file_id, provider, expires_at, consumed_at, ip_hash")
     .eq("token", token)
     .maybeSingle();
-  if (!row) return { ok: false, reason: "not_found" };
-  if (row.consumed_at) return { ok: false, reason: "already_used" };
-  if (new Date(row.expires_at).getTime() < Date.now()) return { ok: false, reason: "expired" };
+  if (!row || row.consumed_at || new Date(row.expires_at ?? 0).getTime() < Date.now()) {
+    const reason = !row ? "not_found" : row.consumed_at ? "already_used" : "expired";
+    try {
+      const { notifyOpsAlert } = await import("@/lib/ops-alert.server");
+      notifyOpsAlert({
+        level: "warn",
+        source: "verification.consumeToken",
+        message: `token verification failed: ${reason}`,
+        details: { reason, ip: ip ? "present" : null },
+      });
+    } catch { /* never block */ }
+    return { ok: false, reason: reason as "not_found" | "already_used" | "expired" };
+  }
   if (row.ip_hash && ip && hashIp(ip) !== row.ip_hash) {
     console.warn(`[verification] ip mismatch for token (soft-allow)`);
   }
