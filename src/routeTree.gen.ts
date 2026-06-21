@@ -48,6 +48,7 @@ import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminGoogleOauthHelpRouteImport } from './routes/_authenticated/admin.google-oauth-help'
 import { Route as AuthenticatedAdminGoogleOauthCallbackRouteImport } from './routes/_authenticated/admin.google-oauth-callback'
 import { Route as AuthenticatedAdminGoogleOauthRouteImport } from './routes/_authenticated/admin.google-oauth'
+import { Route as AuthenticatedAdminForceJoinRouteImport } from './routes/_authenticated/admin.force-join'
 import { Route as AuthenticatedAdminErrorLogRouteImport } from './routes/_authenticated/admin.error-log'
 import { Route as AuthenticatedAdminEpisodeAuditRouteImport } from './routes/_authenticated/admin.episode-audit'
 import { Route as AuthenticatedAdminDiagnosticsRouteImport } from './routes/_authenticated/admin.diagnostics'
@@ -290,6 +291,12 @@ const AuthenticatedAdminGoogleOauthRoute =
     path: '/google-oauth',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminForceJoinRoute =
+  AuthenticatedAdminForceJoinRouteImport.update({
+    id: '/force-join',
+    path: '/force-join',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminErrorLogRoute =
   AuthenticatedAdminErrorLogRouteImport.update({
     id: '/error-log',
@@ -487,6 +494,7 @@ export interface FileRoutesByFullPath {
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/admin/force-join': typeof AuthenticatedAdminForceJoinRoute
   '/admin/google-oauth': typeof AuthenticatedAdminGoogleOauthRoute
   '/admin/google-oauth-callback': typeof AuthenticatedAdminGoogleOauthCallbackRoute
   '/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
@@ -555,6 +563,7 @@ export interface FileRoutesByTo {
   '/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/admin/force-join': typeof AuthenticatedAdminForceJoinRoute
   '/admin/google-oauth': typeof AuthenticatedAdminGoogleOauthRoute
   '/admin/google-oauth-callback': typeof AuthenticatedAdminGoogleOauthCallbackRoute
   '/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
@@ -626,6 +635,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/diagnostics': typeof AuthenticatedAdminDiagnosticsRoute
   '/_authenticated/admin/episode-audit': typeof AuthenticatedAdminEpisodeAuditRoute
   '/_authenticated/admin/error-log': typeof AuthenticatedAdminErrorLogRoute
+  '/_authenticated/admin/force-join': typeof AuthenticatedAdminForceJoinRoute
   '/_authenticated/admin/google-oauth': typeof AuthenticatedAdminGoogleOauthRoute
   '/_authenticated/admin/google-oauth-callback': typeof AuthenticatedAdminGoogleOauthCallbackRoute
   '/_authenticated/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
@@ -697,6 +707,7 @@ export interface FileRouteTypes {
     | '/admin/diagnostics'
     | '/admin/episode-audit'
     | '/admin/error-log'
+    | '/admin/force-join'
     | '/admin/google-oauth'
     | '/admin/google-oauth-callback'
     | '/admin/google-oauth-help'
@@ -765,6 +776,7 @@ export interface FileRouteTypes {
     | '/admin/diagnostics'
     | '/admin/episode-audit'
     | '/admin/error-log'
+    | '/admin/force-join'
     | '/admin/google-oauth'
     | '/admin/google-oauth-callback'
     | '/admin/google-oauth-help'
@@ -835,6 +847,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/diagnostics'
     | '/_authenticated/admin/episode-audit'
     | '/_authenticated/admin/error-log'
+    | '/_authenticated/admin/force-join'
     | '/_authenticated/admin/google-oauth'
     | '/_authenticated/admin/google-oauth-callback'
     | '/_authenticated/admin/google-oauth-help'
@@ -1187,6 +1200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminGoogleOauthRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/force-join': {
+      id: '/_authenticated/admin/force-join'
+      path: '/force-join'
+      fullPath: '/admin/force-join'
+      preLoaderRoute: typeof AuthenticatedAdminForceJoinRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/error-log': {
       id: '/_authenticated/admin/error-log'
       path: '/error-log'
@@ -1415,6 +1435,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminDiagnosticsRoute: typeof AuthenticatedAdminDiagnosticsRoute
   AuthenticatedAdminEpisodeAuditRoute: typeof AuthenticatedAdminEpisodeAuditRoute
   AuthenticatedAdminErrorLogRoute: typeof AuthenticatedAdminErrorLogRoute
+  AuthenticatedAdminForceJoinRoute: typeof AuthenticatedAdminForceJoinRoute
   AuthenticatedAdminGoogleOauthRoute: typeof AuthenticatedAdminGoogleOauthRoute
   AuthenticatedAdminGoogleOauthCallbackRoute: typeof AuthenticatedAdminGoogleOauthCallbackRoute
   AuthenticatedAdminGoogleOauthHelpRoute: typeof AuthenticatedAdminGoogleOauthHelpRoute
@@ -1448,6 +1469,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminDiagnosticsRoute: AuthenticatedAdminDiagnosticsRoute,
   AuthenticatedAdminEpisodeAuditRoute: AuthenticatedAdminEpisodeAuditRoute,
   AuthenticatedAdminErrorLogRoute: AuthenticatedAdminErrorLogRoute,
+  AuthenticatedAdminForceJoinRoute: AuthenticatedAdminForceJoinRoute,
   AuthenticatedAdminGoogleOauthRoute: AuthenticatedAdminGoogleOauthRoute,
   AuthenticatedAdminGoogleOauthCallbackRoute:
     AuthenticatedAdminGoogleOauthCallbackRoute,
