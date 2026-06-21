@@ -1166,6 +1166,43 @@ function ChannelWizard() {
             </Button>
           </div>
         </div>
+        {rescanProgress && (
+          <div className="rounded-md border border-border bg-surface/40 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                Re-scan progress · {rescanProgress.done}/{rescanProgress.total}
+              </div>
+              <button
+                className="text-[11px] underline text-muted-foreground"
+                onClick={() => setRescanProgress(null)}
+              >Clear</button>
+            </div>
+            <div className="h-1.5 bg-border rounded overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${Math.round((rescanProgress.done / Math.max(1, rescanProgress.total)) * 100)}%` }}
+              />
+            </div>
+            <ul className="space-y-1 max-h-72 overflow-y-auto text-xs">
+              {rescanProgress.rows.map((r) => (
+                <li key={r.id} className={`flex items-center justify-between gap-2 px-2 py-1 rounded ${r.status === "failed" ? "bg-red-500/10" : r.status === "ok" ? "bg-emerald-500/5" : ""}`}>
+                  <span className="truncate">
+                    {r.status === "running" && "⏳ "}
+                    {r.status === "ok" && "✅ "}
+                    {r.status === "failed" && "❌ "}
+                    {r.status === "pending" && "· "}
+                    {r.name}
+                  </span>
+                  <span className="text-muted-foreground shrink-0">
+                    {r.status === "ok" && `scanned ${r.scanned} · backfilled ${r.backfilled} · meta+${r.metadataUpdated}`}
+                    {r.status === "failed" && (r.error?.slice(0, 80) ?? "failed")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {channels.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {(channels.data ?? []).length === 0 && !channels.isLoading && (
           <div className="text-sm text-muted-foreground">No channels yet.</div>
