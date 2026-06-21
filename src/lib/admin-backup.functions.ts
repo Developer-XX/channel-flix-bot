@@ -43,8 +43,8 @@ const EXPORT_TABLES: readonly string[] = [
   "title_aliases",
   "seasons",
   "episodes",
-  "telegram_ingest",
   "media_files",
+  "telegram_ingest",
   "scheduled_message_deletes",
   "download_send_queue",
   "delivery_attempts",
@@ -56,17 +56,18 @@ const EXPORT_TABLES: readonly string[] = [
 
 // Bump when EXPORT_TABLES changes shape in a way that would make an old
 // archive unsafe to restore against the current code.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
 const DEFAULT_MAX_ROWS_PER_TABLE = 50_000;
 
-
 export const exportAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ maxRowsPerTable: z.number().int().positive().max(500_000).optional() }).parse(d ?? {}),
+    z
+      .object({ maxRowsPerTable: z.number().int().positive().max(500_000).optional() })
+      .parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
     try {
@@ -112,7 +113,10 @@ export const exportAllData = createServerFn({ method: "POST" })
         level: "error",
         source: "backup.export",
         message: "exportAllData failed",
-        details: { error: err instanceof Error ? err.message : String(err), userId: context.userId },
+        details: {
+          error: err instanceof Error ? err.message : String(err),
+          userId: context.userId,
+        },
       });
       throw err;
     }
@@ -155,10 +159,180 @@ const CONFLICT_COLUMNS: Record<string, string> = {
   app_settings: "key",
   shortener_configs: "provider",
   telegram_user_links: "user_id",
+  telegram_broadcast_subscribers: "telegram_user_id",
+  download_send_queue: "idempotency_key",
+  delivery_attempts: "idempotency_key",
 };
 
 function conflictColumnFor(table: string) {
   return CONFLICT_COLUMNS[table] ?? "id";
+}
+
+const KNOWN_ABSENT_COLUMNS: Record<string, string[]> = {
+  telegram_broadcast_subscribers: ["id"],
+  download_send_queue: ["id"],
+};
+
+const USER_REF_COLUMNS: Record<string, string[]> = {
+  profiles: ["id"],
+  user_roles: ["user_id"],
+  premium_payments: ["user_id", "reviewed_by"],
+  announcements: ["created_by"],
+  telegram_user_links: ["user_id"],
+  telegram_broadcast_runs: ["initiated_by"],
+  download_send_queue: ["user_id"],
+  delivery_attempts: ["user_id"],
+  content_requests: ["user_id"],
+  support_tickets: ["user_id"],
+  support_messages: ["sender_id"],
+  download_logs: ["user_id"],
+};
+
+const NON_NULL_USER_REFS: Record<string, string[]> = {
+  profiles: ["id"],
+  user_roles: ["user_id"],
+  premium_payments: ["user_id"],
+  telegram_user_links: ["user_id"],
+  download_send_queue: ["user_id"],
+  delivery_attempts: ["user_id"],
+  support_tickets: ["user_id"],
+};
+
+function asKey(value: unknown) {
+  return value == null ? null : String(value);
+}
+
+function keySet(rows: Array<Record<string, unknown>>, column = "id") {
+  return new Set(rows.map((r) => asKey(r?.[column])).filter((v): v is string => !!v));
+}
+
+function buildArchiveKeySets(tables: BackupTableRows) {
+  return {
+    app_settings: keySet(tables.app_settings ?? [], "key"),
+    premium_plans: keySet(tables.premium_plans ?? []),
+    telegram_channels: keySet(tables.telegram_channels ?? []),
+    master_titles: keySet(tables.master_titles ?? []),
+    seasons: keySet(tables.seasons ?? []),
+    episodes: keySet(tables.episodes ?? []),
+    media_files: keySet(tables.media_files ?? []),
+    support_tickets: keySet(tables.support_tickets ?? []),
+  } as Record<string, Set<string>>;
+}
+
+function buildEpisodeTitleMap(tables: BackupTableRows) {
+  const map = new Map<string, string>();
+  for (const row of tables.episodes ?? []) {
+    const id = asKey(row.id);
+    const titleId = asKey(row.title_id);
+    if (id && titleId) map.set(id, titleId);
+  }
+  return map;
+}
+
+async function loadExistingAuthUserIds(
+  supabaseAdmin: SupabaseClient<Database>,
+  tables: BackupTableRows,
+) {
+  const wanted = new Set<string>();
+  for (const [table, columns] of Object.entries(USER_REF_COLUMNS)) {
+    for (const row of tables[table] ?? []) {
+      for (const column of columns) {
+        const id = asKey(row[column]);
+        if (id) wanted.add(id);
+      }
+    }
+  }
+
+  const existing = new Set<string>();
+  for (const id of wanted) {
+    try {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(id);
+      if (data?.user?.id) existing.add(id);
+    } catch {
+      // If Auth Admin is unavailable on a self-hosted deployment, keep going.
+      // Nullable user references will be nulled and non-null user-owned rows skipped.
+    }
+  }
+  return existing;
+}
+
+function sanitizeRowForRestore(
+  table: string,
+  row: Record<string, unknown>,
+  opts: {
+    liveCols?: Map<string, LiveColumnMeta>;
+    archiveKeys: Record<string, Set<string>>;
+    restoredKeys: Map<string, Set<string>>;
+    processed: Set<string>;
+    authUsers: Set<string>;
+    episodeTitleById: Map<string, string>;
+  },
+) {
+  const knownMissing = new Set(KNOWN_ABSENT_COLUMNS[table] ?? []);
+  const out: Record<string, unknown> = {};
+  const live = opts.liveCols;
+  for (const [key, value] of Object.entries(row)) {
+    if (knownMissing.has(key)) continue;
+    if (live && live.size > 0 && !live.has(key)) continue;
+    out[key] = value;
+  }
+
+  const validPublicId = (parentTable: string, value: unknown) => {
+    const key = asKey(value);
+    if (!key) return true;
+    if (opts.processed.has(parentTable))
+      return opts.restoredKeys.get(parentTable)?.has(key) ?? false;
+    return opts.archiveKeys[parentTable]?.has(key) ?? false;
+  };
+  const nullInvalidPublic = (column: string, parentTable: string) => {
+    if (!validPublicId(parentTable, out[column])) out[column] = null;
+  };
+  const skipInvalidPublic = (column: string, parentTable: string) => {
+    if (!validPublicId(parentTable, out[column])) return true;
+    return false;
+  };
+  const authExists = (value: unknown) => {
+    const key = asKey(value);
+    return !key || opts.authUsers.has(key);
+  };
+
+  for (const column of NON_NULL_USER_REFS[table] ?? []) {
+    if (!authExists(out[column])) return null;
+  }
+  for (const column of USER_REF_COLUMNS[table] ?? []) {
+    if (!authExists(out[column])) out[column] = null;
+  }
+
+  if (table === "premium_payments") nullInvalidPublic("plan_id", "premium_plans");
+  if (table === "telegram_ingest") {
+    nullInvalidPublic("channel_id", "telegram_channels");
+    nullInvalidPublic("matched_title_id", "master_titles");
+    nullInvalidPublic("promoted_media_file_id", "media_files");
+  }
+  if (table === "media_files") {
+    nullInvalidPublic("channel_id", "telegram_channels");
+    nullInvalidPublic("episode_id", "episodes");
+    const episodeId = asKey(out.episode_id);
+    if ((!out.title_id || !validPublicId("master_titles", out.title_id)) && episodeId) {
+      out.title_id = opts.episodeTitleById.get(episodeId) ?? null;
+    }
+    nullInvalidPublic("title_id", "master_titles");
+    if (!out.title_id && !out.episode_id) return null;
+  }
+  if (table === "download_send_queue") {
+    if (skipInvalidPublic("file_id", "media_files")) return null;
+    nullInvalidPublic("title_id", "master_titles");
+  }
+  if (table === "delivery_attempts" && skipInvalidPublic("media_file_id", "media_files"))
+    return null;
+  if (table === "download_logs") {
+    nullInvalidPublic("file_id", "media_files");
+    nullInvalidPublic("title_id", "master_titles");
+  }
+  if (table === "support_messages" && skipInvalidPublic("ticket_id", "support_tickets"))
+    return null;
+
+  return out;
 }
 
 async function probeTablesThroughDataApi(
@@ -233,10 +407,12 @@ async function loadLiveSchemaProbe(
 export const backupCompletenessReport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({
-      archive: ImportArchiveSchema,
-      sampleSize: z.number().int().positive().max(5000).optional().default(500),
-    }).parse(d),
+    z
+      .object({
+        archive: ImportArchiveSchema,
+        sampleSize: z.number().int().positive().max(5000).optional().default(500),
+      })
+      .parse(d),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
@@ -259,10 +435,7 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
 
     const rows: Row[] = [];
     const archiveTables = data.archive.tables;
-    const allTables = new Set<string>([
-      ...EXPORT_TABLES,
-      ...Object.keys(archiveTables),
-    ]);
+    const allTables = new Set<string>([...EXPORT_TABLES, ...Object.keys(archiveTables)]);
 
     for (const t of allTables) {
       const archiveRows = (archiveTables[t] ?? []) as any[];
@@ -294,9 +467,7 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
 
       // Sample key values from the archive and check existence in live.
       const sample = archiveRows.slice(0, data.sampleSize);
-      const archiveKeys = sample
-        .map((r) => r?.[primaryKey])
-        .filter((v) => v != null);
+      const archiveKeys = sample.map((r) => r?.[primaryKey]).filter((v) => v != null);
 
       let missingInLive = 0;
       const sampleMissingInLive: string[] = [];
@@ -363,9 +534,17 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
     // Telegram files appear on title pages after a restore.
     const ingestRows = (archiveTables["telegram_ingest"] ?? []) as any[];
     const mediaRows = (archiveTables["media_files"] ?? []) as any[];
-    const mediaIds = new Set(mediaRows.map((r) => r?.id).filter((v) => v != null).map(String));
+    const mediaIds = new Set(
+      mediaRows
+        .map((r) => r?.id)
+        .filter((v) => v != null)
+        .map(String),
+    );
     const mediaTelegramIds = new Set(
-      mediaRows.map((r) => r?.telegram_file_id).filter((v) => v != null).map(String),
+      mediaRows
+        .map((r) => r?.telegram_file_id)
+        .filter((v) => v != null)
+        .map(String),
     );
     const ingestPromotedRefs = ingestRows
       .map((r) => r?.promoted_media_file_id)
@@ -417,13 +596,15 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({
-      archive: ImportArchiveSchema,
-      mode: z.enum(["upsert", "replace"]).default("upsert"),
-      dryRun: z.boolean().optional().default(false),
-      // confirm is only required for actual writes; dry runs don't touch data.
-      confirm: z.union([z.literal("RESTORE"), z.literal("DRYRUN"), z.literal("")]).optional(),
-    }).parse(d),
+    z
+      .object({
+        archive: ImportArchiveSchema,
+        mode: z.enum(["upsert", "replace"]).default("upsert"),
+        dryRun: z.boolean().optional().default(false),
+        // confirm is only required for actual writes; dry runs don't touch data.
+        confirm: z.union([z.literal("RESTORE"), z.literal("DRYRUN"), z.literal("")]).optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
@@ -535,7 +716,7 @@ export const importAllData = createServerFn({ method: "POST" })
             .from(t as never)
             .select(conflictColumn)
             .in(conflictColumn, slice as any);
-          matching += (hits?.length ?? 0);
+          matching += hits?.length ?? 0;
         }
         r.idsMatchingExisting = matching;
         r.newIds = archiveIds.length - matching;
@@ -553,7 +734,9 @@ export const importAllData = createServerFn({ method: "POST" })
         tablesWithSchemaDrift: Object.entries(report)
           .filter(([, r]) => r.unknownColumns.length > 0 || r.missingRequiredColumns.length > 0)
           .map(([t]) => t),
-        tablesMissing: Object.entries(report).filter(([, r]) => !r.tableExists).map(([t]) => t),
+        tablesMissing: Object.entries(report)
+          .filter(([, r]) => !r.tableExists)
+          .map(([t]) => t),
       };
       return { ok: true, dryRun: true, mode: data.mode, summary, report, integrity };
     }
@@ -561,44 +744,114 @@ export const importAllData = createServerFn({ method: "POST" })
     // Live restore path.
     const inserted: Record<string, number> = {};
     const failed: Record<string, string> = {};
+    const skipped: Record<string, number> = {};
+    const archiveKeys = buildArchiveKeySets(tables);
+    const episodeTitleById = buildEpisodeTitleMap(tables);
+    const authUsers = await loadExistingAuthUserIds(supabaseAdmin, tables);
+    const restoredKeys = new Map<string, Set<string>>();
+    const processed = new Set<string>();
+    const replaceDeleteFailed = new Set<string>();
+
+    if (data.mode === "replace") {
+      for (const t of [...EXPORT_TABLES].reverse()) {
+        if (report[t]?.error) continue;
+        const conflictColumn = conflictColumnFor(t);
+        const { error: delErr } = await supabaseAdmin
+          .from(t as never)
+          .delete()
+          .not(conflictColumn, "is", null);
+        if (delErr && !/column .* does not exist/i.test(delErr.message)) {
+          failed[t] = `delete failed: ${delErr.message}`;
+          replaceDeleteFailed.add(t);
+        }
+      }
+    }
 
     for (const t of EXPORT_TABLES) {
       const rows = (tables[t] ?? []) as any[];
-      if (rows.length === 0) continue;
+      if (rows.length === 0) {
+        processed.add(t);
+        restoredKeys.set(t, new Set());
+        continue;
+      }
       if (report[t]?.error) {
         failed[t] = report[t].error!;
+        processed.add(t);
+        restoredKeys.set(t, new Set());
+        continue;
+      }
+      if (replaceDeleteFailed.has(t)) {
+        processed.add(t);
+        restoredKeys.set(t, new Set());
         continue;
       }
 
       try {
         const conflictColumn = conflictColumnFor(t);
-        if (data.mode === "replace") {
-          const { error: delErr } = await supabaseAdmin
-            .from(t as never)
-            .delete()
-            .not(conflictColumn, "is", null);
-          if (delErr && !/column .* does not exist/i.test(delErr.message)) {
-            failed[t] = `delete failed: ${delErr.message}`;
-            continue;
-          }
+        const liveColsForTable = liveCols.get(t);
+        const sanitizedRows = rows
+          .map((row) =>
+            sanitizeRowForRestore(t, row, {
+              liveCols: liveColsForTable,
+              archiveKeys,
+              restoredKeys,
+              processed,
+              authUsers,
+              episodeTitleById,
+            }),
+          )
+          .filter((row): row is Record<string, unknown> => !!row);
+        skipped[t] = rows.length - sanitizedRows.length;
+        const restoredForTable = new Set<string>();
+
+        if (sanitizedRows.length === 0) {
+          inserted[t] = 0;
+          restoredKeys.set(t, restoredForTable);
+          processed.add(t);
+          continue;
         }
 
         const CHUNK = 500;
         let writtenForTable = 0;
-        for (let i = 0; i < rows.length; i += CHUNK) {
-          const chunk = rows.slice(i, i + CHUNK);
+        const rowErrors: string[] = [];
+        for (let i = 0; i < sanitizedRows.length; i += CHUNK) {
+          const chunk = sanitizedRows.slice(i, i + CHUNK);
           const { error: upErr } = await supabaseAdmin
             .from(t as never)
             .upsert(chunk as never, { onConflict: conflictColumn });
           if (upErr) {
-            failed[t] = upErr.message;
-            break;
+            for (const row of chunk) {
+              const { error: rowErr } = await supabaseAdmin
+                .from(t as never)
+                .upsert(row as never, { onConflict: conflictColumn });
+              if (rowErr) {
+                rowErrors.push(rowErr.message);
+                skipped[t] = (skipped[t] ?? 0) + 1;
+                continue;
+              }
+              writtenForTable += 1;
+              const id = asKey(row[conflictColumn]) ?? asKey(row.id);
+              if (id) restoredForTable.add(id);
+            }
+            continue;
           }
           writtenForTable += chunk.length;
+          for (const row of chunk) {
+            const id = asKey(row[conflictColumn]) ?? asKey(row.id);
+            if (id) restoredForTable.add(id);
+          }
         }
         inserted[t] = writtenForTable;
+        if (rowErrors.length > 0 && writtenForTable === 0 && sanitizedRows.length > 0) {
+          failed[t] =
+            `${rowErrors.length} row(s) skipped after restore fallback; first error: ${rowErrors[0]}`;
+        }
+        restoredKeys.set(t, restoredForTable);
+        processed.add(t);
       } catch (e) {
         failed[t] = (e as Error).message;
+        restoredKeys.set(t, new Set());
+        processed.add(t);
       }
     }
 
@@ -619,7 +872,17 @@ export const importAllData = createServerFn({ method: "POST" })
       postRestore.indexesError = (e as Error).message;
     }
 
-    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report, integrity, postRestore };
+    return {
+      ok: true,
+      dryRun: false,
+      mode: data.mode,
+      inserted,
+      skipped,
+      failed,
+      report,
+      integrity,
+      postRestore,
+    };
   });
 
 // ---- Health check ------------------------------------------------------
@@ -654,7 +917,10 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
     const tables: Record<string, any[]> = {};
     const counts: Record<string, number> = {};
     for (const t of EXPORT_TABLES) {
-      const { data: rows } = await supabaseAdmin.from(t as never).select("*").limit(cap);
+      const { data: rows } = await supabaseAdmin
+        .from(t as never)
+        .select("*")
+        .limit(cap);
       tables[t] = (rows ?? []) as any[];
       counts[t] = tables[t].length;
     }
@@ -677,4 +943,3 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
       ran_at: new Date().toISOString(),
     };
   });
-
