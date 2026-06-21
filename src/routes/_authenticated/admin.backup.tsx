@@ -46,18 +46,19 @@ function BackupPage() {
     }
   }
 
-  async function handleImport() {
+  async function handleImport(dryRun: boolean) {
     if (!file) { toast.error("Pick a backup file first"); return; }
-    if (confirm !== "RESTORE") { toast.error("Type RESTORE to confirm"); return; }
+    if (!dryRun && confirm !== "RESTORE") { toast.error("Type RESTORE to confirm"); return; }
     setImporting(true);
     setImportResult(null);
     try {
       const text = await file.text();
       const archive = JSON.parse(text);
-      const res = await doImport({ data: { archive, mode, confirm: "RESTORE" } });
-      setImportResult({ inserted: res.inserted, failed: res.failed });
-      const failedCount = Object.keys(res.failed).length;
-      if (failedCount === 0) toast.success("Restore complete");
+      const res: any = await doImport({ data: { archive, mode, dryRun, confirm: dryRun ? "DRYRUN" : "RESTORE" } });
+      setImportResult({ dryRun: res.dryRun, inserted: res.inserted, failed: res.failed, report: res.report, summary: res.summary });
+      const failedCount = Object.keys(res.failed ?? {}).length;
+      if (dryRun) toast.success("Dry-run complete");
+      else if (failedCount === 0) toast.success("Restore complete");
       else toast.warning(`Restored with ${failedCount} table error(s)`);
     } catch (e: any) {
       toast.error(e?.message ?? "Import failed");
