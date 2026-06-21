@@ -936,7 +936,7 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const cap = 50_000;
+    const cap = 5_000_000;
     const tables: Record<string, any[]> = {};
     const counts: Record<string, number> = {};
     for (const t of EXPORT_TABLES) {
