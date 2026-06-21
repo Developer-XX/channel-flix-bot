@@ -153,34 +153,76 @@ function BackupPage() {
             />
           </div>
 
-          <Button
-            variant="destructive"
-            onClick={handleImport}
-            disabled={importing || !file || confirm !== "RESTORE"}
-          >
-            {importing ? "Restoring…" : "Restore from backup"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleImport(true)}
+              disabled={importing || !file}
+            >
+              {importing ? "Checking…" : "Dry-run (validate only)"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleImport(false)}
+              disabled={importing || !file || confirm !== "RESTORE"}
+            >
+              {importing ? "Restoring…" : "Restore from backup"}
+            </Button>
+          </div>
         </div>
 
         {importResult && (
           <div className="text-xs space-y-2 pt-3 border-t border-border">
-            <div>
-              <div className="font-semibold mb-1">Inserted</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
-                {Object.entries(importResult.inserted).map(([t, n]) => (
-                  <div key={t} className="flex justify-between font-mono">
-                    <span className="text-muted-foreground">{t}</span>
-                    <span>{n.toLocaleString()}</span>
-                  </div>
-                ))}
+            {importResult.dryRun && importResult.summary && (
+              <div className="rounded-md bg-muted p-2 space-y-1">
+                <div className="font-semibold">Dry-run summary</div>
+                <div>Tables analyzed: {importResult.summary.tablesAnalyzed}</div>
+                <div>Total incoming rows: {importResult.summary.totalIncoming?.toLocaleString?.()}</div>
+                <div>Existing rows that would be overwritten: {importResult.summary.totalConflicts?.toLocaleString?.()}</div>
+                {importResult.summary.tablesWithSchemaDrift?.length > 0 && (
+                  <div className="text-amber-500">Schema drift: {importResult.summary.tablesWithSchemaDrift.join(", ")}</div>
+                )}
+                {importResult.summary.tablesMissing?.length > 0 && (
+                  <div className="text-destructive">Missing tables: {importResult.summary.tablesMissing.join(", ")}</div>
+                )}
               </div>
-            </div>
-            {Object.keys(importResult.failed).length > 0 && (
+            )}
+            {importResult.report && (
+              <details>
+                <summary className="cursor-pointer font-semibold">Per-table report</summary>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1 mt-2">
+                  {Object.entries(importResult.report).map(([t, r]: [string, any]) => (
+                    <div key={t} className="rounded border border-border p-2 font-mono">
+                      <div className="font-semibold">{t}</div>
+                      <div>incoming: {r.incoming} · existing: {r.existing ?? "—"}</div>
+                      <div>conflicts: {r.idsMatchingExisting} · new: {r.newIds}</div>
+                      {r.unknownColumns?.length > 0 && <div className="text-amber-500">extra cols: {r.unknownColumns.join(", ")}</div>}
+                      {r.missingRequiredColumns?.length > 0 && <div className="text-destructive">missing req cols: {r.missingRequiredColumns.join(", ")}</div>}
+                      {r.error && <div className="text-destructive">{r.error}</div>}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            {importResult.inserted && (
+              <div>
+                <div className="font-semibold mb-1">Inserted</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+                  {Object.entries(importResult.inserted).map(([t, n]) => (
+                    <div key={t} className="flex justify-between font-mono">
+                      <span className="text-muted-foreground">{t}</span>
+                      <span>{(n as number).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {importResult.failed && Object.keys(importResult.failed).length > 0 && (
               <div className="text-destructive">
                 <div className="font-semibold mb-1">Failed</div>
                 {Object.entries(importResult.failed).map(([t, msg]) => (
                   <div key={t} className="font-mono">
-                    <span>{t}:</span> {msg}
+                    <span>{t}:</span> {msg as string}
                   </div>
                 ))}
               </div>
