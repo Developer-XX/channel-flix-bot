@@ -619,7 +619,8 @@ function DeliveryAuditWidget() {
             {!q.isLoading && rows.length === 0 && (
               <tr><td colSpan={6} className="py-3 text-muted-foreground">No download attempts yet.</td></tr>
             )}
-            {rows.map((r) => (
+            {rows.map((r: DeliveryAuditRow) => (
+
               <tr key={r.id} className="border-b border-border/40 align-top">
                 <td className="py-1.5 pr-2 whitespace-nowrap">{new Date(r.created_at).toLocaleString()}</td>
                 <td className="py-1.5 pr-2">
