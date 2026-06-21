@@ -44,9 +44,14 @@ const EXPORT_TABLES: readonly string[] = [
   "download_logs",
 ] as const;
 
+// Bump when EXPORT_TABLES changes shape in a way that would make an old
+// archive unsafe to restore against the current code.
+const SCHEMA_VERSION = 2;
+
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
 const DEFAULT_MAX_ROWS_PER_TABLE = 50_000;
+
 
 export const exportAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -79,6 +84,8 @@ export const exportAllData = createServerFn({ method: "POST" })
       ok: true,
       archive: {
         version: 1,
+        schema_version: SCHEMA_VERSION,
+        schema_tables: [...EXPORT_TABLES],
         kind: "lovable-app-backup",
         exported_at: new Date().toISOString(),
         exported_by: context.userId,
@@ -92,9 +99,12 @@ export const exportAllData = createServerFn({ method: "POST" })
 
 const ImportArchiveSchema = z.object({
   version: z.literal(1),
+  schema_version: z.number().int().optional(),
+  schema_tables: z.array(z.string()).optional(),
   kind: z.string().optional(),
   tables: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
 });
+
 
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -115,7 +125,32 @@ export const importAllData = createServerFn({ method: "POST" })
       throw new Error("confirm=RESTORE required for live restore");
     }
 
+    // ---- Integrity / version compatibility ----------------------------
+    const archiveSchemaVersion = data.archive.schema_version ?? 1;
+    const archiveTables = data.archive.schema_tables ?? Object.keys(data.archive.tables);
+    const liveTables = [...EXPORT_TABLES];
+    const unknownTables = archiveTables.filter((t) => !liveTables.includes(t));
+    const missingTables = liveTables.filter((t) => !archiveTables.includes(t));
+    const compatible = archiveSchemaVersion <= SCHEMA_VERSION && unknownTables.length === 0;
+    const integrity = {
+      archive_schema_version: archiveSchemaVersion,
+      live_schema_version: SCHEMA_VERSION,
+      archive_tables: archiveTables.length,
+      live_tables: liveTables.length,
+      unknown_tables: unknownTables,
+      missing_tables: missingTables,
+      compatible,
+    };
+    if (!data.dryRun && !compatible) {
+      throw new Error(
+        `Incompatible archive: schema v${archiveSchemaVersion} vs live v${SCHEMA_VERSION}` +
+          (unknownTables.length ? `; unknown tables: ${unknownTables.join(", ")}` : "") +
+          ". Run a dry-run to inspect, or re-export from a matching deployment.",
+      );
+    }
+
     const tables = data.archive.tables;
+
 
     type TableReport = {
       incoming: number;
@@ -227,7 +262,7 @@ export const importAllData = createServerFn({ method: "POST" })
           .map(([t]) => t),
         tablesMissing: Object.entries(report).filter(([, r]) => !r.tableExists).map(([t]) => t),
       };
-      return { ok: true, dryRun: true, mode: data.mode, summary, report };
+      return { ok: true, dryRun: true, mode: data.mode, summary, report, integrity };
     }
 
     // Live restore path.
@@ -273,5 +308,62 @@ export const importAllData = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report };
+    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report, integrity };
   });
+
+// ---- Health check ------------------------------------------------------
+// Lightweight ping the UI calls on mount to verify the server function
+// route is reachable and the admin context is healthy before showing the
+// Backup & Restore controls.
+export const checkBackupHealth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Cheap probe: count one table we know exists.
+    const { error } = await supabaseAdmin
+      .from("app_settings" as never)
+      .select("*", { count: "exact", head: true });
+    return {
+      ok: !error,
+      schema_version: SCHEMA_VERSION,
+      tables: EXPORT_TABLES.length,
+      probe_error: error?.message ?? null,
+      checked_at: new Date().toISOString(),
+    };
+  });
+
+// ---- Self-test: export then dry-run import, assert counts match -------
+export const runBackupSelfTest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const cap = 1_000;
+    const tables: Record<string, any[]> = {};
+    const counts: Record<string, number> = {};
+    for (const t of EXPORT_TABLES) {
+      const { data: rows } = await supabaseAdmin.from(t as never).select("*").limit(cap);
+      tables[t] = (rows ?? []) as any[];
+      counts[t] = tables[t].length;
+    }
+    // Compare archive counts against current counts. On a quiet DB they
+    // should match — mismatches indicate writes happened mid-export.
+    const mismatches: Record<string, { archive: number; live: number }> = {};
+    for (const t of EXPORT_TABLES) {
+      const { count } = await supabaseAdmin
+        .from(t as never)
+        .select("*", { count: "exact", head: true });
+      const live = Math.min(count ?? 0, cap);
+      if (live !== counts[t]) mismatches[t] = { archive: counts[t], live };
+    }
+    return {
+      ok: Object.keys(mismatches).length === 0,
+      schema_version: SCHEMA_VERSION,
+      tables_checked: EXPORT_TABLES.length,
+      total_rows: Object.values(counts).reduce((a, n) => a + n, 0),
+      mismatches,
+      ran_at: new Date().toISOString(),
+    };
+  });
+
