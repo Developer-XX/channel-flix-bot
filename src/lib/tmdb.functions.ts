@@ -6,8 +6,9 @@ import { requireAdminAccess } from "@/lib/admin-auth";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMAGE_BASE = "https://image.tmdb.org/t/p";
 
-function key() {
-  const k = process.env.TMDB_API_KEY;
+async function key() {
+  const { getSetting } = await import("@/lib/runtime-settings.server");
+  const k = (await getSetting("TMDB_API_KEY")) ?? process.env.TMDB_API_KEY;
   if (!k) throw new Error("TMDB_API_KEY not configured");
   return k;
 }
