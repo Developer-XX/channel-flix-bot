@@ -125,7 +125,32 @@ export const importAllData = createServerFn({ method: "POST" })
       throw new Error("confirm=RESTORE required for live restore");
     }
 
+    // ---- Integrity / version compatibility ----------------------------
+    const archiveSchemaVersion = data.archive.schema_version ?? 1;
+    const archiveTables = data.archive.schema_tables ?? Object.keys(data.archive.tables);
+    const liveTables = [...EXPORT_TABLES];
+    const unknownTables = archiveTables.filter((t) => !liveTables.includes(t));
+    const missingTables = liveTables.filter((t) => !archiveTables.includes(t));
+    const compatible = archiveSchemaVersion <= SCHEMA_VERSION && unknownTables.length === 0;
+    const integrity = {
+      archive_schema_version: archiveSchemaVersion,
+      live_schema_version: SCHEMA_VERSION,
+      archive_tables: archiveTables.length,
+      live_tables: liveTables.length,
+      unknown_tables: unknownTables,
+      missing_tables: missingTables,
+      compatible,
+    };
+    if (!data.dryRun && !compatible) {
+      throw new Error(
+        `Incompatible archive: schema v${archiveSchemaVersion} vs live v${SCHEMA_VERSION}` +
+          (unknownTables.length ? `; unknown tables: ${unknownTables.join(", ")}` : "") +
+          ". Run a dry-run to inspect, or re-export from a matching deployment.",
+      );
+    }
+
     const tables = data.archive.tables;
+
 
     type TableReport = {
       incoming: number;
