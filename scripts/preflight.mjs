@@ -20,6 +20,24 @@ const REQUIRED_OR_DB = ["TMDB_API_KEY", "TELEGRAM_BOT_TOKEN"];
 const missing = REQUIRED.filter((k) => !process.env[k]);
 const missingOrDb = REQUIRED_OR_DB.filter((k) => !process.env[k]);
 
+async function alertOps(level, message, details) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.OPS_ALERT_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: `🔥 ${level.toUpperCase()} · startup\nhost: ${process.env.HOSTNAME || "vps"}\ntime: ${new Date().toISOString()}\n\n${message}\n\n${JSON.stringify(details ?? {}, null, 2)}`.slice(0, 3900),
+      }),
+    });
+  } catch {
+    /* never block boot on alert failure */
+  }
+}
+
 if (missing.length) {
   console.error(
     JSON.stringify({
@@ -29,6 +47,7 @@ if (missing.length) {
       ts: new Date().toISOString(),
     }),
   );
+  await alertOps("error", "preflight failed: missing required env vars", { missing });
   process.exit(1);
 }
 
