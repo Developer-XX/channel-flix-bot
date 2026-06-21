@@ -107,6 +107,9 @@ function AnalyticsPage() {
         {a?.downloadsByDay && <DailyBars data={a.downloadsByDay} />}
       </Section>
 
+      <DeliveryAuditWidget />
+
+
       {/* Auto-delete cron (process-message-deletes) */}
       <Section title="Auto-delete (delivered messages)" icon={<XCircle className="h-4 w-4" />}>
         <StatGrid>
