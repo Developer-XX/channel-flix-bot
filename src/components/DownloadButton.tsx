@@ -210,8 +210,9 @@ export function DownloadButton({
     setJoinState(null);
   }
 
-
+  async function handleClick() {
     setLoading(true);
+
     const cid = newCorrelationId();
     setErrorState(null);
     try {
