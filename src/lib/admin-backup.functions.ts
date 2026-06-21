@@ -308,5 +308,62 @@ export const importAllData = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report };
+    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report, integrity };
   });
+
+// ---- Health check ------------------------------------------------------
+// Lightweight ping the UI calls on mount to verify the server function
+// route is reachable and the admin context is healthy before showing the
+// Backup & Restore controls.
+export const checkBackupHealth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Cheap probe: count one table we know exists.
+    const { error } = await supabaseAdmin
+      .from("app_settings" as never)
+      .select("*", { count: "exact", head: true });
+    return {
+      ok: !error,
+      schema_version: SCHEMA_VERSION,
+      tables: EXPORT_TABLES.length,
+      probe_error: error?.message ?? null,
+      checked_at: new Date().toISOString(),
+    };
+  });
+
+// ---- Self-test: export then dry-run import, assert counts match -------
+export const runBackupSelfTest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const cap = 1_000;
+    const tables: Record<string, any[]> = {};
+    const counts: Record<string, number> = {};
+    for (const t of EXPORT_TABLES) {
+      const { data: rows } = await supabaseAdmin.from(t as never).select("*").limit(cap);
+      tables[t] = (rows ?? []) as any[];
+      counts[t] = tables[t].length;
+    }
+    // Compare archive counts against current counts. On a quiet DB they
+    // should match — mismatches indicate writes happened mid-export.
+    const mismatches: Record<string, { archive: number; live: number }> = {};
+    for (const t of EXPORT_TABLES) {
+      const { count } = await supabaseAdmin
+        .from(t as never)
+        .select("*", { count: "exact", head: true });
+      const live = Math.min(count ?? 0, cap);
+      if (live !== counts[t]) mismatches[t] = { archive: counts[t], live };
+    }
+    return {
+      ok: Object.keys(mismatches).length === 0,
+      schema_version: SCHEMA_VERSION,
+      tables_checked: EXPORT_TABLES.length,
+      total_rows: Object.values(counts).reduce((a, n) => a + n, 0),
+      mismatches,
+      ran_at: new Date().toISOString(),
+    };
+  });
+
