@@ -26,36 +26,24 @@ export function BuildSyncProvider() {
     // expose build id for logger payloads
     (window as unknown as { __BUILD_ID__?: string }).__BUILD_ID__ = BUILD_ID;
 
-    // 1) buildId polling
+    // 1) buildId polling — DISABLED.
+    // The client and SSR bundles are built in separate Vite passes, so their
+    // injected BUILD_ID values differ even within a single deployment. That
+    // produced a permanent "A new version is available — reloading…" loop on
+    // self-hosted deployments. We still ping /api/public/health to track API
+    // health, but we no longer compare buildIds or trigger reloads.
     let cancelled = false;
     const check = async () => {
       try {
         const res = await fetch(HEALTH_URL, { cache: "no-store" });
-        if (!res.ok) {
-          setApiHealthy(false);
-          return;
-        }
-        const data = (await res.json()) as { buildId?: string };
-        setApiHealthy(true);
-        if (
-          data.buildId &&
-          data.buildId !== BUILD_ID &&
-          BUILD_ID !== "dev-unknown" &&
-          !reloadedRef.current
-        ) {
-          reloadedRef.current = true;
-          toast("A new version is available", {
-            description: "Reloading to apply the update…",
-            duration: 4000,
-          });
-          setTimeout(() => hardReload("buildid"), 4000);
-        }
+        setApiHealthy(res.ok);
       } catch {
         setApiHealthy(false);
       }
     };
     void check();
     const interval = window.setInterval(check, POLL_MS);
+
 
     // 2) /_serverFn fetch interceptor — cache-bust on stale server-fn IDs
     const originalFetch = window.fetch.bind(window);
