@@ -11,6 +11,7 @@ import {
   importAllData,
   checkBackupHealth,
   runBackupSelfTest,
+  backupCompletenessReport,
 } from "@/lib/admin-backup.functions";
 import { Download, Upload, AlertTriangle, Database, ShieldCheck, Loader2, RefreshCw } from "lucide-react";
 
