@@ -44,9 +44,14 @@ const EXPORT_TABLES: readonly string[] = [
   "download_logs",
 ] as const;
 
+// Bump when EXPORT_TABLES changes shape in a way that would make an old
+// archive unsafe to restore against the current code.
+const SCHEMA_VERSION = 2;
+
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
 const DEFAULT_MAX_ROWS_PER_TABLE = 50_000;
+
 
 export const exportAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
