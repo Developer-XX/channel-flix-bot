@@ -62,11 +62,12 @@ const SCHEMA_VERSION = 5;
 // for a bigger window in the UI if they have a huge dataset.
 const DEFAULT_MAX_ROWS_PER_TABLE = 50_000;
 
-
 export const exportAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ maxRowsPerTable: z.number().int().positive().max(500_000).optional() }).parse(d ?? {}),
+    z
+      .object({ maxRowsPerTable: z.number().int().positive().max(500_000).optional() })
+      .parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
     try {
@@ -112,7 +113,10 @@ export const exportAllData = createServerFn({ method: "POST" })
         level: "error",
         source: "backup.export",
         message: "exportAllData failed",
-        details: { error: err instanceof Error ? err.message : String(err), userId: context.userId },
+        details: {
+          error: err instanceof Error ? err.message : String(err),
+          userId: context.userId,
+        },
       });
       throw err;
     }
@@ -276,7 +280,8 @@ function sanitizeRowForRestore(
   const validPublicId = (parentTable: string, value: unknown) => {
     const key = asKey(value);
     if (!key) return true;
-    if (opts.processed.has(parentTable)) return opts.restoredKeys.get(parentTable)?.has(key) ?? false;
+    if (opts.processed.has(parentTable))
+      return opts.restoredKeys.get(parentTable)?.has(key) ?? false;
     return opts.archiveKeys[parentTable]?.has(key) ?? false;
   };
   const nullInvalidPublic = (column: string, parentTable: string) => {
@@ -318,12 +323,14 @@ function sanitizeRowForRestore(
     if (skipInvalidPublic("file_id", "media_files")) return null;
     nullInvalidPublic("title_id", "master_titles");
   }
-  if (table === "delivery_attempts" && skipInvalidPublic("media_file_id", "media_files")) return null;
+  if (table === "delivery_attempts" && skipInvalidPublic("media_file_id", "media_files"))
+    return null;
   if (table === "download_logs") {
     nullInvalidPublic("file_id", "media_files");
     nullInvalidPublic("title_id", "master_titles");
   }
-  if (table === "support_messages" && skipInvalidPublic("ticket_id", "support_tickets")) return null;
+  if (table === "support_messages" && skipInvalidPublic("ticket_id", "support_tickets"))
+    return null;
 
   return out;
 }
@@ -400,10 +407,12 @@ async function loadLiveSchemaProbe(
 export const backupCompletenessReport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({
-      archive: ImportArchiveSchema,
-      sampleSize: z.number().int().positive().max(5000).optional().default(500),
-    }).parse(d),
+    z
+      .object({
+        archive: ImportArchiveSchema,
+        sampleSize: z.number().int().positive().max(5000).optional().default(500),
+      })
+      .parse(d),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
@@ -426,10 +435,7 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
 
     const rows: Row[] = [];
     const archiveTables = data.archive.tables;
-    const allTables = new Set<string>([
-      ...EXPORT_TABLES,
-      ...Object.keys(archiveTables),
-    ]);
+    const allTables = new Set<string>([...EXPORT_TABLES, ...Object.keys(archiveTables)]);
 
     for (const t of allTables) {
       const archiveRows = (archiveTables[t] ?? []) as any[];
@@ -461,9 +467,7 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
 
       // Sample key values from the archive and check existence in live.
       const sample = archiveRows.slice(0, data.sampleSize);
-      const archiveKeys = sample
-        .map((r) => r?.[primaryKey])
-        .filter((v) => v != null);
+      const archiveKeys = sample.map((r) => r?.[primaryKey]).filter((v) => v != null);
 
       let missingInLive = 0;
       const sampleMissingInLive: string[] = [];
@@ -530,9 +534,17 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
     // Telegram files appear on title pages after a restore.
     const ingestRows = (archiveTables["telegram_ingest"] ?? []) as any[];
     const mediaRows = (archiveTables["media_files"] ?? []) as any[];
-    const mediaIds = new Set(mediaRows.map((r) => r?.id).filter((v) => v != null).map(String));
+    const mediaIds = new Set(
+      mediaRows
+        .map((r) => r?.id)
+        .filter((v) => v != null)
+        .map(String),
+    );
     const mediaTelegramIds = new Set(
-      mediaRows.map((r) => r?.telegram_file_id).filter((v) => v != null).map(String),
+      mediaRows
+        .map((r) => r?.telegram_file_id)
+        .filter((v) => v != null)
+        .map(String),
     );
     const ingestPromotedRefs = ingestRows
       .map((r) => r?.promoted_media_file_id)
@@ -584,13 +596,15 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({
-      archive: ImportArchiveSchema,
-      mode: z.enum(["upsert", "replace"]).default("upsert"),
-      dryRun: z.boolean().optional().default(false),
-      // confirm is only required for actual writes; dry runs don't touch data.
-      confirm: z.union([z.literal("RESTORE"), z.literal("DRYRUN"), z.literal("")]).optional(),
-    }).parse(d),
+    z
+      .object({
+        archive: ImportArchiveSchema,
+        mode: z.enum(["upsert", "replace"]).default("upsert"),
+        dryRun: z.boolean().optional().default(false),
+        // confirm is only required for actual writes; dry runs don't touch data.
+        confirm: z.union([z.literal("RESTORE"), z.literal("DRYRUN"), z.literal("")]).optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
@@ -702,7 +716,7 @@ export const importAllData = createServerFn({ method: "POST" })
             .from(t as never)
             .select(conflictColumn)
             .in(conflictColumn, slice as any);
-          matching += (hits?.length ?? 0);
+          matching += hits?.length ?? 0;
         }
         r.idsMatchingExisting = matching;
         r.newIds = archiveIds.length - matching;
@@ -720,7 +734,9 @@ export const importAllData = createServerFn({ method: "POST" })
         tablesWithSchemaDrift: Object.entries(report)
           .filter(([, r]) => r.unknownColumns.length > 0 || r.missingRequiredColumns.length > 0)
           .map(([t]) => t),
-        tablesMissing: Object.entries(report).filter(([, r]) => !r.tableExists).map(([t]) => t),
+        tablesMissing: Object.entries(report)
+          .filter(([, r]) => !r.tableExists)
+          .map(([t]) => t),
       };
       return { ok: true, dryRun: true, mode: data.mode, summary, report, integrity };
     }
@@ -753,14 +769,16 @@ export const importAllData = createServerFn({ method: "POST" })
         const conflictColumn = conflictColumnFor(t);
         const liveColsForTable = liveCols.get(t);
         const sanitizedRows = rows
-          .map((row) => sanitizeRowForRestore(t, row, {
-            liveCols: liveColsForTable,
-            archiveKeys,
-            restoredKeys,
-            processed,
-            authUsers,
-            episodeTitleById,
-          }))
+          .map((row) =>
+            sanitizeRowForRestore(t, row, {
+              liveCols: liveColsForTable,
+              archiveKeys,
+              restoredKeys,
+              processed,
+              authUsers,
+              episodeTitleById,
+            }),
+          )
           .filter((row): row is Record<string, unknown> => !!row);
         skipped[t] = rows.length - sanitizedRows.length;
         const restoredForTable = new Set<string>();
@@ -827,7 +845,17 @@ export const importAllData = createServerFn({ method: "POST" })
       postRestore.indexesError = (e as Error).message;
     }
 
-    return { ok: true, dryRun: false, mode: data.mode, inserted, skipped, failed, report, integrity, postRestore };
+    return {
+      ok: true,
+      dryRun: false,
+      mode: data.mode,
+      inserted,
+      skipped,
+      failed,
+      report,
+      integrity,
+      postRestore,
+    };
   });
 
 // ---- Health check ------------------------------------------------------
@@ -862,7 +890,10 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
     const tables: Record<string, any[]> = {};
     const counts: Record<string, number> = {};
     for (const t of EXPORT_TABLES) {
-      const { data: rows } = await supabaseAdmin.from(t as never).select("*").limit(cap);
+      const { data: rows } = await supabaseAdmin
+        .from(t as never)
+        .select("*")
+        .limit(cap);
       tables[t] = (rows ?? []) as any[];
       counts[t] = tables[t].length;
     }
@@ -885,4 +916,3 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
       ran_at: new Date().toISOString(),
     };
   });
-

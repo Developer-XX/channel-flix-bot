@@ -13,7 +13,15 @@ import {
   runBackupSelfTest,
   backupCompletenessReport,
 } from "@/lib/admin-backup.functions";
-import { Download, Upload, AlertTriangle, Database, ShieldCheck, Loader2, RefreshCw } from "lucide-react";
+import {
+  Download,
+  Upload,
+  AlertTriangle,
+  Database,
+  ShieldCheck,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/backup")({
   component: BackupPage,
@@ -34,7 +42,15 @@ function BackupPage() {
   const [importing, setImporting] = useState(false);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [lastArchive, setLastArchive] = useState<any>(null);
-  const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; skipped?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any; integrity?: any } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    dryRun?: boolean;
+    inserted?: Record<string, number>;
+    skipped?: Record<string, number>;
+    failed?: Record<string, string>;
+    report?: Record<string, any>;
+    summary?: any;
+    integrity?: any;
+  } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
   const [confirm, setConfirm] = useState("");
@@ -49,9 +65,18 @@ function BackupPage() {
     try {
       const res: any = await doHealth();
       if (res?.ok) {
-        setHealth({ status: "ok", schema_version: res.schema_version, tables: res.tables, checked_at: res.checked_at });
+        setHealth({
+          status: "ok",
+          schema_version: res.schema_version,
+          tables: res.tables,
+          checked_at: res.checked_at,
+        });
       } else {
-        setHealth({ status: "error", code: "other", message: res?.probe_error ?? "Health probe failed" });
+        setHealth({
+          status: "error",
+          code: "other",
+          message: res?.probe_error ?? "Health probe failed",
+        });
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e ?? "Unknown error");
@@ -63,8 +88,9 @@ function BackupPage() {
     }
   }
 
-  useEffect(() => { runHealthCheck(); }, []);
-
+  useEffect(() => {
+    runHealthCheck();
+  }, []);
 
   async function handleExport() {
     setExporting(true);
@@ -107,7 +133,10 @@ function BackupPage() {
   }
 
   async function handleCompletenessFromFile() {
-    if (!file) { toast.error("Pick a backup file first"); return; }
+    if (!file) {
+      toast.error("Pick a backup file first");
+      return;
+    }
     try {
       const text = await file.text();
       const archive = JSON.parse(text);
@@ -118,15 +147,31 @@ function BackupPage() {
   }
 
   async function handleImport(dryRun: boolean) {
-    if (!file) { toast.error("Pick a backup file first"); return; }
-    if (!dryRun && confirm !== "RESTORE") { toast.error("Type RESTORE to confirm"); return; }
+    if (!file) {
+      toast.error("Pick a backup file first");
+      return;
+    }
+    if (!dryRun && confirm !== "RESTORE") {
+      toast.error("Type RESTORE to confirm");
+      return;
+    }
     setImporting(true);
     setImportResult(null);
     try {
       const text = await file.text();
       const archive = JSON.parse(text);
-      const res: any = await doImport({ data: { archive, mode, dryRun, confirm: dryRun ? "DRYRUN" : "RESTORE" } });
-      setImportResult({ dryRun: res.dryRun, inserted: res.inserted, skipped: res.skipped, failed: res.failed, report: res.report, summary: res.summary, integrity: res.integrity });
+      const res: any = await doImport({
+        data: { archive, mode, dryRun, confirm: dryRun ? "DRYRUN" : "RESTORE" },
+      });
+      setImportResult({
+        dryRun: res.dryRun,
+        inserted: res.inserted,
+        skipped: res.skipped,
+        failed: res.failed,
+        report: res.report,
+        summary: res.summary,
+        integrity: res.integrity,
+      });
       const failedCount = Object.keys(res.failed ?? {}).length;
       if (dryRun) toast.success("Dry-run complete");
       else if (failedCount === 0) {
@@ -151,7 +196,8 @@ function BackupPage() {
       const res: any = await doSelfTest();
       setSelfTestResult(res);
       if (res?.ok) toast.success("Self-test passed");
-      else toast.warning(`Self-test found ${Object.keys(res?.mismatches ?? {}).length} mismatch(es)`);
+      else
+        toast.warning(`Self-test found ${Object.keys(res?.mismatches ?? {}).length} mismatch(es)`);
     } catch (e: any) {
       toast.error(e?.message ?? "Self-test failed");
     } finally {
@@ -176,20 +222,20 @@ function BackupPage() {
             "Confirm src/routes/_authenticated/admin.backup.tsx exists in the deployed bundle.",
           ]
         : health.code === "5xx"
-        ? [
-            "The server function crashed. Check the server logs for `checkBackupHealth` errors.",
-            "Common causes: missing SUPABASE_SERVICE_ROLE_KEY, database paused, or a recent migration that hasn't run yet.",
-            "Retry after 30 seconds — transient cold-start failures usually self-heal.",
-          ]
-        : health.code === "auth"
-        ? [
-            "Your account does not have the admin role. Sign in as an admin user.",
-            "If you ARE an admin, your session may have expired — sign out and back in.",
-          ]
-        : [
-            "Unexpected error from the backup endpoint. Check the message below.",
-            "Verify Lovable Cloud is connected and the database is reachable.",
-          ];
+          ? [
+              "The server function crashed. Check the server logs for `checkBackupHealth` errors.",
+              "Common causes: missing SUPABASE_SERVICE_ROLE_KEY, database paused, or a recent migration that hasn't run yet.",
+              "Retry after 30 seconds — transient cold-start failures usually self-heal.",
+            ]
+          : health.code === "auth"
+            ? [
+                "Your account does not have the admin role. Sign in as an admin user.",
+                "If you ARE an admin, your session may have expired — sign out and back in.",
+              ]
+            : [
+                "Unexpected error from the backup endpoint. Check the message below.",
+                "Verify Lovable Cloud is connected and the database is reachable.",
+              ];
     return (
       <div className="p-6 max-w-2xl mx-auto space-y-4">
         <Card className="p-5 border-destructive/40 space-y-3">
@@ -201,7 +247,9 @@ function BackupPage() {
           <div>
             <div className="text-sm font-semibold mb-1">Troubleshooting</div>
             <ul className="text-sm list-disc pl-5 space-y-1 text-muted-foreground">
-              {tips.map((t) => <li key={t}>{t}</li>)}
+              {tips.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
             </ul>
           </div>
           <Button size="sm" variant="outline" onClick={runHealthCheck}>
@@ -219,20 +267,30 @@ function BackupPage() {
         <div>
           <h1 className="text-2xl font-bold">Backup &amp; Restore</h1>
           <p className="text-sm text-muted-foreground">
-            Download a JSON snapshot of every data table or restore from one.
-            Use this before migrating to a VPS or after data loss.
+            Download a JSON snapshot of every data table or restore from one. Use this before
+            migrating to a VPS or after data loss.
           </p>
         </div>
       </div>
 
       <Card className="p-3 flex flex-wrap items-center gap-3 text-xs bg-emerald-500/5 border-emerald-500/30">
         <ShieldCheck className="h-4 w-4 text-emerald-500" />
-        <span>Endpoint healthy · schema v{health.schema_version} · {health.tables} tables</span>
-        <span className="text-muted-foreground">checked {new Date(health.checked_at).toLocaleTimeString()}</span>
+        <span>
+          Endpoint healthy · schema v{health.schema_version} · {health.tables} tables
+        </span>
+        <span className="text-muted-foreground">
+          checked {new Date(health.checked_at).toLocaleTimeString()}
+        </span>
         <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={runHealthCheck}>
           <RefreshCw className="h-3 w-3 mr-1" /> Recheck
         </Button>
-        <Button size="sm" variant="outline" className="h-7" onClick={handleSelfTest} disabled={selfTesting}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7"
+          onClick={handleSelfTest}
+          disabled={selfTesting}
+        >
           {selfTesting ? "Running…" : "Run self-test"}
         </Button>
       </Card>
@@ -243,12 +301,15 @@ function BackupPage() {
             Self-test {selfTestResult.ok ? "passed ✓" : "found mismatches"}
           </div>
           <div className="text-muted-foreground">
-            tables checked: {selfTestResult.tables_checked} · total rows sampled: {selfTestResult.total_rows?.toLocaleString?.()}
+            tables checked: {selfTestResult.tables_checked} · total rows sampled:{" "}
+            {selfTestResult.total_rows?.toLocaleString?.()}
           </div>
           {!selfTestResult.ok && (
             <div className="font-mono text-amber-500">
               {Object.entries(selfTestResult.mismatches ?? {}).map(([t, m]: [string, any]) => (
-                <div key={t}>{t}: archive={m.archive} · live={m.live}</div>
+                <div key={t}>
+                  {t}: archive={m.archive} · live={m.live}
+                </div>
               ))}
             </div>
           )}
@@ -260,16 +321,25 @@ function BackupPage() {
           <div>
             <h2 className="font-semibold text-sm">Backup completeness report</h2>
             <p className="text-xs text-muted-foreground">
-              Compares per-table row counts and verifies Telegram ingest rows
-              are linked to restored media files between an archive and the
-              live database.
+              Compares per-table row counts and verifies Telegram ingest rows are linked to restored
+              media files between an archive and the live database.
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="outline" disabled={completenessRunning || !lastArchive} onClick={() => lastArchive && runCompleteness(lastArchive)}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={completenessRunning || !lastArchive}
+              onClick={() => lastArchive && runCompleteness(lastArchive)}
+            >
               {completenessRunning ? "Checking…" : "Recheck last export"}
             </Button>
-            <Button size="sm" variant="outline" disabled={completenessRunning || !file} onClick={handleCompletenessFromFile}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={completenessRunning || !file}
+              onClick={handleCompletenessFromFile}
+            >
               Check uploaded file
             </Button>
           </div>
@@ -277,32 +347,43 @@ function BackupPage() {
 
         {completeness && (
           <div className="text-xs space-y-2 pt-2 border-t border-border">
-            <div className={`rounded-md p-2 border ${completeness.summary?.overall_status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-amber-500/10 border-amber-500/30"}`}>
+            <div
+              className={`rounded-md p-2 border ${completeness.summary?.overall_status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-amber-500/10 border-amber-500/30"}`}
+            >
               <div className="font-semibold">
-                Overall: {completeness.summary?.overall_status === "ok" ? "complete ✓" : "drift detected"}
+                Overall:{" "}
+                {completeness.summary?.overall_status === "ok" ? "complete ✓" : "drift detected"}
               </div>
               <div>
-                {completeness.summary?.tables_ok}/{completeness.summary?.tables_checked} tables ok ·
-                {" "}{completeness.summary?.tables_drift} drift ·
-                {" "}{completeness.summary?.tables_skipped} skipped
+                {completeness.summary?.tables_ok}/{completeness.summary?.tables_checked} tables ok ·{" "}
+                {completeness.summary?.tables_drift} drift · {completeness.summary?.tables_skipped}{" "}
+                skipped
               </div>
               <div>
-                Total rows — archive: {completeness.summary?.total_archive_rows?.toLocaleString?.()} ·
-                {" "}live: {completeness.summary?.total_live_rows?.toLocaleString?.()}
+                Total rows — archive: {completeness.summary?.total_archive_rows?.toLocaleString?.()}{" "}
+                · live: {completeness.summary?.total_live_rows?.toLocaleString?.()}
               </div>
             </div>
 
-            <div className={`rounded-md p-2 border ${completeness.file_metadata_check?.status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}>
+            <div
+              className={`rounded-md p-2 border ${completeness.file_metadata_check?.status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}
+            >
               <div className="font-semibold">Telegram file metadata</div>
               <div>
-                matched ingest files: {completeness.file_metadata_check?.ingest_with_file_unique_id?.toLocaleString?.()} ·
-                {" "}media files: {completeness.file_metadata_check?.media_with_file_unique_id?.toLocaleString?.()}
+                matched ingest files:{" "}
+                {completeness.file_metadata_check?.ingest_with_file_unique_id?.toLocaleString?.()} ·{" "}
+                media files:{" "}
+                {completeness.file_metadata_check?.media_with_file_unique_id?.toLocaleString?.()}
               </div>
               {completeness.file_metadata_check?.ingest_orphans_without_media > 0 && (
                 <div className="text-destructive">
-                  Orphans (ingest with no matching media row): {completeness.file_metadata_check.ingest_orphans_without_media}
+                  Orphans (ingest with no matching media row):{" "}
+                  {completeness.file_metadata_check.ingest_orphans_without_media}
                   {completeness.file_metadata_check.sample_orphans?.length > 0 && (
-                    <span className="font-mono"> · sample: {completeness.file_metadata_check.sample_orphans.join(", ")}</span>
+                    <span className="font-mono">
+                      {" "}
+                      · sample: {completeness.file_metadata_check.sample_orphans.join(", ")}
+                    </span>
                   )}
                 </div>
               )}
@@ -312,16 +393,27 @@ function BackupPage() {
               <summary className="cursor-pointer font-semibold">Per-table breakdown</summary>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1 mt-2">
                 {completeness.tables?.map((r: any) => (
-                  <div key={r.table} className={`rounded border p-2 font-mono ${r.status === "ok" ? "border-border" : r.status === "skipped" ? "border-muted bg-muted/30" : "border-amber-500/40 bg-amber-500/5"}`}>
-                    <div className="font-semibold">{r.table} <span className="text-muted-foreground">[{r.key_columns?.join(", ")}]</span></div>
-                    <div>archive: {r.archive_rows} · live: {r.live_rows} · Δ {r.delta}</div>
+                  <div
+                    key={r.table}
+                    className={`rounded border p-2 font-mono ${r.status === "ok" ? "border-border" : r.status === "skipped" ? "border-muted bg-muted/30" : "border-amber-500/40 bg-amber-500/5"}`}
+                  >
+                    <div className="font-semibold">
+                      {r.table}{" "}
+                      <span className="text-muted-foreground">[{r.key_columns?.join(", ")}]</span>
+                    </div>
+                    <div>
+                      archive: {r.archive_rows} · live: {r.live_rows} · Δ {r.delta}
+                    </div>
                     {(r.keys_missing_in_live > 0 || r.keys_missing_in_archive > 0) && (
                       <div className="text-amber-500">
-                        missing in live: {r.keys_missing_in_live} · missing in archive: {r.keys_missing_in_archive}
+                        missing in live: {r.keys_missing_in_live} · missing in archive:{" "}
+                        {r.keys_missing_in_archive}
                       </div>
                     )}
                     {r.sample_missing_in_live?.length > 0 && (
-                      <div className="text-muted-foreground truncate">sample missing live: {r.sample_missing_in_live.join(", ")}</div>
+                      <div className="text-muted-foreground truncate">
+                        sample missing live: {r.sample_missing_in_live.join(", ")}
+                      </div>
                     )}
                     {r.note && <div className="text-destructive">{r.note}</div>}
                   </div>
@@ -332,21 +424,16 @@ function BackupPage() {
         )}
       </Card>
 
-
-
-
-
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Download className="h-5 w-5" />
           <h2 className="font-semibold">Export all data</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          Includes titles, episodes, files, ingest rows, channels, settings,
-          ads, announcements, slides, premium plans/payments, profiles, roles,
-          support tickets, etc. Sign-in credentials (Supabase Auth) are NOT
-          exportable through this API — users will need to sign in again on a
-          fresh installation; their roles are restored from this file.
+          Includes titles, episodes, files, ingest rows, channels, settings, ads, announcements,
+          slides, premium plans/payments, profiles, roles, support tickets, etc. Sign-in credentials
+          (Supabase Auth) are NOT exportable through this API — users will need to sign in again on
+          a fresh installation; their roles are restored from this file.
         </p>
         <Button onClick={handleExport} disabled={exporting}>
           {exporting ? "Exporting…" : "Download backup (.json)"}
@@ -371,8 +458,8 @@ function BackupPage() {
         <div className="flex items-start gap-2 text-sm rounded-md bg-destructive/10 border border-destructive/30 p-3 text-destructive">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            Destructive. <strong>Upsert</strong> merges incoming rows by id;
-            existing rows with matching ids are overwritten. <strong>Replace</strong>
+            Destructive. <strong>Upsert</strong> merges incoming rows by id; existing rows with
+            matching ids are overwritten. <strong>Replace</strong>
             wipes each table before inserting. Make a fresh export first.
           </div>
         </div>
@@ -394,13 +481,19 @@ function BackupPage() {
               Upsert (merge by id)
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={mode === "replace"} onChange={() => setMode("replace")} />
+              <input
+                type="radio"
+                checked={mode === "replace"}
+                onChange={() => setMode("replace")}
+              />
               Replace (wipe each table first)
             </label>
           </div>
 
           <div>
-            <Label htmlFor="confirm">Type <code>RESTORE</code> to confirm</Label>
+            <Label htmlFor="confirm">
+              Type <code>RESTORE</code> to confirm
+            </Label>
             <Input
               id="confirm"
               value={confirm}
@@ -430,17 +523,33 @@ function BackupPage() {
         {importResult && (
           <div className="text-xs space-y-2 pt-3 border-t border-border">
             {importResult.integrity && (
-              <div className={`rounded-md p-2 space-y-1 border ${importResult.integrity.compatible ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}>
+              <div
+                className={`rounded-md p-2 space-y-1 border ${importResult.integrity.compatible ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}
+              >
                 <div className="font-semibold">
-                  Integrity: {importResult.integrity.compatible ? "compatible ✓" : "INCOMPATIBLE — restore blocked"}
+                  Integrity:{" "}
+                  {importResult.integrity.compatible
+                    ? "compatible ✓"
+                    : "INCOMPATIBLE — restore blocked"}
                 </div>
-                <div>Archive schema v{importResult.integrity.archive_schema_version} vs live v{importResult.integrity.live_schema_version}</div>
-                <div>Tables — archive: {importResult.integrity.archive_tables} · live: {importResult.integrity.live_tables}</div>
+                <div>
+                  Archive schema v{importResult.integrity.archive_schema_version} vs live v
+                  {importResult.integrity.live_schema_version}
+                </div>
+                <div>
+                  Tables — archive: {importResult.integrity.archive_tables} · live:{" "}
+                  {importResult.integrity.live_tables}
+                </div>
                 {importResult.integrity.unknown_tables?.length > 0 && (
-                  <div className="text-destructive">Unknown tables in archive: {importResult.integrity.unknown_tables.join(", ")}</div>
+                  <div className="text-destructive">
+                    Unknown tables in archive: {importResult.integrity.unknown_tables.join(", ")}
+                  </div>
                 )}
                 {importResult.integrity.missing_tables?.length > 0 && (
-                  <div className="text-amber-500">Tables absent from archive (will be left untouched): {importResult.integrity.missing_tables.join(", ")}</div>
+                  <div className="text-amber-500">
+                    Tables absent from archive (will be left untouched):{" "}
+                    {importResult.integrity.missing_tables.join(", ")}
+                  </div>
                 )}
               </div>
             )}
@@ -449,13 +558,22 @@ function BackupPage() {
               <div className="rounded-md bg-muted p-2 space-y-1">
                 <div className="font-semibold">Dry-run summary</div>
                 <div>Tables analyzed: {importResult.summary.tablesAnalyzed}</div>
-                <div>Total incoming rows: {importResult.summary.totalIncoming?.toLocaleString?.()}</div>
-                <div>Existing rows that would be overwritten: {importResult.summary.totalConflicts?.toLocaleString?.()}</div>
+                <div>
+                  Total incoming rows: {importResult.summary.totalIncoming?.toLocaleString?.()}
+                </div>
+                <div>
+                  Existing rows that would be overwritten:{" "}
+                  {importResult.summary.totalConflicts?.toLocaleString?.()}
+                </div>
                 {importResult.summary.tablesWithSchemaDrift?.length > 0 && (
-                  <div className="text-amber-500">Schema drift: {importResult.summary.tablesWithSchemaDrift.join(", ")}</div>
+                  <div className="text-amber-500">
+                    Schema drift: {importResult.summary.tablesWithSchemaDrift.join(", ")}
+                  </div>
                 )}
                 {importResult.summary.tablesMissing?.length > 0 && (
-                  <div className="text-destructive">Missing tables: {importResult.summary.tablesMissing.join(", ")}</div>
+                  <div className="text-destructive">
+                    Missing tables: {importResult.summary.tablesMissing.join(", ")}
+                  </div>
                 )}
               </div>
             )}
@@ -466,10 +584,22 @@ function BackupPage() {
                   {Object.entries(importResult.report).map(([t, r]: [string, any]) => (
                     <div key={t} className="rounded border border-border p-2 font-mono">
                       <div className="font-semibold">{t}</div>
-                      <div>incoming: {r.incoming} · existing: {r.existing ?? "—"}</div>
-                      <div>conflicts: {r.idsMatchingExisting} · new: {r.newIds}</div>
-                      {r.unknownColumns?.length > 0 && <div className="text-amber-500">extra cols: {r.unknownColumns.join(", ")}</div>}
-                      {r.missingRequiredColumns?.length > 0 && <div className="text-destructive">missing req cols: {r.missingRequiredColumns.join(", ")}</div>}
+                      <div>
+                        incoming: {r.incoming} · existing: {r.existing ?? "—"}
+                      </div>
+                      <div>
+                        conflicts: {r.idsMatchingExisting} · new: {r.newIds}
+                      </div>
+                      {r.unknownColumns?.length > 0 && (
+                        <div className="text-amber-500">
+                          extra cols: {r.unknownColumns.join(", ")}
+                        </div>
+                      )}
+                      {r.missingRequiredColumns?.length > 0 && (
+                        <div className="text-destructive">
+                          missing req cols: {r.missingRequiredColumns.join(", ")}
+                        </div>
+                      )}
                       {r.error && <div className="text-destructive">{r.error}</div>}
                     </div>
                   ))}
@@ -489,19 +619,22 @@ function BackupPage() {
                 </div>
               </div>
             )}
-            {importResult.skipped && Object.values(importResult.skipped).some((n) => Number(n) > 0) && (
-              <div className="text-amber-500">
-                <div className="font-semibold mb-1">Skipped unsafe rows</div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
-                  {Object.entries(importResult.skipped).filter(([, n]) => Number(n) > 0).map(([t, n]) => (
-                    <div key={t} className="flex justify-between font-mono">
-                      <span>{t}</span>
-                      <span>{Number(n).toLocaleString()}</span>
-                    </div>
-                  ))}
+            {importResult.skipped &&
+              Object.values(importResult.skipped).some((n) => Number(n) > 0) && (
+                <div className="text-amber-500">
+                  <div className="font-semibold mb-1">Skipped unsafe rows</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+                    {Object.entries(importResult.skipped)
+                      .filter(([, n]) => Number(n) > 0)
+                      .map(([t, n]) => (
+                        <div key={t} className="flex justify-between font-mono">
+                          <span>{t}</span>
+                          <span>{Number(n).toLocaleString()}</span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             {importResult.failed && Object.keys(importResult.failed).length > 0 && (
               <div className="text-destructive">
                 <div className="font-semibold mb-1">Failed</div>
