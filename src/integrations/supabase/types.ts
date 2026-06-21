@@ -2199,6 +2199,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           last_error: string | null
+          match_locked: boolean
           match_score: number | null
           match_status: Database["public"]["Enums"]["ingest_status"]
           matched_title_id: string | null
@@ -2236,6 +2237,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           last_error?: string | null
+          match_locked?: boolean
           match_score?: number | null
           match_status?: Database["public"]["Enums"]["ingest_status"]
           matched_title_id?: string | null
@@ -2273,6 +2275,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           last_error?: string | null
+          match_locked?: boolean
           match_score?: number | null
           match_status?: Database["public"]["Enums"]["ingest_status"]
           matched_title_id?: string | null
