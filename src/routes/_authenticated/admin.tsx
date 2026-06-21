@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign, ScrollText, Link2 } from "lucide-react";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign, ScrollText, Link2, Database } from "lucide-react";
 import { useQuery as useReactQuery } from "@tanstack/react-query";
 import { listAdminAlerts } from "@/lib/admin-alerts.functions";
 import { Skeleton } from "@/components/ui/skeleton";
