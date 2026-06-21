@@ -1371,6 +1371,20 @@ export const reparseIngest = createServerFn({ method: "POST" })
       return { ok: true, locked: true, match: { matchedTitleId: r.matched_title_id, matchScore: r.match_score }, promoted: false };
     }
 
+    if ((r as any).match_locked) {
+      return {
+        ok: true,
+        locked: true,
+        parsed: {
+          title: r.parsed_title, year: r.parsed_year, category: r.parsed_category,
+          season: r.parsed_season, episode: r.parsed_episode,
+          quality: r.parsed_quality, resolution: r.parsed_resolution, language: r.parsed_language,
+        },
+        match: { matchedTitleId: r.matched_title_id, matchScore: r.match_score, matchedVia: "locked" as const },
+        promoted: false,
+        demoted: false,
+      };
+    }
     const parsed = parseMedia(r.caption, r.file_name);
     const settings = await loadMatchingSettings(supabaseAdmin);
     const match = await runMatcher(
