@@ -60,7 +60,7 @@ const SCHEMA_VERSION = 5;
 
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
-const DEFAULT_MAX_ROWS_PER_TABLE = 50_000;
+const DEFAULT_MAX_ROWS_PER_TABLE = 5_000_000;
 
 // PostgREST caps a single response at ~1000 rows regardless of the .limit()
 // we pass, so we have to paginate with .range() to get everything. Use 1000
