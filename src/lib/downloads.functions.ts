@@ -244,6 +244,50 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "not_linked" as const };
     }
 
+    // 2b. Force-join gate. When FORCE_JOIN_ENABLED is on, the bot calls
+    // getChatMember on the configured main channel and refuses delivery
+    // until the user has joined. The bot itself must be an administrator
+    // of FORCE_JOIN_CHANNEL so getChatMember succeeds.
+    const fjEnabledRaw = (await getSetting("FORCE_JOIN_ENABLED")) ?? "";
+    const forceJoinEnabled = /^(1|true|yes|on)$/i.test(fjEnabledRaw.trim());
+    if (forceJoinEnabled) {
+      const fjChannel = (await getSetting("FORCE_JOIN_CHANNEL")) ?? "";
+      const fjUrl = (await getSetting("FORCE_JOIN_CHANNEL_URL")) ?? "";
+      const fjTitle = (await getSetting("FORCE_JOIN_CHANNEL_TITLE")) ?? "";
+      if (fjChannel.trim()) {
+        try {
+          const { getChatMember } = await import("@/lib/telegram-api.server");
+          const member = await getChatMember(fjChannel.trim(), link.telegram_user_id);
+          const isMember = member?.status && !["left", "kicked"].includes(member.status);
+          if (!isMember) {
+            await auditFailure("must_join_channel", { channel: fjChannel, status: member?.status ?? null });
+            return {
+              ok: false as const,
+              reason: "must_join_channel" as const,
+              channel: fjChannel,
+              joinUrl: fjUrl || (fjChannel.startsWith("@") ? `https://t.me/${fjChannel.slice(1)}` : ""),
+              channelTitle: fjTitle || fjChannel,
+            };
+          }
+        } catch (e) {
+          // getChatMember can fail when the bot isn't an admin or the chat
+          // id is wrong. Surface a clear message rather than silently
+          // letting unjoined users through.
+          const msg = (e as Error).message ?? String(e);
+          await auditFailure("force_join_check_failed", { channel: fjChannel, error: msg.slice(0, 300) });
+          return {
+            ok: false as const,
+            reason: "must_join_channel" as const,
+            channel: fjChannel,
+            joinUrl: fjUrl || (fjChannel.startsWith("@") ? `https://t.me/${fjChannel.slice(1)}` : ""),
+            channelTitle: fjTitle || fjChannel,
+            checkFailed: true,
+          };
+        }
+      }
+    }
+
+
     // 3. Cooldown-window keyed idempotency. The key includes a window bucket
     //    derived from DOWNLOAD_RESEND_COOLDOWN_SECONDS. Within the same window
     //    the same (user, file) → same key → we return the prior delivered
