@@ -427,6 +427,73 @@ export function DownloadButton({
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!joinState}
+        onOpenChange={(open) => {
+          if (!open) cancelJoinPolling();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Join to download</DialogTitle>
+            <DialogDescription>
+              {joinState?.rule === "or"
+                ? "Join at least one of these Telegram channels — the bot will deliver your file automatically."
+                : "Join all of these Telegram channels — the bot will deliver your file automatically once you've joined."}
+            </DialogDescription>
+          </DialogHeader>
+          {joinState && (
+            <div className="space-y-3">
+              <ul className="space-y-2">
+                {joinState.channels.map((c) => {
+                  const ok = c.status === "joined";
+                  return (
+                    <li
+                      key={c.id}
+                      className={`flex items-center justify-between gap-2 rounded-md border p-2 ${ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-border bg-surface/40"}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {ok ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        ) : (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                        )}
+                        <span className="text-sm truncate">{c.title}</span>
+                      </div>
+                      {!ok && c.joinUrl && (
+                        <Button asChild size="sm" variant="outline">
+                          <a href={c.joinUrl} target="_blank" rel="noreferrer">
+                            <ExternalLink className="h-4 w-4 mr-1.5" /> Open
+                          </a>
+                        </Button>
+                      )}
+                      {ok && <span className="text-[11px] text-emerald-400">Joined ✓</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="rounded-md border border-border bg-surface/40 px-3 py-2 text-[12px] text-muted-foreground">
+                {joinState.polling ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 inline animate-spin" />
+                    Waiting for you to join — we'll auto-send the file when ready.{" "}
+                    {joinState.secondsLeft > 0 && <span>({joinState.secondsLeft}s)</span>}
+                  </>
+                ) : (
+                  <>Timed out waiting. Close this dialog and click Download again.</>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" variant="ghost" onClick={cancelJoinPolling}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
+
   );
 }
