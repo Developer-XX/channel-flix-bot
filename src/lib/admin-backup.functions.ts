@@ -196,9 +196,7 @@ async function loadLiveSchemaProbe(
       continue;
     }
 
-    const sample = (tables[t] ?? []).find(
-      (row) => row && typeof row === "object",
-    );
+    const sample = (tables[t] ?? []).find((row) => row && typeof row === "object");
     const tableCols = new Map<string, LiveColumnMeta>();
     for (const c of Object.keys(sample ?? { id: null })) {
       tableCols.set(c, { nullable: true, hasDefault: true });
@@ -448,10 +446,7 @@ export const importAllData = createServerFn({ method: "POST" })
     // Load live schema info once for all involved tables. Falls back to direct
     // table probes if a self-hosted/VPS PostgREST schema cache has not picked up
     // the helper RPC yet.
-    const { columns: liveCols, tableErrors } = await loadLiveSchemaProbe(
-      supabaseAdmin,
-      tables,
-    );
+    const { columns: liveCols, tableErrors } = await loadLiveSchemaProbe(supabaseAdmin, tables);
 
     // Per-table analysis (always run for dry runs; also collected during live runs).
     for (const t of EXPORT_TABLES) {
