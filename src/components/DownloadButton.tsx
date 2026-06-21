@@ -151,7 +151,8 @@ export function DownloadButton({
     joinPollRef.current = handle;
     const start = Date.now();
     const MAX_MS = 180_000;
-    const POLL_MS = 4_000;
+    const POLL_MS = 10_000; // stay well under the 10-req/min server rate limit
+
     const tick = async () => {
       if (handle.stop) return;
       const elapsed = Date.now() - start;
