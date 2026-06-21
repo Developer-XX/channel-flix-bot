@@ -92,7 +92,7 @@ function BackupPage() {
       const text = await file.text();
       const archive = JSON.parse(text);
       const res: any = await doImport({ data: { archive, mode, dryRun, confirm: dryRun ? "DRYRUN" : "RESTORE" } });
-      setImportResult({ dryRun: res.dryRun, inserted: res.inserted, failed: res.failed, report: res.report, summary: res.summary });
+      setImportResult({ dryRun: res.dryRun, inserted: res.inserted, failed: res.failed, report: res.report, summary: res.summary, integrity: res.integrity });
       const failedCount = Object.keys(res.failed ?? {}).length;
       if (dryRun) toast.success("Dry-run complete");
       else if (failedCount === 0) toast.success("Restore complete");
