@@ -326,6 +326,15 @@ export const requestDownload = createServerFn({ method: "POST" })
       };
     }
 
+    // Build the delivery caption with the file name + an admin-configurable
+    // player tip. The default tip recommends MX Player / VLC, which handle
+    // multi-audio MKV/HEVC files the stock Android gallery often can't.
+    const defaultTip =
+      "▶️ Playback tip: if the video won't play or the audio is missing, open this file in <b>MX Player</b> or <b>VLC</b> — both are free and handle every format (MKV, multi-audio, HEVC). Stock gallery players often skip the audio track.";
+    const tipRaw = (await getSetting("DOWNLOAD_CAPTION_TIP")) ?? "";
+    const tip = tipRaw.trim() || defaultTip;
+    const deliveryCaption = `📥 <b>${file.file_name ?? "Your file"}</b>\nDelivered by StreamVault\n\n${tip}`;
+
     // 3b. Claim/insert the queue row (PK = idempotency key).
     const queue = await claimOrFetchQueueRow(supabaseAdmin, {
       idempotencyKey: idemKey,
@@ -336,7 +345,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       payload: {
         fromChatId: (file as any).telegram_channels.channel_id,
         messageId: file.telegram_message_id!,
-        caption: `📥 ${file.file_name ?? "Your file"}\nDelivered by StreamVault`,
+        caption: deliveryCaption,
       },
     });
     if (queue.existed && queue.row.status === "sent" && queue.row.message_id) {
@@ -365,7 +374,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
       messageId: file.telegram_message_id!,
-      caption: `📥 ${file.file_name ?? "Your file"}\nDelivered by StreamVault`,
+      caption: deliveryCaption,
     });
 
     await upsertDeliveryAttempt(supabaseAdmin, {
