@@ -2824,6 +2824,15 @@ export type Database = {
           status: string
         }[]
       }
+      get_public_columns: {
+        Args: { _tables: string[] }
+        Returns: {
+          column_default: string
+          column_name: string
+          is_nullable: string
+          table_name: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
