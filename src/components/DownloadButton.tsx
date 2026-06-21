@@ -82,6 +82,11 @@ export function DownloadButton({
     }
   }
 
+  const cooldownLeftSec =
+    cooldownUntil && cooldownUntil > now ? Math.ceil((cooldownUntil - now) / 1000) : 0;
+  const isCoolingDown = cooldownLeftSec > 0;
+
+
 
   function failWith(message: string, cid: string, detail?: string) {
     setErrorState({ message, detail, cid });
