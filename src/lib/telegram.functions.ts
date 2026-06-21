@@ -905,8 +905,8 @@ export const bulkAssignTitle = createServerFn({ method: "POST" })
     if (error) throw error;
     for (const r of rows ?? []) {
       await supabaseAdmin.from("telegram_ingest").update({
-        matched_title_id: data.titleId, match_status: "matched", match_score: 1.0,
-      }).eq("id", r.id);
+        matched_title_id: data.titleId, match_status: "matched", match_score: 1.0, match_locked: true,
+      } as any).eq("id", r.id);
       if (data.promote !== false && r.telegram_file_id) {
         try {
           await autoPromoteToMediaFile(supabaseAdmin, {
