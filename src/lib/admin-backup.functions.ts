@@ -62,6 +62,32 @@ const SCHEMA_VERSION = 5;
 // for a bigger window in the UI if they have a huge dataset.
 const DEFAULT_MAX_ROWS_PER_TABLE = 50_000;
 
+// PostgREST caps a single response at ~1000 rows regardless of the .limit()
+// we pass, so we have to paginate with .range() to get everything. Use 1000
+// per page (PostgREST's effective max) and stop when we hit `cap` or an
+// empty page.
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows(
+  supabaseAdmin: any,
+  table: string,
+  cap: number,
+): Promise<{ rows: any[]; error: string | null }> {
+  const out: any[] = [];
+  for (let from = 0; from < cap; from += PAGE_SIZE) {
+    const to = Math.min(from + PAGE_SIZE, cap) - 1;
+    const { data, error } = await supabaseAdmin
+      .from(table as never)
+      .select("*")
+      .range(from, to);
+    if (error) return { rows: out, error: error.message };
+    const page = (data ?? []) as any[];
+    out.push(...page);
+    if (page.length < to - from + 1) break;
+  }
+  return { rows: out, error: null };
+}
+
 export const exportAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -80,16 +106,13 @@ export const exportAllData = createServerFn({ method: "POST" })
       const skipped: Record<string, string> = {};
 
       for (const t of EXPORT_TABLES) {
-        const { data: rows, error } = await supabaseAdmin
-          .from(t as never)
-          .select("*")
-          .limit(cap);
+        const { rows, error } = await fetchAllRows(supabaseAdmin, t, cap);
         if (error) {
-          skipped[t] = error.message;
+          skipped[t] = error;
           continue;
         }
-        tables[t] = (rows ?? []) as any[];
-        counts[t] = (rows ?? []).length;
+        tables[t] = rows;
+        counts[t] = rows.length;
       }
 
       return {
@@ -913,16 +936,13 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const cap = 1_000;
+    const cap = 50_000;
     const tables: Record<string, any[]> = {};
     const counts: Record<string, number> = {};
     for (const t of EXPORT_TABLES) {
-      const { data: rows } = await supabaseAdmin
-        .from(t as never)
-        .select("*")
-        .limit(cap);
-      tables[t] = (rows ?? []) as any[];
-      counts[t] = tables[t].length;
+      const { rows } = await fetchAllRows(supabaseAdmin, t, cap);
+      tables[t] = rows;
+      counts[t] = rows.length;
     }
     // Compare archive counts against current counts. On a quiet DB they
     // should match — mismatches indicate writes happened mid-export.
