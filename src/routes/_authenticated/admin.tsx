@@ -181,6 +181,7 @@ function AdminLayout() {
             <MobileNavItem to="/admin/notifications" label="Alerts" />
             <MobileNavItem to="/admin/google-oauth" label="Google OAuth" />
             <MobileNavItem to="/admin/settings" label="Settings" />
+            <MobileNavItem to="/admin/backup" label="Backup" />
 
           </nav>
         </div>
