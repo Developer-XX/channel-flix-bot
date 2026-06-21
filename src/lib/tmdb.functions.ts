@@ -24,7 +24,7 @@ export const tmdbSearch = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireAdminAccess(context);
     const url = new URL(`${TMDB_BASE}/search/${data.kind}`);
-    url.searchParams.set("api_key", key());
+    url.searchParams.set("api_key", await key());
     url.searchParams.set("query", data.query);
     url.searchParams.set("include_adult", "false");
     const res = await fetch(url);
@@ -62,7 +62,7 @@ export const tmdbDetails = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireAdminAccess(context);
     const url = new URL(`${TMDB_BASE}/${data.media_type}/${data.tmdb_id}`);
-    url.searchParams.set("api_key", key());
+    url.searchParams.set("api_key", await key());
     url.searchParams.set("append_to_response", "credits");
     const res = await fetch(url);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
@@ -126,7 +126,7 @@ export const tmdbFindByImdb = createServerFn({ method: "POST" })
     await requireAdminAccess(context);
     const imdb = data.imdb_id.toLowerCase();
     const url = new URL(`${TMDB_BASE}/find/${imdb}`);
-    url.searchParams.set("api_key", key());
+    url.searchParams.set("api_key", await key());
     url.searchParams.set("external_source", "imdb_id");
     const res = await fetch(url);
     if (!res.ok) throw new Error(`TMDB ${res.status}`);
