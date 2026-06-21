@@ -218,8 +218,10 @@ export const promoteIngest = createServerFn({ method: "POST" })
         match_status: "matched",
         matched_title_id: data.titleId,
         promoted_media_file_id: file.id,
+        match_locked: true,
+        match_score: 1.0,
         last_error: null,
-      })
+      } as any)
       .eq("id", data.ingestId);
     if (e3) throw e3;
     return { ok: true, fileId: file.id };
@@ -903,8 +905,8 @@ export const bulkAssignTitle = createServerFn({ method: "POST" })
     if (error) throw error;
     for (const r of rows ?? []) {
       await supabaseAdmin.from("telegram_ingest").update({
-        matched_title_id: data.titleId, match_status: "matched", match_score: 1.0,
-      }).eq("id", r.id);
+        matched_title_id: data.titleId, match_status: "matched", match_score: 1.0, match_locked: true,
+      } as any).eq("id", r.id);
       if (data.promote !== false && r.telegram_file_id) {
         try {
           await autoPromoteToMediaFile(supabaseAdmin, {
@@ -1366,6 +1368,20 @@ export const reparseIngest = createServerFn({ method: "POST" })
     if (error) throw error;
     if (!r) throw new Error("Ingest row not found");
 
+    if ((r as any).match_locked) {
+      return {
+        ok: true,
+        locked: true,
+        parsed: {
+          title: r.parsed_title, year: r.parsed_year, category: r.parsed_category,
+          season: r.parsed_season, episode: r.parsed_episode,
+          quality: r.parsed_quality, resolution: r.parsed_resolution, language: r.parsed_language,
+        },
+        match: { matchedTitleId: r.matched_title_id, matchScore: r.match_score, matchedVia: "locked" as const },
+        promoted: false,
+        demoted: false,
+      };
+    }
     const parsed = parseMedia(r.caption, r.file_name);
     const settings = await loadMatchingSettings(supabaseAdmin);
     const match = await runMatcher(
