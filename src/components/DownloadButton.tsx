@@ -217,6 +217,21 @@ export function DownloadButton({
         setLinkOpen(true);
         return;
       }
+      if (r.reason === "must_join_channel") {
+        const rr = r as any;
+        const url: string = rr.joinUrl || "";
+        const title: string = rr.channelTitle || "the main channel";
+        toast.message(`Join ${title} on Telegram to download files`, {
+          description: url ? "Opening the channel — tap Join, then try the download again." : "Ask the admin for the channel link.",
+          action: url
+            ? { label: "Open channel", onClick: () => window.open(url, "_blank", "noopener,noreferrer") }
+            : undefined,
+        });
+        if (url) {
+          try { window.open(url, "_blank", "noopener,noreferrer"); } catch { /* popup blocked */ }
+        }
+        return;
+      }
       // Note: cooldown is now handled server-side as a transparent re-use of
       // the prior delivery within DOWNLOAD_RESEND_COOLDOWN_SECONDS — the
       // server returns ok:true with reused:true and the bot's previous
