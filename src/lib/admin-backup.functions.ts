@@ -843,7 +843,8 @@ export const importAllData = createServerFn({ method: "POST" })
         }
         inserted[t] = writtenForTable;
         if (rowErrors.length > 0 && writtenForTable === 0 && sanitizedRows.length > 0) {
-          failed[t] = `${rowErrors.length} row(s) skipped after restore fallback; first error: ${rowErrors[0]}`;
+          failed[t] =
+            `${rowErrors.length} row(s) skipped after restore fallback; first error: ${rowErrors[0]}`;
         }
         restoredKeys.set(t, restoredForTable);
         processed.add(t);
