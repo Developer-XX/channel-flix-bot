@@ -1035,6 +1035,13 @@ export const forceRematchAndPublish = createServerFn({ method: "POST" })
         });
         promoted = true;
         reason = data.assignTitleId ? "manual_assign" : (match.matchedVia ?? "fuzzy") + "_promote";
+        // Lock the row so future channel re-scans / redeploys don't blow
+        // away the admin's manual assignment.
+        if (data.assignTitleId) {
+          await supabaseAdmin.from("telegram_ingest")
+            .update({ match_locked: true } as any)
+            .eq("id", r.id);
+        }
         await bumpCacheVersion(supabaseAdmin);
       } catch (e) {
         reason = `promote_failed:${(e as Error).message}`;
