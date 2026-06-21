@@ -102,24 +102,148 @@ export const importAllData = createServerFn({ method: "POST" })
     z.object({
       archive: ImportArchiveSchema,
       mode: z.enum(["upsert", "replace"]).default("upsert"),
-      confirm: z.literal("RESTORE"),
+      dryRun: z.boolean().optional().default(false),
+      // confirm is only required for actual writes; dry runs don't touch data.
+      confirm: z.union([z.literal("RESTORE"), z.literal("DRYRUN"), z.literal("")]).optional(),
     }).parse(d),
   )
   .handler(async ({ context, data }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const inserted: Record<string, number> = {};
-    const failed: Record<string, string> = {};
+    if (!data.dryRun && data.confirm !== "RESTORE") {
+      throw new Error("confirm=RESTORE required for live restore");
+    }
+
     const tables = data.archive.tables;
 
+    type TableReport = {
+      incoming: number;
+      existing: number | null;
+      idsInArchive: number;
+      idsMatchingExisting: number; // would be overwritten on upsert
+      newIds: number;              // would be inserted
+      unknownColumns: string[];    // columns in archive not in live schema
+      missingRequiredColumns: string[]; // NOT-NULL no-default columns absent from archive rows
+      sampleRowErrors: string[];   // per-row issues (first 3)
+      tableExists: boolean;
+      error?: string;
+    };
+
+    const report: Record<string, TableReport> = {};
+
+    // Load live schema info once for all involved tables.
+    // (information_schema lookup below)
+
+    // Use information_schema via a direct select.
+    const { data: colsData } = await supabaseAdmin
+      .from("information_schema.columns" as never)
+      .select("table_name,column_name,is_nullable,column_default")
+      .eq("table_schema", "public")
+      .in("table_name", EXPORT_TABLES as unknown as string[]);
+
+    const liveCols = new Map<string, Map<string, { nullable: boolean; hasDefault: boolean }>>();
+    for (const row of (colsData as any[] | null) ?? []) {
+      const tn = row.table_name as string;
+      if (!liveCols.has(tn)) liveCols.set(tn, new Map());
+      liveCols.get(tn)!.set(row.column_name, {
+        nullable: row.is_nullable === "YES",
+        hasDefault: row.column_default != null,
+      });
+    }
+
+    // Per-table analysis (always run for dry runs; also collected during live runs).
     for (const t of EXPORT_TABLES) {
-      const rows = tables[t];
-      if (!Array.isArray(rows) || rows.length === 0) continue;
+      const rows = (tables[t] ?? []) as any[];
+      const live = liveCols.get(t);
+      const r: TableReport = {
+        incoming: rows.length,
+        existing: null,
+        idsInArchive: 0,
+        idsMatchingExisting: 0,
+        newIds: 0,
+        unknownColumns: [],
+        missingRequiredColumns: [],
+        sampleRowErrors: [],
+        tableExists: !!live && live.size > 0,
+      };
+
+      if (!r.tableExists) {
+        r.error = "table not found in live schema";
+        report[t] = r;
+        continue;
+      }
+
+      // Count existing rows.
+      const { count: existingCount } = await supabaseAdmin
+        .from(t as never)
+        .select("id", { count: "exact", head: true });
+      r.existing = existingCount ?? 0;
+
+      if (rows.length === 0) {
+        report[t] = r;
+        continue;
+      }
+
+      // Compute archive vs live column drift on a sampled row.
+      const sample = rows[0];
+      const archiveCols = new Set(Object.keys(sample));
+      const liveColSet = new Set(live!.keys());
+      r.unknownColumns = [...archiveCols].filter((c) => !liveColSet.has(c));
+      r.missingRequiredColumns = [...liveColSet].filter((c) => {
+        const meta = live!.get(c)!;
+        return !meta.nullable && !meta.hasDefault && !archiveCols.has(c);
+      });
+
+      // ID-based conflict detection (in chunks to keep .in() lists reasonable).
+      const archiveIds = rows.map((row) => row?.id).filter((id) => id != null);
+      r.idsInArchive = archiveIds.length;
+      if (archiveIds.length > 0) {
+        const CHUNK = 500;
+        let matching = 0;
+        for (let i = 0; i < archiveIds.length; i += CHUNK) {
+          const slice = archiveIds.slice(i, i + CHUNK);
+          const { data: hits } = await supabaseAdmin
+            .from(t as never)
+            .select("id")
+            .in("id", slice as any);
+          matching += (hits?.length ?? 0);
+        }
+        r.idsMatchingExisting = matching;
+        r.newIds = archiveIds.length - matching;
+      }
+
+      report[t] = r;
+    }
+
+    // Dry-run: stop here.
+    if (data.dryRun) {
+      const summary = {
+        tablesAnalyzed: Object.keys(report).length,
+        totalIncoming: Object.values(report).reduce((a, r) => a + r.incoming, 0),
+        totalConflicts: Object.values(report).reduce((a, r) => a + r.idsMatchingExisting, 0),
+        tablesWithSchemaDrift: Object.entries(report)
+          .filter(([, r]) => r.unknownColumns.length > 0 || r.missingRequiredColumns.length > 0)
+          .map(([t]) => t),
+        tablesMissing: Object.entries(report).filter(([, r]) => !r.tableExists).map(([t]) => t),
+      };
+      return { ok: true, dryRun: true, mode: data.mode, summary, report };
+    }
+
+    // Live restore path.
+    const inserted: Record<string, number> = {};
+    const failed: Record<string, string> = {};
+
+    for (const t of EXPORT_TABLES) {
+      const rows = (tables[t] ?? []) as any[];
+      if (rows.length === 0) continue;
+      if (report[t]?.error) {
+        failed[t] = report[t].error!;
+        continue;
+      }
 
       try {
         if (data.mode === "replace") {
-          // Wipe table first. Use a where-true clause acceptable to PostgREST.
           const { error: delErr } = await supabaseAdmin
             .from(t as never)
             .delete()
@@ -130,7 +254,6 @@ export const importAllData = createServerFn({ method: "POST" })
           }
         }
 
-        // Chunk to keep individual requests small.
         const CHUNK = 500;
         let writtenForTable = 0;
         for (let i = 0; i < rows.length; i += CHUNK) {
@@ -150,5 +273,5 @@ export const importAllData = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, inserted, failed };
+    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report };
   });
