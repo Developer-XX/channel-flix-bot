@@ -153,6 +153,8 @@ type ColumnRpcRow = {
 
 const CONFLICT_COLUMNS: Record<string, string> = {
   app_settings: "key",
+  shortener_configs: "provider",
+  telegram_user_links: "user_id",
 };
 
 function conflictColumnFor(table: string) {
