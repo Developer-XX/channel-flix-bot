@@ -141,8 +141,76 @@ export function DownloadButton({
     return null;
   }
 
+  // Auto re-check loop after the user clicks "Open channel" and joins. Polls
+  // requestDownload every 4 seconds for up to ~3 minutes. The first call
+  // that succeeds — i.e. the bot's getChatMember sees the user joined —
+  // delivers the file and we close the dialog.
+  function startJoinPolling(fileId: string, cid: string) {
+    if (joinPollRef.current) joinPollRef.current.stop = true;
+    const handle = { stop: false, cid };
+    joinPollRef.current = handle;
+    const start = Date.now();
+    const MAX_MS = 180_000;
+    const POLL_MS = 4_000;
+    const tick = async () => {
+      if (handle.stop) return;
+      const elapsed = Date.now() - start;
+      const secondsLeft = Math.max(0, Math.ceil((MAX_MS - elapsed) / 1000));
+      setJoinState((s) => (s ? { ...s, secondsLeft, polling: true } : s));
+      if (elapsed > MAX_MS) {
+        setJoinState((s) => (s ? { ...s, polling: false } : s));
+        return;
+      }
+      try {
+        const r: any = await reqDownload({ data: { mediaFileId: fileId } });
+        if (handle.stop) return;
+        if (r.ok) {
+          const cd = Number(r.cooldownSec ?? 0);
+          if (cd > 0) setCooldownUntil(Date.now() + cd * 1000);
+          toast.success(`✅ ${fileName ?? "File"} sent to your Telegram`);
+          setJoinState(null);
+          handle.stop = true;
+          return;
+        }
+        if (r.reason === "must_join_channel") {
+          // Refresh per-channel status so the dialog shows green checks for
+          // channels they've already joined.
+          const channels = Array.isArray(r.channels) && r.channels.length
+            ? r.channels
+            : null;
+          if (channels) {
+            setJoinState((s) =>
+              s
+                ? {
+                    ...s,
+                    channels,
+                    joined: new Set(channels.filter((c: any) => c.status === "joined").map((c: any) => c.id)),
+                  }
+                : s,
+            );
+          }
+        } else {
+          // Different terminal error — stop polling and surface it.
+          setJoinState(null);
+          handle.stop = true;
+          failWith(`Couldn't deliver: ${r.reason ?? "unknown"}`, cid, (r as any)?.detail);
+          return;
+        }
+      } catch (e: any) {
+        // Network/auth blip — keep polling but note it.
+        console.warn("[force-join poll] error:", e?.message);
+      }
+      setTimeout(tick, POLL_MS);
+    };
+    setTimeout(tick, 3_500); // small head-start so Telegram registers the join
+  }
 
-  async function handleClick() {
+  function cancelJoinPolling() {
+    if (joinPollRef.current) joinPollRef.current.stop = true;
+    setJoinState(null);
+  }
+
+
     setLoading(true);
     const cid = newCorrelationId();
     setErrorState(null);
