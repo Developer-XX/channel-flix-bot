@@ -163,6 +163,8 @@ function AdminLayout() {
             <MobileNavItem to="/admin/requests" label="Requests" />
             <MobileNavItem to="/admin/telegram" label="Telegram" />
             <MobileNavItem to="/admin/telegram-health" label="TG health" />
+            <MobileNavItem to="/admin/force-join" label="Force-join" />
+
             <MobileNavItem to="/admin/bulk" label="Bulk" />
             <MobileNavItem to="/admin/episode-audit" label="Episode audit" />
             <MobileNavItem to="/admin/verification-limits" label="Limits" />
