@@ -142,6 +142,7 @@ function AdminLayout() {
           <NavItem to="/admin/notifications" icon={<Bell className="h-4 w-4" />} label="Notifications" />
           <NavItem to="/admin/google-oauth" icon={<ShieldAlert className="h-4 w-4" />} label="Google OAuth" />
           <NavItem to="/admin/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
+          <NavItem to="/admin/backup" icon={<Database className="h-4 w-4" />} label="Backup & Restore" />
 
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
