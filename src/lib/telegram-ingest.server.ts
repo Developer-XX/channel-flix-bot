@@ -418,7 +418,7 @@ export async function ingestTelegramUpdate(
     try {
       await autoPromoteToMediaFile(supabase, {
         ingestId: ingestRow.id,
-        titleId: match.matchedTitleId,
+        titleId: effectiveTitleId!,
         channelRowId: chanRow?.id ?? null,
         telegramFileId: file.file_id,
         telegramMessageId: tgMessageId,
