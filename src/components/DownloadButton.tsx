@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Send, Loader2, Copy, ExternalLink } from "lucide-react";
+import { Send, Loader2, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
 import { startVerification } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
 import { triggerInterstitial } from "@/components/InterstitialController";
+
 
 interface Props {
   mediaFileId: string;
