@@ -310,6 +310,22 @@ function BackupPage() {
 
         {importResult && (
           <div className="text-xs space-y-2 pt-3 border-t border-border">
+            {importResult.integrity && (
+              <div className={`rounded-md p-2 space-y-1 border ${importResult.integrity.compatible ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}>
+                <div className="font-semibold">
+                  Integrity: {importResult.integrity.compatible ? "compatible ✓" : "INCOMPATIBLE — restore blocked"}
+                </div>
+                <div>Archive schema v{importResult.integrity.archive_schema_version} vs live v{importResult.integrity.live_schema_version}</div>
+                <div>Tables — archive: {importResult.integrity.archive_tables} · live: {importResult.integrity.live_tables}</div>
+                {importResult.integrity.unknown_tables?.length > 0 && (
+                  <div className="text-destructive">Unknown tables in archive: {importResult.integrity.unknown_tables.join(", ")}</div>
+                )}
+                {importResult.integrity.missing_tables?.length > 0 && (
+                  <div className="text-amber-500">Tables absent from archive (will be left untouched): {importResult.integrity.missing_tables.join(", ")}</div>
+                )}
+              </div>
+            )}
+
             {importResult.dryRun && importResult.summary && (
               <div className="rounded-md bg-muted p-2 space-y-1">
                 <div className="font-semibold">Dry-run summary</div>
