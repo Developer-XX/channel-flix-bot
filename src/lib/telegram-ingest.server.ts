@@ -285,9 +285,12 @@ export async function ingestTelegramUpdate(
 
   // Snapshot the prior ingest row (if any) so we can detect title changes on
   // a caption edit and demote the previously-promoted media_files row.
+  // `match_locked = true` means an admin manually assigned this row to a
+  // title; the automatic matcher must NOT overwrite that assignment on a
+  // later backfill / redeploy / channel re-scan.
   const { data: priorIngest } = await supabase
     .from("telegram_ingest")
-    .select("id, matched_title_id, promoted_media_file_id, caption")
+    .select("id, matched_title_id, promoted_media_file_id, caption, match_score, match_locked")
     .eq("telegram_channel_id", tgChannelId)
     .eq("telegram_message_id", tgMessageId)
     .maybeSingle();
@@ -295,7 +298,10 @@ export async function ingestTelegramUpdate(
   const parsed = parseMedia(caption, file.file_name);
   const settings = await loadMatchingSettings(supabase);
   const match = await runMatcher(supabase, parsed, settings);
-  const status = match.matchedTitleId ? "matched" : "unmatched";
+  const wasLocked = !!(priorIngest as any)?.match_locked && !!priorIngest?.matched_title_id;
+  const effectiveTitleId = wasLocked ? priorIngest!.matched_title_id : match.matchedTitleId;
+  const effectiveScore = wasLocked ? ((priorIngest as any).match_score ?? match.matchScore) : match.matchScore;
+  const status = effectiveTitleId ? "matched" : "unmatched";
 
 
   const { data: ingestRow, error: ingestErr } = await supabase
@@ -322,8 +328,8 @@ export async function ingestTelegramUpdate(
         parsed_language: parsed.language,
         parsed_category: parsed.category,
         match_status: status,
-        matched_title_id: match.matchedTitleId,
-        match_score: match.matchScore,
+        matched_title_id: effectiveTitleId,
+        match_score: effectiveScore,
         update_id: update.update_id,
         raw_update: update as any,
       },
@@ -374,9 +380,10 @@ export async function ingestTelegramUpdate(
   const priorTitleId = priorIngest?.matched_title_id ?? null;
   const priorMediaFileId = priorIngest?.promoted_media_file_id ?? null;
   const titleChanged =
-    !!priorTitleId && priorTitleId !== (match.matchedTitleId ?? null);
-  const becameUnmatched = !!priorTitleId && !match.matchedTitleId;
-  if ((isEdit || priorIngest) && priorMediaFileId && (titleChanged || becameUnmatched)) {
+    !!priorTitleId && priorTitleId !== (effectiveTitleId ?? null);
+  const becameUnmatched = !!priorTitleId && !effectiveTitleId;
+  // Never demote/auto-reassign when the row is admin-locked.
+  if (!wasLocked && (isEdit || priorIngest) && priorMediaFileId && (titleChanged || becameUnmatched)) {
     try {
       await supabase
         .from("media_files")
@@ -389,7 +396,7 @@ export async function ingestTelegramUpdate(
         decision: "demoted",
         reason: becameUnmatched
           ? `caption_edit: now unmatched (was title ${priorTitleId})`
-          : `caption_edit: title changed (was ${priorTitleId}, now ${match.matchedTitleId})`,
+          : `caption_edit: title changed (was ${priorTitleId}, now ${effectiveTitleId})`,
         actor: "auto:caption-edit",
         oldScore: null,
         newScore: match.matchScore,
@@ -407,11 +414,11 @@ export async function ingestTelegramUpdate(
   }
 
 
-  if (match.matchedTitleId && file.file_id) {
+  if (effectiveTitleId && file.file_id) {
     try {
       await autoPromoteToMediaFile(supabase, {
         ingestId: ingestRow.id,
-        titleId: match.matchedTitleId,
+        titleId: effectiveTitleId!,
         channelRowId: chanRow?.id ?? null,
         telegramFileId: file.file_id,
         telegramMessageId: tgMessageId,

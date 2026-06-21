@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign, ScrollText, Link2 } from "lucide-react";
+import { Film, LayoutDashboard, MessageSquare, ArrowLeft, Send, AlertTriangle, Zap, ShieldAlert, Activity, Stethoscope, Settings as SettingsIcon, PlayCircle, Crown, MessageCircle, Megaphone, Bell, Users, Images, BadgeDollarSign, ScrollText, Link2, Database } from "lucide-react";
 import { useQuery as useReactQuery } from "@tanstack/react-query";
 import { listAdminAlerts } from "@/lib/admin-alerts.functions";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -142,6 +142,7 @@ function AdminLayout() {
           <NavItem to="/admin/notifications" icon={<Bell className="h-4 w-4" />} label="Notifications" />
           <NavItem to="/admin/google-oauth" icon={<ShieldAlert className="h-4 w-4" />} label="Google OAuth" />
           <NavItem to="/admin/settings" icon={<SettingsIcon className="h-4 w-4" />} label="Settings" />
+          <NavItem to="/admin/backup" icon={<Database className="h-4 w-4" />} label="Backup & Restore" />
 
         </nav>
         <div className="mt-auto p-4 text-xs text-muted-foreground">
@@ -180,6 +181,7 @@ function AdminLayout() {
             <MobileNavItem to="/admin/notifications" label="Alerts" />
             <MobileNavItem to="/admin/google-oauth" label="Google OAuth" />
             <MobileNavItem to="/admin/settings" label="Settings" />
+            <MobileNavItem to="/admin/backup" label="Backup" />
 
           </nav>
         </div>
