@@ -15,7 +15,9 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import { requireAdminAccess } from "@/lib/admin-auth";
 
 // Order matters for restore: parents before children (FK references).
@@ -134,6 +136,76 @@ const KEY_COLUMNS: Record<string, string[]> = {
   seasons: ["id"],
   master_titles: ["id"],
 };
+
+type LiveColumnMeta = { nullable: boolean; hasDefault: boolean };
+type LiveSchemaProbe = {
+  columns: Map<string, Map<string, LiveColumnMeta>>;
+  tableErrors: Record<string, string>;
+};
+type BackupTableRows = Record<string, Array<Record<string, unknown>>>;
+type ColumnRpcRow = {
+  table_name: string;
+  column_name: string;
+  is_nullable: string;
+  column_default: string | null;
+};
+
+async function loadLiveSchemaProbe(
+  supabaseAdmin: SupabaseClient<Database>,
+  tables: BackupTableRows,
+): Promise<LiveSchemaProbe> {
+  const columns = new Map<string, Map<string, LiveColumnMeta>>();
+  const tableErrors: Record<string, string> = {};
+
+  // Prefer the optional metadata RPC when it exists, but never make restore depend
+  // on PostgREST's schema cache. Self-hosted/VPS deployments often hit a stale
+  // cache and return "Could not find the function ... in the schema cache".
+  const { data: colsData, error: colsErr } = await supabaseAdmin.rpc(
+    "get_public_columns" as never,
+    { _tables: EXPORT_TABLES as unknown as string[] } as never,
+  );
+
+  if (!colsErr) {
+    for (const row of (colsData as ColumnRpcRow[] | null) ?? []) {
+      const tn = row.table_name;
+      if (!columns.has(tn)) columns.set(tn, new Map());
+      columns.get(tn)!.set(row.column_name, {
+        nullable: row.is_nullable === "YES",
+        hasDefault: row.column_default != null,
+      });
+    }
+    return { columns, tableErrors };
+  }
+
+  const schemaCacheMiss = /schema cache|could not find the function|get_public_columns/i.test(
+    colsErr.message ?? "",
+  );
+  if (!schemaCacheMiss) {
+    throw new Error(`Failed to load live schema: ${colsErr.message}`);
+  }
+
+  // Fallback: verify tables directly through the Data API and use archive sample
+  // columns for dry-run drift checks. Live restore still surfaces real per-table
+  // upsert errors if a column actually changed.
+  for (const t of EXPORT_TABLES) {
+    const { error } = await supabaseAdmin
+      .from(t as never)
+      .select("*", { count: "exact", head: true });
+    if (error) {
+      tableErrors[t] = error.message;
+      continue;
+    }
+
+    const sample = (tables[t] ?? []).find((row) => row && typeof row === "object");
+    const tableCols = new Map<string, LiveColumnMeta>();
+    for (const c of Object.keys(sample ?? { id: null })) {
+      tableCols.set(c, { nullable: true, hasDefault: true });
+    }
+    columns.set(t, tableCols);
+  }
+
+  return { columns, tableErrors };
+}
 
 export const backupCompletenessReport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -311,8 +383,6 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
     };
   });
 
-
-
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -356,49 +426,31 @@ export const importAllData = createServerFn({ method: "POST" })
       );
     }
 
-    const tables = data.archive.tables;
-
+    const tables: BackupTableRows = data.archive.tables;
 
     type TableReport = {
       incoming: number;
       existing: number | null;
       idsInArchive: number;
       idsMatchingExisting: number; // would be overwritten on upsert
-      newIds: number;              // would be inserted
-      unknownColumns: string[];    // columns in archive not in live schema
+      newIds: number; // would be inserted
+      unknownColumns: string[]; // columns in archive not in live schema
       missingRequiredColumns: string[]; // NOT-NULL no-default columns absent from archive rows
-      sampleRowErrors: string[];   // per-row issues (first 3)
+      sampleRowErrors: string[]; // per-row issues (first 3)
       tableExists: boolean;
       error?: string;
     };
 
     const report: Record<string, TableReport> = {};
 
-    // Load live schema info once for all involved tables.
-    // (information_schema lookup below)
-
-    // information_schema is not exposed via PostgREST; use a SECURITY DEFINER RPC.
-    const { data: colsData, error: colsErr } = await supabaseAdmin.rpc(
-      "get_public_columns" as never,
-      { _tables: EXPORT_TABLES as unknown as string[] } as never,
-    );
-    if (colsErr) {
-      throw new Error(`Failed to load live schema: ${colsErr.message}`);
-    }
-
-    const liveCols = new Map<string, Map<string, { nullable: boolean; hasDefault: boolean }>>();
-    for (const row of (colsData as any[] | null) ?? []) {
-      const tn = row.table_name as string;
-      if (!liveCols.has(tn)) liveCols.set(tn, new Map());
-      liveCols.get(tn)!.set(row.column_name, {
-        nullable: row.is_nullable === "YES",
-        hasDefault: row.column_default != null,
-      });
-    }
+    // Load live schema info once for all involved tables. Falls back to direct
+    // table probes if a self-hosted/VPS PostgREST schema cache has not picked up
+    // the helper RPC yet.
+    const { columns: liveCols, tableErrors } = await loadLiveSchemaProbe(supabaseAdmin, tables);
 
     // Per-table analysis (always run for dry runs; also collected during live runs).
     for (const t of EXPORT_TABLES) {
-      const rows = (tables[t] ?? []) as any[];
+      const rows = tables[t] ?? [];
       const live = liveCols.get(t);
       const r: TableReport = {
         incoming: rows.length,
@@ -413,7 +465,7 @@ export const importAllData = createServerFn({ method: "POST" })
       };
 
       if (!r.tableExists) {
-        r.error = "table not found in live schema";
+        r.error = tableErrors[t] ?? "table not found in live schema";
         report[t] = r;
         continue;
       }
