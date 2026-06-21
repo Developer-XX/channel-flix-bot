@@ -40,6 +40,7 @@ import {
   deleteAllIngest,
   restoreIngestRows,
   resyncChannels,
+  resyncAllChannels,
   reparseIngest,
   reparseChannelFromCaptions,
 } from "@/lib/telegram.functions";
@@ -1006,6 +1007,7 @@ function ChannelWizard() {
   const channels = useQuery({ queryKey: ["tg-channels"], queryFn: () => list() });
   const botState = useQuery({ queryKey: ["tg-bot-state-wizard"], queryFn: () => state() });
   const resync = useServerFn(resyncChannels);
+  const resyncAll = useServerFn(resyncAllChannels);
 
   const [ref, setRef] = useState("");
   const [check, setCheck] = useState<any>(null);
@@ -1013,6 +1015,7 @@ function ChannelWizard() {
   const [adminIds, setAdminIds] = useState("");
   const [pickedChannels, setPickedChannels] = useState<Set<string>>(new Set());
   const [resyncing, setResyncing] = useState(false);
+  const [resyncingAll, setResyncingAll] = useState(false);
   const togglePick = (id: string) => setPickedChannels((prev) => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
@@ -1098,26 +1101,50 @@ function ChannelWizard() {
       )}
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="text-xs uppercase text-muted-foreground">Connected channels</div>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={resyncing || pickedChannels.size === 0}
-            onClick={async () => {
-              setResyncing(true);
-              try {
-                const r = await resync({ data: { channelIds: Array.from(pickedChannels) } });
-                toast.success(`Resynced ${pickedChannels.size} channel(s) · scanned ${r.scanned} · backfilled ${r.backfillProcessed} · metadata updated ${r.metadataUpdated}`);
-                setPickedChannels(new Set());
-                channels.refetch();
-              } catch (e: any) {
-                toast.error(e?.message ?? "Resync failed");
-              } finally { setResyncing(false); }
-            }}
-          >
-            {resyncing ? "Resyncing…" : `Resync selected (${pickedChannels.size})`}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="default"
+              disabled={resyncingAll || resyncing}
+              onClick={async () => {
+                setResyncingAll(true);
+                try {
+                  const r = await resyncAll();
+                  toast.success(
+                    `Re-scanned ${r.channels} channel(s) · scanned ${r.scanned} · backfilled ${r.backfillProcessed} · metadata updated ${r.metadataUpdated}`,
+                  );
+                  channels.refetch();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Re-scan failed");
+                } finally {
+                  setResyncingAll(false);
+                }
+              }}
+              title="Re-scan every active channel and rebuild website indexes — useful after a restore"
+            >
+              {resyncingAll ? "Re-scanning all…" : "🔄 Re-scan all channels"}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={resyncing || resyncingAll || pickedChannels.size === 0}
+              onClick={async () => {
+                setResyncing(true);
+                try {
+                  const r = await resync({ data: { channelIds: Array.from(pickedChannels) } });
+                  toast.success(`Resynced ${pickedChannels.size} channel(s) · scanned ${r.scanned} · backfilled ${r.backfillProcessed} · metadata updated ${r.metadataUpdated}`);
+                  setPickedChannels(new Set());
+                  channels.refetch();
+                } catch (e: any) {
+                  toast.error(e?.message ?? "Resync failed");
+                } finally { setResyncing(false); }
+              }}
+            >
+              {resyncing ? "Resyncing…" : `Resync selected (${pickedChannels.size})`}
+            </Button>
+          </div>
         </div>
         {channels.isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
         {(channels.data ?? []).length === 0 && !channels.isLoading && (
