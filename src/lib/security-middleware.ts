@@ -30,6 +30,11 @@ const RATE_LIMIT = Math.max(1, Number(process.env.RATE_LIMIT_PER_MIN ?? 60));
 
 const HSTS = "max-age=31536000; includeSubDomains; preload";
 
+// Hosts allowed to embed the app in an iframe (Lovable editor preview, etc.).
+// Keep self + Lovable hosts. Add your own admin/embed hosts here if needed.
+const FRAME_ANCESTORS =
+  "'self' https://*.lovable.app https://*.lovable.dev https://lovable.dev https://*.gpt-eng.com";
+
 // Permissive CSP — Report-Only so we never break the live app. Tighten with
 // nonces/hashes once a CSP-report endpoint is wired up.
 const CSP_REPORT_ONLY = [
@@ -44,7 +49,7 @@ const CSP_REPORT_ONLY = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-ancestors 'self'",
+  `frame-ancestors ${FRAME_ANCESTORS}`,
 ].join("; ");
 
 const PERMISSIONS_POLICY =
@@ -84,7 +89,9 @@ function setHeader(res: Response, name: string, value: string) {
 function applySecurityHeaders(res: Response, isHttps: boolean) {
   if (isHttps) setHeader(res, "strict-transport-security", HSTS);
   setHeader(res, "x-content-type-options", "nosniff");
-  setHeader(res, "x-frame-options", "SAMEORIGIN");
+  // NOTE: X-Frame-Options is intentionally NOT set — it only supports
+  // single-origin SAMEORIGIN/DENY and would block the Lovable preview iframe.
+  // Modern browsers honor CSP `frame-ancestors` (set below) instead.
   setHeader(res, "referrer-policy", "strict-origin-when-cross-origin");
   setHeader(res, "permissions-policy", PERMISSIONS_POLICY);
   setHeader(res, "content-security-policy-report-only", CSP_REPORT_ONLY);
