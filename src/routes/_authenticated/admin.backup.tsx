@@ -129,8 +129,14 @@ function BackupPage() {
       setImportResult({ dryRun: res.dryRun, inserted: res.inserted, failed: res.failed, report: res.report, summary: res.summary, integrity: res.integrity });
       const failedCount = Object.keys(res.failed ?? {}).length;
       if (dryRun) toast.success("Dry-run complete");
-      else if (failedCount === 0) toast.success("Restore complete");
-      else toast.warning(`Restored with ${failedCount} table error(s)`);
+      else if (failedCount === 0) {
+        const idx = res.postRestore?.indexes;
+        toast.success(
+          idx
+            ? `Restore complete · indexes rebuilt (latest ${idx.latest}, trending ${idx.trending}, search ${idx.search})`
+            : "Restore complete",
+        );
+      } else toast.warning(`Restored with ${failedCount} table error(s)`);
     } catch (e: any) {
       toast.error(e?.message ?? "Import failed");
     } finally {

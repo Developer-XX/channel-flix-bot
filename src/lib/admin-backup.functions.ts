@@ -569,7 +569,24 @@ export const importAllData = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report, integrity };
+    // Post-restore: rebuild website indexes + bump cache version so the
+    // homepage, search, latest releases, trending sections, and the admin
+    // telegram dashboard immediately reflect restored data without requiring
+    // the operator to click "Rebuild website indexes" manually.
+    const postRestore: {
+      indexes?: { latest: number; trending: number; search: number; cacheVersion: number };
+      indexesError?: string;
+    } = {};
+    try {
+      const { rebuildIndexes, bumpCacheVersion } = await import("@/lib/indexes.server");
+      const idx = await rebuildIndexes(supabaseAdmin as never);
+      await bumpCacheVersion(supabaseAdmin as never);
+      postRestore.indexes = idx;
+    } catch (e) {
+      postRestore.indexesError = (e as Error).message;
+    }
+
+    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report, integrity, postRestore };
   });
 
 // ---- Health check ------------------------------------------------------
