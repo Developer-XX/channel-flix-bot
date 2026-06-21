@@ -1,28 +1,65 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { exportAllData, importAllData } from "@/lib/admin-backup.functions";
-import { Download, Upload, AlertTriangle, Database } from "lucide-react";
+import {
+  exportAllData,
+  importAllData,
+  checkBackupHealth,
+  runBackupSelfTest,
+} from "@/lib/admin-backup.functions";
+import { Download, Upload, AlertTriangle, Database, ShieldCheck, Loader2, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/backup")({
   component: BackupPage,
 });
 
+type HealthState =
+  | { status: "checking" }
+  | { status: "ok"; schema_version: number; tables: number; checked_at: string }
+  | { status: "error"; code: "404" | "5xx" | "auth" | "other"; message: string };
+
 function BackupPage() {
   const doExport = useServerFn(exportAllData);
   const doImport = useServerFn(importAllData);
+  const doHealth = useServerFn(checkBackupHealth);
+  const doSelfTest = useServerFn(runBackupSelfTest);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
-  const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any } | null>(null);
+  const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any; integrity?: any } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
   const [confirm, setConfirm] = useState("");
+  const [health, setHealth] = useState<HealthState>({ status: "checking" });
+  const [selfTesting, setSelfTesting] = useState(false);
+  const [selfTestResult, setSelfTestResult] = useState<any>(null);
+
+  async function runHealthCheck() {
+    setHealth({ status: "checking" });
+    try {
+      const res: any = await doHealth({ data: {} });
+      if (res?.ok) {
+        setHealth({ status: "ok", schema_version: res.schema_version, tables: res.tables, checked_at: res.checked_at });
+      } else {
+        setHealth({ status: "error", code: "other", message: res?.probe_error ?? "Health probe failed" });
+      }
+    } catch (e: any) {
+      const msg = String(e?.message ?? e ?? "Unknown error");
+      let code: "404" | "5xx" | "auth" | "other" = "other";
+      if (/404|not\s*found/i.test(msg)) code = "404";
+      else if (/5\d\d|server\s*error|internal/i.test(msg)) code = "5xx";
+      else if (/unauthor|forbidden|admin role/i.test(msg)) code = "auth";
+      setHealth({ status: "error", code, message: msg });
+    }
+  }
+
+  useEffect(() => { runHealthCheck(); }, []);
+
 
   async function handleExport() {
     setExporting(true);
