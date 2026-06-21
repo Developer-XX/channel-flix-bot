@@ -272,8 +272,10 @@ export const requestDownload = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!link?.telegram_user_id) {
       await auditFailure("not_linked");
+      await downloadLogEarlyFailure("not_linked", { shortener: ver.lastProvider, category: fileCategory, titleId: file.title_id, fileId: file.id });
       return { ok: false as const, reason: "not_linked" as const };
     }
+
 
     // 2b. Multi-channel force-join gate. Reads public.force_join_channels (or
     // falls back to the legacy single-channel settings) and applies AND/OR.
