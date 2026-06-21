@@ -262,7 +262,7 @@ export const importAllData = createServerFn({ method: "POST" })
           .map(([t]) => t),
         tablesMissing: Object.entries(report).filter(([, r]) => !r.tableExists).map(([t]) => t),
       };
-      return { ok: true, dryRun: true, mode: data.mode, summary, report };
+      return { ok: true, dryRun: true, mode: data.mode, summary, report, integrity };
     }
 
     // Live restore path.
