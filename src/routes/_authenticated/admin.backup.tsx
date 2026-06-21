@@ -34,7 +34,7 @@ function BackupPage() {
   const [importing, setImporting] = useState(false);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [lastArchive, setLastArchive] = useState<any>(null);
-  const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any; integrity?: any } | null>(null);
+  const [importResult, setImportResult] = useState<{ dryRun?: boolean; inserted?: Record<string, number>; skipped?: Record<string, number>; failed?: Record<string, string>; report?: Record<string, any>; summary?: any; integrity?: any } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<"upsert" | "replace">("upsert");
   const [confirm, setConfirm] = useState("");
@@ -126,7 +126,7 @@ function BackupPage() {
       const text = await file.text();
       const archive = JSON.parse(text);
       const res: any = await doImport({ data: { archive, mode, dryRun, confirm: dryRun ? "DRYRUN" : "RESTORE" } });
-      setImportResult({ dryRun: res.dryRun, inserted: res.inserted, failed: res.failed, report: res.report, summary: res.summary, integrity: res.integrity });
+      setImportResult({ dryRun: res.dryRun, inserted: res.inserted, skipped: res.skipped, failed: res.failed, report: res.report, summary: res.summary, integrity: res.integrity });
       const failedCount = Object.keys(res.failed ?? {}).length;
       if (dryRun) toast.success("Dry-run complete");
       else if (failedCount === 0) {
@@ -484,6 +484,19 @@ function BackupPage() {
                     <div key={t} className="flex justify-between font-mono">
                       <span className="text-muted-foreground">{t}</span>
                       <span>{(n as number).toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {importResult.skipped && Object.values(importResult.skipped).some((n) => Number(n) > 0) && (
+              <div className="text-amber-500">
+                <div className="font-semibold mb-1">Skipped unsafe rows</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+                  {Object.entries(importResult.skipped).filter(([, n]) => Number(n) > 0).map(([t, n]) => (
+                    <div key={t} className="flex justify-between font-mono">
+                      <span>{t}</span>
+                      <span>{Number(n).toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
