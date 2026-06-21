@@ -41,8 +41,24 @@ export async function evaluateForceJoin(args: {
   const { supabaseAdmin, telegramUserId, category } = args;
   const { getSetting } = await import("@/lib/runtime-settings.server");
 
-  const enabledRaw = (await getSetting("FORCE_JOIN_ENABLED")) ?? "";
-  const enabled = /^(1|true|yes|on)$/i.test(enabledRaw.trim());
+  const enabledRaw = ((await getSetting("FORCE_JOIN_ENABLED")) ?? "").trim();
+  // Explicit off/on wins. If unset, auto-enable when at least one active
+  // force_join_channels row exists OR a legacy single-channel setting is
+  // configured — so admins don't have to flip a separate master toggle after
+  // adding their first channel.
+  let enabled: boolean;
+  if (/^(0|false|no|off)$/i.test(enabledRaw)) {
+    enabled = false;
+  } else if (/^(1|true|yes|on)$/i.test(enabledRaw)) {
+    enabled = true;
+  } else {
+    const { count } = await supabaseAdmin
+      .from("force_join_channels")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true);
+    const legacy = ((await getSetting("FORCE_JOIN_CHANNEL")) ?? "").trim();
+    enabled = (count ?? 0) > 0 || legacy.length > 0;
+  }
   if (!enabled) {
     return { enabled: false, required: false, passed: true, rule: "and", channels: [] };
   }
