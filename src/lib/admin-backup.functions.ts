@@ -43,8 +43,8 @@ const EXPORT_TABLES: readonly string[] = [
   "title_aliases",
   "seasons",
   "episodes",
-  "telegram_ingest",
   "media_files",
+  "telegram_ingest",
   "scheduled_message_deletes",
   "download_send_queue",
   "delivery_attempts",
@@ -56,7 +56,7 @@ const EXPORT_TABLES: readonly string[] = [
 
 // Bump when EXPORT_TABLES changes shape in a way that would make an old
 // archive unsafe to restore against the current code.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
@@ -155,10 +155,177 @@ const CONFLICT_COLUMNS: Record<string, string> = {
   app_settings: "key",
   shortener_configs: "provider",
   telegram_user_links: "user_id",
+  telegram_broadcast_subscribers: "telegram_user_id",
+  download_send_queue: "idempotency_key",
+  delivery_attempts: "idempotency_key",
 };
 
 function conflictColumnFor(table: string) {
   return CONFLICT_COLUMNS[table] ?? "id";
+}
+
+const KNOWN_ABSENT_COLUMNS: Record<string, string[]> = {
+  telegram_broadcast_subscribers: ["id"],
+  download_send_queue: ["id"],
+};
+
+const USER_REF_COLUMNS: Record<string, string[]> = {
+  profiles: ["id"],
+  user_roles: ["user_id"],
+  premium_payments: ["user_id", "reviewed_by"],
+  announcements: ["created_by"],
+  telegram_user_links: ["user_id"],
+  telegram_broadcast_runs: ["initiated_by"],
+  download_send_queue: ["user_id"],
+  delivery_attempts: ["user_id"],
+  content_requests: ["user_id"],
+  support_tickets: ["user_id"],
+  support_messages: ["sender_id"],
+  download_logs: ["user_id"],
+};
+
+const NON_NULL_USER_REFS: Record<string, string[]> = {
+  profiles: ["id"],
+  user_roles: ["user_id"],
+  premium_payments: ["user_id"],
+  telegram_user_links: ["user_id"],
+  download_send_queue: ["user_id"],
+  delivery_attempts: ["user_id"],
+  support_tickets: ["user_id"],
+};
+
+function asKey(value: unknown) {
+  return value == null ? null : String(value);
+}
+
+function keySet(rows: Array<Record<string, unknown>>, column = "id") {
+  return new Set(rows.map((r) => asKey(r?.[column])).filter((v): v is string => !!v));
+}
+
+function buildArchiveKeySets(tables: BackupTableRows) {
+  return {
+    app_settings: keySet(tables.app_settings ?? [], "key"),
+    premium_plans: keySet(tables.premium_plans ?? []),
+    telegram_channels: keySet(tables.telegram_channels ?? []),
+    master_titles: keySet(tables.master_titles ?? []),
+    seasons: keySet(tables.seasons ?? []),
+    episodes: keySet(tables.episodes ?? []),
+    media_files: keySet(tables.media_files ?? []),
+    support_tickets: keySet(tables.support_tickets ?? []),
+  } as Record<string, Set<string>>;
+}
+
+function buildEpisodeTitleMap(tables: BackupTableRows) {
+  const map = new Map<string, string>();
+  for (const row of tables.episodes ?? []) {
+    const id = asKey(row.id);
+    const titleId = asKey(row.title_id);
+    if (id && titleId) map.set(id, titleId);
+  }
+  return map;
+}
+
+async function loadExistingAuthUserIds(
+  supabaseAdmin: SupabaseClient<Database>,
+  tables: BackupTableRows,
+) {
+  const wanted = new Set<string>();
+  for (const [table, columns] of Object.entries(USER_REF_COLUMNS)) {
+    for (const row of tables[table] ?? []) {
+      for (const column of columns) {
+        const id = asKey(row[column]);
+        if (id) wanted.add(id);
+      }
+    }
+  }
+
+  const existing = new Set<string>();
+  for (const id of wanted) {
+    try {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(id);
+      if (data?.user?.id) existing.add(id);
+    } catch {
+      // If Auth Admin is unavailable on a self-hosted deployment, keep going.
+      // Nullable user references will be nulled and non-null user-owned rows skipped.
+    }
+  }
+  return existing;
+}
+
+function sanitizeRowForRestore(
+  table: string,
+  row: Record<string, unknown>,
+  opts: {
+    liveCols?: Map<string, LiveColumnMeta>;
+    archiveKeys: Record<string, Set<string>>;
+    restoredKeys: Map<string, Set<string>>;
+    processed: Set<string>;
+    authUsers: Set<string>;
+    episodeTitleById: Map<string, string>;
+  },
+) {
+  const knownMissing = new Set(KNOWN_ABSENT_COLUMNS[table] ?? []);
+  const out: Record<string, unknown> = {};
+  const live = opts.liveCols;
+  for (const [key, value] of Object.entries(row)) {
+    if (knownMissing.has(key)) continue;
+    if (live && live.size > 0 && !live.has(key)) continue;
+    out[key] = value;
+  }
+
+  const validPublicId = (parentTable: string, value: unknown) => {
+    const key = asKey(value);
+    if (!key) return true;
+    if (opts.processed.has(parentTable)) return opts.restoredKeys.get(parentTable)?.has(key) ?? false;
+    return opts.archiveKeys[parentTable]?.has(key) ?? false;
+  };
+  const nullInvalidPublic = (column: string, parentTable: string) => {
+    if (!validPublicId(parentTable, out[column])) out[column] = null;
+  };
+  const skipInvalidPublic = (column: string, parentTable: string) => {
+    if (!validPublicId(parentTable, out[column])) return true;
+    return false;
+  };
+  const authExists = (value: unknown) => {
+    const key = asKey(value);
+    return !key || opts.authUsers.has(key);
+  };
+
+  for (const column of NON_NULL_USER_REFS[table] ?? []) {
+    if (!authExists(out[column])) return null;
+  }
+  for (const column of USER_REF_COLUMNS[table] ?? []) {
+    if (!authExists(out[column])) out[column] = null;
+  }
+
+  if (table === "premium_payments") nullInvalidPublic("plan_id", "premium_plans");
+  if (table === "telegram_ingest") {
+    nullInvalidPublic("channel_id", "telegram_channels");
+    nullInvalidPublic("matched_title_id", "master_titles");
+    nullInvalidPublic("promoted_media_file_id", "media_files");
+  }
+  if (table === "media_files") {
+    nullInvalidPublic("channel_id", "telegram_channels");
+    nullInvalidPublic("episode_id", "episodes");
+    const episodeId = asKey(out.episode_id);
+    if (!validPublicId("master_titles", out.title_id) && episodeId) {
+      out.title_id = opts.episodeTitleById.get(episodeId) ?? null;
+    }
+    nullInvalidPublic("title_id", "master_titles");
+    if (!out.title_id && !out.episode_id) return null;
+  }
+  if (table === "download_send_queue") {
+    if (skipInvalidPublic("file_id", "media_files")) return null;
+    nullInvalidPublic("title_id", "master_titles");
+  }
+  if (table === "delivery_attempts" && skipInvalidPublic("media_file_id", "media_files")) return null;
+  if (table === "download_logs") {
+    nullInvalidPublic("file_id", "media_files");
+    nullInvalidPublic("title_id", "master_titles");
+  }
+  if (table === "support_messages" && skipInvalidPublic("ticket_id", "support_tickets")) return null;
+
+  return out;
 }
 
 async function probeTablesThroughDataApi(
