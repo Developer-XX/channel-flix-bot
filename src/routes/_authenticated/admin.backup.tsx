@@ -71,6 +71,7 @@ function BackupPage() {
     try {
       const res = await doExport({ data: {} });
       setCounts(res.archive.counts);
+      setLastArchive(res.archive);
       const blob = new Blob([JSON.stringify(res.archive, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -81,10 +82,38 @@ function BackupPage() {
       a.remove();
       URL.revokeObjectURL(url);
       toast.success("Backup downloaded");
+      // Auto-run completeness report right after export.
+      runCompleteness(res.archive);
     } catch (e: any) {
       toast.error(e?.message ?? "Export failed");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function runCompleteness(archive: any) {
+    setCompletenessRunning(true);
+    setCompleteness(null);
+    try {
+      const res: any = await doCompleteness({ data: { archive } });
+      setCompleteness(res);
+      if (res?.summary?.overall_status === "ok") toast.success("Completeness check passed");
+      else toast.warning(`Completeness check: drift in ${res?.summary?.tables_drift} table(s)`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Completeness check failed");
+    } finally {
+      setCompletenessRunning(false);
+    }
+  }
+
+  async function handleCompletenessFromFile() {
+    if (!file) { toast.error("Pick a backup file first"); return; }
+    try {
+      const text = await file.text();
+      const archive = JSON.parse(text);
+      await runCompleteness(archive);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not parse file");
     }
   }
 
