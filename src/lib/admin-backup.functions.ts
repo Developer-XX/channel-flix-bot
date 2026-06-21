@@ -58,7 +58,7 @@ export const exportAllData = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const cap = data.maxRowsPerTable ?? DEFAULT_MAX_ROWS_PER_TABLE;
 
-    const tables: Record<string, unknown[]> = {};
+    const tables: Record<string, any[]> = {};
     const counts: Record<string, number> = {};
     const skipped: Record<string, string> = {};
 
@@ -71,7 +71,7 @@ export const exportAllData = createServerFn({ method: "POST" })
         skipped[t] = error.message;
         continue;
       }
-      tables[t] = rows ?? [];
+      tables[t] = (rows ?? []) as any[];
       counts[t] = (rows ?? []).length;
     }
 
