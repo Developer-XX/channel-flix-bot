@@ -385,8 +385,6 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
     };
   });
 
-
-
 export const importAllData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -430,18 +428,17 @@ export const importAllData = createServerFn({ method: "POST" })
       );
     }
 
-    const tables = data.archive.tables;
-
+    const tables: BackupTableRows = data.archive.tables;
 
     type TableReport = {
       incoming: number;
       existing: number | null;
       idsInArchive: number;
       idsMatchingExisting: number; // would be overwritten on upsert
-      newIds: number;              // would be inserted
-      unknownColumns: string[];    // columns in archive not in live schema
+      newIds: number; // would be inserted
+      unknownColumns: string[]; // columns in archive not in live schema
       missingRequiredColumns: string[]; // NOT-NULL no-default columns absent from archive rows
-      sampleRowErrors: string[];   // per-row issues (first 3)
+      sampleRowErrors: string[]; // per-row issues (first 3)
       tableExists: boolean;
       error?: string;
     };
@@ -451,11 +448,14 @@ export const importAllData = createServerFn({ method: "POST" })
     // Load live schema info once for all involved tables. Falls back to direct
     // table probes if a self-hosted/VPS PostgREST schema cache has not picked up
     // the helper RPC yet.
-    const { columns: liveCols, tableErrors } = await loadLiveSchemaProbe(supabaseAdmin, tables);
+    const { columns: liveCols, tableErrors } = await loadLiveSchemaProbe(
+      supabaseAdmin,
+      tables,
+    );
 
     // Per-table analysis (always run for dry runs; also collected during live runs).
     for (const t of EXPORT_TABLES) {
-      const rows = (tables[t] ?? []) as any[];
+      const rows = tables[t] ?? [];
       const live = liveCols.get(t);
       const r: TableReport = {
         incoming: rows.length,
