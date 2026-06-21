@@ -40,6 +40,7 @@ import {
   deleteAllIngest,
   restoreIngestRows,
   resyncChannels,
+  resyncAllChannels,
   reparseIngest,
   reparseChannelFromCaptions,
 } from "@/lib/telegram.functions";
