@@ -31,6 +31,7 @@ const EXPORT_TABLES: readonly string[] = [
   "homepage_slides",
   "ads",
   "shortener_configs",
+  "force_join_channels",
   "google_oauth_credentials",
   "telegram_channels",
   "telegram_user_links",
@@ -55,7 +56,7 @@ const EXPORT_TABLES: readonly string[] = [
 
 // Bump when EXPORT_TABLES changes shape in a way that would make an old
 // archive unsafe to restore against the current code.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
@@ -129,9 +130,9 @@ const ImportArchiveSchema = z.object({
 // For each table we sample the archive and compare against live rows by the
 // listed unique key, so admins can confirm Telegram file metadata round-trips.
 const KEY_COLUMNS: Record<string, string[]> = {
-  telegram_ingest: ["file_unique_id", "telegram_channel_id", "telegram_message_id"],
-  media_files: ["file_unique_id", "file_id"],
-  telegram_channels: ["telegram_chat_id"],
+  telegram_ingest: ["telegram_file_id", "telegram_channel_id", "telegram_message_id"],
+  media_files: ["telegram_file_id", "id"],
+  telegram_channels: ["channel_id"],
   episodes: ["id"],
   seasons: ["id"],
   master_titles: ["id"],
@@ -149,6 +150,42 @@ type ColumnRpcRow = {
   is_nullable: string;
   column_default: string | null;
 };
+
+const CONFLICT_COLUMNS: Record<string, string> = {
+  app_settings: "key",
+  shortener_configs: "provider",
+  telegram_user_links: "user_id",
+};
+
+function conflictColumnFor(table: string) {
+  return CONFLICT_COLUMNS[table] ?? "id";
+}
+
+async function probeTablesThroughDataApi(
+  supabaseAdmin: SupabaseClient<Database>,
+  tables: BackupTableRows,
+  columns: Map<string, Map<string, LiveColumnMeta>>,
+  tableErrors: Record<string, string>,
+) {
+  for (const t of EXPORT_TABLES) {
+    if (columns.has(t)) continue;
+    const { error } = await supabaseAdmin
+      .from(t as never)
+      .select("*", { count: "exact", head: true });
+    if (error) {
+      tableErrors[t] = error.message;
+      continue;
+    }
+
+    const keyColumn = conflictColumnFor(t);
+    const sample = (tables[t] ?? []).find((row) => row && typeof row === "object");
+    const tableCols = new Map<string, LiveColumnMeta>();
+    for (const c of Object.keys(sample ?? { [keyColumn]: null })) {
+      tableCols.set(c, { nullable: true, hasDefault: true });
+    }
+    columns.set(t, tableCols);
+  }
+}
 
 async function loadLiveSchemaProbe(
   supabaseAdmin: SupabaseClient<Database>,
@@ -174,6 +211,7 @@ async function loadLiveSchemaProbe(
         hasDefault: row.column_default != null,
       });
     }
+    await probeTablesThroughDataApi(supabaseAdmin, tables, columns, tableErrors);
     return { columns, tableErrors };
   }
 
@@ -187,22 +225,7 @@ async function loadLiveSchemaProbe(
   // Fallback: verify tables directly through the Data API and use archive sample
   // columns for dry-run drift checks. Live restore still surfaces real per-table
   // upsert errors if a column actually changed.
-  for (const t of EXPORT_TABLES) {
-    const { error } = await supabaseAdmin
-      .from(t as never)
-      .select("*", { count: "exact", head: true });
-    if (error) {
-      tableErrors[t] = error.message;
-      continue;
-    }
-
-    const sample = (tables[t] ?? []).find((row) => row && typeof row === "object");
-    const tableCols = new Map<string, LiveColumnMeta>();
-    for (const c of Object.keys(sample ?? { id: null })) {
-      tableCols.set(c, { nullable: true, hasDefault: true });
-    }
-    columns.set(t, tableCols);
-  }
+  await probeTablesThroughDataApi(supabaseAdmin, tables, columns, tableErrors);
 
   return { columns, tableErrors };
 }
@@ -335,26 +358,34 @@ export const backupCompletenessReport = createServerFn({ method: "POST" })
       });
     }
 
-    // Targeted check: every telegram_ingest row in the archive that has a
-    // file_unique_id must map to a media_files row with that same value.
+    // Targeted check: every matched/promoted telegram_ingest row in the archive
+    // should map to a restored media_files row. This is the signal that makes
+    // Telegram files appear on title pages after a restore.
     const ingestRows = (archiveTables["telegram_ingest"] ?? []) as any[];
     const mediaRows = (archiveTables["media_files"] ?? []) as any[];
-    const mediaUids = new Set(
-      mediaRows.map((r) => r?.file_unique_id).filter((v) => v != null).map(String),
+    const mediaIds = new Set(mediaRows.map((r) => r?.id).filter((v) => v != null).map(String));
+    const mediaTelegramIds = new Set(
+      mediaRows.map((r) => r?.telegram_file_id).filter((v) => v != null).map(String),
     );
-    const ingestUids = ingestRows
-      .map((r) => r?.file_unique_id)
+    const ingestPromotedRefs = ingestRows
+      .map((r) => r?.promoted_media_file_id)
       .filter((v) => v != null)
       .map(String);
-    const orphanIngestUids = ingestUids.filter((u) => !mediaUids.has(u));
+    const ingestTelegramIds = ingestRows
+      .filter((r) => r?.match_status === "matched" || r?.promoted_media_file_id != null)
+      .map((r) => r?.telegram_file_id)
+      .filter((v) => v != null)
+      .map(String);
+    const orphanPromotedRefs = ingestPromotedRefs.filter((id) => !mediaIds.has(id));
+    const orphanTelegramIds = ingestTelegramIds.filter((id) => !mediaTelegramIds.has(id));
 
     const fileMetadataCheck = {
-      ingest_with_file_unique_id: ingestUids.length,
-      media_with_file_unique_id: mediaUids.size,
-      ingest_orphans_without_media: orphanIngestUids.length,
-      sample_orphans: orphanIngestUids.slice(0, 5),
+      ingest_with_file_unique_id: ingestTelegramIds.length,
+      media_with_file_unique_id: mediaTelegramIds.size,
+      ingest_orphans_without_media: orphanPromotedRefs.length + orphanTelegramIds.length,
+      sample_orphans: [...orphanPromotedRefs, ...orphanTelegramIds].slice(0, 5),
       status:
-        orphanIngestUids.length === 0
+        orphanPromotedRefs.length === 0 && orphanTelegramIds.length === 0
           ? ("ok" as const)
           : ("drift" as const),
     };
@@ -470,10 +501,11 @@ export const importAllData = createServerFn({ method: "POST" })
         continue;
       }
 
+      const conflictColumn = conflictColumnFor(t);
       // Count existing rows.
       const { count: existingCount } = await supabaseAdmin
         .from(t as never)
-        .select("id", { count: "exact", head: true });
+        .select(conflictColumn, { count: "exact", head: true });
       r.existing = existingCount ?? 0;
 
       if (rows.length === 0) {
@@ -492,7 +524,7 @@ export const importAllData = createServerFn({ method: "POST" })
       });
 
       // ID-based conflict detection (in chunks to keep .in() lists reasonable).
-      const archiveIds = rows.map((row) => row?.id).filter((id) => id != null);
+      const archiveIds = rows.map((row) => row?.[conflictColumn]).filter((id) => id != null);
       r.idsInArchive = archiveIds.length;
       if (archiveIds.length > 0) {
         const CHUNK = 500;
@@ -501,8 +533,8 @@ export const importAllData = createServerFn({ method: "POST" })
           const slice = archiveIds.slice(i, i + CHUNK);
           const { data: hits } = await supabaseAdmin
             .from(t as never)
-            .select("id")
-            .in("id", slice as any);
+            .select(conflictColumn)
+            .in(conflictColumn, slice as any);
           matching += (hits?.length ?? 0);
         }
         r.idsMatchingExisting = matching;
@@ -539,11 +571,12 @@ export const importAllData = createServerFn({ method: "POST" })
       }
 
       try {
+        const conflictColumn = conflictColumnFor(t);
         if (data.mode === "replace") {
           const { error: delErr } = await supabaseAdmin
             .from(t as never)
             .delete()
-            .not("id", "is", null);
+            .not(conflictColumn, "is", null);
           if (delErr && !/column .* does not exist/i.test(delErr.message)) {
             failed[t] = `delete failed: ${delErr.message}`;
             continue;
@@ -556,7 +589,7 @@ export const importAllData = createServerFn({ method: "POST" })
           const chunk = rows.slice(i, i + CHUNK);
           const { error: upErr } = await supabaseAdmin
             .from(t as never)
-            .upsert(chunk as never, { onConflict: "id" });
+            .upsert(chunk as never, { onConflict: conflictColumn });
           if (upErr) {
             failed[t] = upErr.message;
             break;

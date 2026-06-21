@@ -260,9 +260,9 @@ function BackupPage() {
           <div>
             <h2 className="font-semibold text-sm">Backup completeness report</h2>
             <p className="text-xs text-muted-foreground">
-              Compares per-table row counts and verifies Telegram file metadata
-              (telegram_ingest / media_files / file_unique_id) between an
-              archive and the live database.
+              Compares per-table row counts and verifies Telegram ingest rows
+              are linked to restored media files between an archive and the
+              live database.
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
@@ -295,8 +295,8 @@ function BackupPage() {
             <div className={`rounded-md p-2 border ${completeness.file_metadata_check?.status === "ok" ? "bg-emerald-500/5 border-emerald-500/30" : "bg-destructive/10 border-destructive/30"}`}>
               <div className="font-semibold">Telegram file metadata</div>
               <div>
-                ingest file_unique_id: {completeness.file_metadata_check?.ingest_with_file_unique_id?.toLocaleString?.()} ·
-                {" "}media file_unique_id: {completeness.file_metadata_check?.media_with_file_unique_id?.toLocaleString?.()}
+                matched ingest files: {completeness.file_metadata_check?.ingest_with_file_unique_id?.toLocaleString?.()} ·
+                {" "}media files: {completeness.file_metadata_check?.media_with_file_unique_id?.toLocaleString?.()}
               </div>
               {completeness.file_metadata_check?.ingest_orphans_without_media > 0 && (
                 <div className="text-destructive">
