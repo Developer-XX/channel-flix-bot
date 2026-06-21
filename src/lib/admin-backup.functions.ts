@@ -135,6 +135,71 @@ const KEY_COLUMNS: Record<string, string[]> = {
   master_titles: ["id"],
 };
 
+type LiveColumnMeta = { nullable: boolean; hasDefault: boolean };
+type LiveSchemaProbe = {
+  columns: Map<string, Map<string, LiveColumnMeta>>;
+  tableErrors: Record<string, string>;
+};
+
+async function loadLiveSchemaProbe(
+  supabaseAdmin: any,
+  tables: Record<string, any[]>,
+): Promise<LiveSchemaProbe> {
+  const columns = new Map<string, Map<string, LiveColumnMeta>>();
+  const tableErrors: Record<string, string> = {};
+
+  // Prefer the optional metadata RPC when it exists, but never make restore depend
+  // on PostgREST's schema cache. Self-hosted/VPS deployments often hit a stale
+  // cache and return "Could not find the function ... in the schema cache".
+  const { data: colsData, error: colsErr } = await supabaseAdmin.rpc(
+    "get_public_columns" as never,
+    { _tables: EXPORT_TABLES as unknown as string[] } as never,
+  );
+
+  if (!colsErr) {
+    for (const row of (colsData as any[] | null) ?? []) {
+      const tn = row.table_name as string;
+      if (!columns.has(tn)) columns.set(tn, new Map());
+      columns.get(tn)!.set(row.column_name, {
+        nullable: row.is_nullable === "YES",
+        hasDefault: row.column_default != null,
+      });
+    }
+    return { columns, tableErrors };
+  }
+
+  const schemaCacheMiss = /schema cache|could not find the function|get_public_columns/i.test(
+    colsErr.message ?? "",
+  );
+  if (!schemaCacheMiss) {
+    throw new Error(`Failed to load live schema: ${colsErr.message}`);
+  }
+
+  // Fallback: verify tables directly through the Data API and use archive sample
+  // columns for dry-run drift checks. Live restore still surfaces real per-table
+  // upsert errors if a column actually changed.
+  for (const t of EXPORT_TABLES) {
+    const { error } = await supabaseAdmin
+      .from(t as never)
+      .select("*", { count: "exact", head: true });
+    if (error) {
+      tableErrors[t] = error.message;
+      continue;
+    }
+
+    const sample = (tables[t] ?? []).find((row) => row && typeof row === "object") as
+      | Record<string, unknown>
+      | undefined;
+    const tableCols = new Map<string, LiveColumnMeta>();
+    for (const c of Object.keys(sample ?? { id: null })) {
+      tableCols.set(c, { nullable: true, hasDefault: true });
+    }
+    columns.set(t, tableCols);
+  }
+
+  return { columns, tableErrors };
+}
+
 export const backupCompletenessReport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
