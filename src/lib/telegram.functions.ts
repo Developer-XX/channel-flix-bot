@@ -1367,6 +1367,9 @@ export const reparseIngest = createServerFn({ method: "POST" })
       .from("telegram_ingest").select("*").eq("id", data.ingestId).maybeSingle();
     if (error) throw error;
     if (!r) throw new Error("Ingest row not found");
+    if ((r as any).match_locked) {
+      return { ok: true, locked: true, match: { matchedTitleId: r.matched_title_id, matchScore: r.match_score }, promoted: false };
+    }
 
     const parsed = parseMedia(r.caption, r.file_name);
     const settings = await loadMatchingSettings(supabaseAdmin);
