@@ -205,10 +205,11 @@ export const requestDownload = createServerFn({ method: "POST" })
       };
     }
 
-    // 1. Resolve the file + its source channel/message
+    // 1. Resolve the file + its source channel/message + category (used to
+    // pick which force-join channels apply).
     const { data: file, error: fileErr } = await supabaseAdmin
       .from("media_files")
-      .select("id, file_name, title_id, telegram_message_id, channel_id, telegram_channels(channel_id, name)")
+      .select("id, file_name, title_id, telegram_message_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
       .eq("id", data.mediaFileId)
       .maybeSingle();
     if (fileErr) throw fileErr;
@@ -216,6 +217,7 @@ export const requestDownload = createServerFn({ method: "POST" })
       await auditFailure("file_not_found");
       return { ok: false as const, reason: "file_not_found" as const };
     }
+    const fileCategory: string | null = (file as any).master_titles?.category ?? null;
     const missing: string[] = [];
     if (!file.telegram_message_id) missing.push("telegram_message_id");
     if (!file.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
@@ -244,48 +246,63 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "not_linked" as const };
     }
 
-    // 2b. Force-join gate. When FORCE_JOIN_ENABLED is on, the bot calls
-    // getChatMember on the configured main channel and refuses delivery
-    // until the user has joined. The bot itself must be an administrator
-    // of FORCE_JOIN_CHANNEL so getChatMember succeeds.
-    const fjEnabledRaw = (await getSetting("FORCE_JOIN_ENABLED")) ?? "";
-    const forceJoinEnabled = /^(1|true|yes|on)$/i.test(fjEnabledRaw.trim());
-    if (forceJoinEnabled) {
-      const fjChannel = (await getSetting("FORCE_JOIN_CHANNEL")) ?? "";
-      const fjUrl = (await getSetting("FORCE_JOIN_CHANNEL_URL")) ?? "";
-      const fjTitle = (await getSetting("FORCE_JOIN_CHANNEL_TITLE")) ?? "";
-      if (fjChannel.trim()) {
-        try {
-          const { getChatMember } = await import("@/lib/telegram-api.server");
-          const member = await getChatMember(fjChannel.trim(), link.telegram_user_id);
-          const isMember = member?.status && !["left", "kicked"].includes(member.status);
-          if (!isMember) {
-            await auditFailure("must_join_channel", { channel: fjChannel, status: member?.status ?? null });
-            return {
-              ok: false as const,
-              reason: "must_join_channel" as const,
-              channel: fjChannel,
-              joinUrl: fjUrl || (fjChannel.startsWith("@") ? `https://t.me/${fjChannel.slice(1)}` : ""),
-              channelTitle: fjTitle || fjChannel,
-            };
-          }
-        } catch (e) {
-          // getChatMember can fail when the bot isn't an admin or the chat
-          // id is wrong. Surface a clear message rather than silently
-          // letting unjoined users through.
-          const msg = (e as Error).message ?? String(e);
-          await auditFailure("force_join_check_failed", { channel: fjChannel, error: msg.slice(0, 300) });
-          return {
-            ok: false as const,
-            reason: "must_join_channel" as const,
-            channel: fjChannel,
-            joinUrl: fjUrl || (fjChannel.startsWith("@") ? `https://t.me/${fjChannel.slice(1)}` : ""),
-            channelTitle: fjTitle || fjChannel,
-            checkFailed: true,
-          };
-        }
+    // 2b. Multi-channel force-join gate. Reads public.force_join_channels (or
+    // falls back to the legacy single-channel settings) and applies AND/OR.
+    // The bot must be administrator of each configured chat so getChatMember
+    // can resolve membership.
+    const { evaluateForceJoin } = await import("@/lib/force-join.server");
+    const forceJoin = await evaluateForceJoin({
+      supabaseAdmin,
+      telegramUserId: link.telegram_user_id,
+      category: fileCategory,
+    });
+    if (forceJoin.required && !forceJoin.passed) {
+      const channelsPayload = forceJoin.channels.map((c) => ({
+        id: c.id,
+        title: c.title,
+        joinUrl: c.inviteUrl ?? "",
+        status: c.status,
+      }));
+      await auditFailure("must_join_channel", {
+        rule: forceJoin.rule,
+        channels: forceJoin.channels.map((c) => ({ id: c.id, status: c.status, chatId: c.chatId })),
+      });
+      // Record the gated attempt into download_logs so it shows up in the
+      // delivery audit dashboard (the auditFailure helper only writes to
+      // admin_audit_log).
+      try {
+        await supabaseAdmin.from("download_logs").insert({
+          user_id: context.userId,
+          file_id: file.id,
+          title_id: file.title_id,
+          source: "bot_dm",
+          delivery_status: "blocked",
+          delivery_error: `must_join_channel (${forceJoin.rule})`,
+          verification_status: "verified",
+          verification_provider: ver.lastProvider,
+          shortener_used: ver.lastProvider ?? null,
+          category: fileCategory,
+          force_join_required: true,
+          force_join_status: "not_joined",
+          force_join_channels: forceJoin.channels as never,
+          failure_reason: "must_join_channel",
+        });
+      } catch (e) {
+        console.warn("[download-audit] gated insert failed", (e as Error).message);
       }
+      return {
+        ok: false as const,
+        reason: "must_join_channel" as const,
+        rule: forceJoin.rule,
+        channels: channelsPayload,
+        // legacy single-channel fields kept for older clients
+        channel: forceJoin.channels[0]?.chatId ?? "",
+        joinUrl: forceJoin.channels[0]?.inviteUrl ?? "",
+        channelTitle: forceJoin.channels[0]?.title ?? "",
+      };
     }
+
+
 
 
     // 3. Cooldown-window keyed idempotency. The key includes a window bucket
