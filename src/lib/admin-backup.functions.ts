@@ -728,17 +728,50 @@ export const importAllData = createServerFn({ method: "POST" })
     // Live restore path.
     const inserted: Record<string, number> = {};
     const failed: Record<string, string> = {};
+    const skipped: Record<string, number> = {};
+    const archiveKeys = buildArchiveKeySets(tables);
+    const episodeTitleById = buildEpisodeTitleMap(tables);
+    const authUsers = await loadExistingAuthUserIds(supabaseAdmin, tables);
+    const restoredKeys = new Map<string, Set<string>>();
+    const processed = new Set<string>();
 
     for (const t of EXPORT_TABLES) {
       const rows = (tables[t] ?? []) as any[];
-      if (rows.length === 0) continue;
+      if (rows.length === 0) {
+        processed.add(t);
+        restoredKeys.set(t, new Set());
+        continue;
+      }
       if (report[t]?.error) {
         failed[t] = report[t].error!;
+        processed.add(t);
+        restoredKeys.set(t, new Set());
         continue;
       }
 
       try {
         const conflictColumn = conflictColumnFor(t);
+        const liveColsForTable = liveCols.get(t);
+        const sanitizedRows = rows
+          .map((row) => sanitizeRowForRestore(t, row, {
+            liveCols: liveColsForTable,
+            archiveKeys,
+            restoredKeys,
+            processed,
+            authUsers,
+            episodeTitleById,
+          }))
+          .filter((row): row is Record<string, unknown> => !!row);
+        skipped[t] = rows.length - sanitizedRows.length;
+        const restoredForTable = new Set<string>();
+
+        if (sanitizedRows.length === 0) {
+          inserted[t] = 0;
+          restoredKeys.set(t, restoredForTable);
+          processed.add(t);
+          continue;
+        }
+
         if (data.mode === "replace") {
           const { error: delErr } = await supabaseAdmin
             .from(t as never)
@@ -752,8 +785,8 @@ export const importAllData = createServerFn({ method: "POST" })
 
         const CHUNK = 500;
         let writtenForTable = 0;
-        for (let i = 0; i < rows.length; i += CHUNK) {
-          const chunk = rows.slice(i, i + CHUNK);
+        for (let i = 0; i < sanitizedRows.length; i += CHUNK) {
+          const chunk = sanitizedRows.slice(i, i + CHUNK);
           const { error: upErr } = await supabaseAdmin
             .from(t as never)
             .upsert(chunk as never, { onConflict: conflictColumn });
@@ -762,10 +795,18 @@ export const importAllData = createServerFn({ method: "POST" })
             break;
           }
           writtenForTable += chunk.length;
+          for (const row of chunk) {
+            const id = asKey(row[conflictColumn]) ?? asKey(row.id);
+            if (id) restoredForTable.add(id);
+          }
         }
         inserted[t] = writtenForTable;
+        restoredKeys.set(t, restoredForTable);
+        processed.add(t);
       } catch (e) {
         failed[t] = (e as Error).message;
+        restoredKeys.set(t, new Set());
+        processed.add(t);
       }
     }
 
@@ -786,7 +827,7 @@ export const importAllData = createServerFn({ method: "POST" })
       postRestore.indexesError = (e as Error).message;
     }
 
-    return { ok: true, dryRun: false, mode: data.mode, inserted, failed, report, integrity, postRestore };
+    return { ok: true, dryRun: false, mode: data.mode, inserted, skipped, failed, report, integrity, postRestore };
   });
 
 // ---- Health check ------------------------------------------------------
