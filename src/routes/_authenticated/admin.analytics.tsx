@@ -593,7 +593,7 @@ function DeliveryAuditWidget() {
       {summary && summary.topReasons.length > 0 && (
         <div className="mt-3 text-xs">
           <span className="text-muted-foreground">Top reasons:</span>{" "}
-          {summary.topReasons.map((r) => (
+          {summary.topReasons.map((r: { reason: string; count: number }) => (
             <span key={r.reason} className="inline-block mr-2 px-2 py-0.5 rounded-md border border-border bg-surface/40">
               {r.reason} <b>{r.count}</b>
             </span>
