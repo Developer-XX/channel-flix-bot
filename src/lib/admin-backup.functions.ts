@@ -377,12 +377,14 @@ export const importAllData = createServerFn({ method: "POST" })
     // Load live schema info once for all involved tables.
     // (information_schema lookup below)
 
-    // Use information_schema via a direct select.
-    const { data: colsData } = await supabaseAdmin
-      .from("information_schema.columns" as never)
-      .select("table_name,column_name,is_nullable,column_default")
-      .eq("table_schema", "public")
-      .in("table_name", EXPORT_TABLES as unknown as string[]);
+    // information_schema is not exposed via PostgREST; use a SECURITY DEFINER RPC.
+    const { data: colsData, error: colsErr } = await supabaseAdmin.rpc(
+      "get_public_columns" as never,
+      { _tables: EXPORT_TABLES as unknown as string[] } as never,
+    );
+    if (colsErr) {
+      throw new Error(`Failed to load live schema: ${colsErr.message}`);
+    }
 
     const liveCols = new Map<string, Map<string, { nullable: boolean; hasDefault: boolean }>>();
     for (const row of (colsData as any[] | null) ?? []) {
