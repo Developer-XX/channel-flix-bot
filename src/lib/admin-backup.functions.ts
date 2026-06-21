@@ -936,16 +936,13 @@ export const runBackupSelfTest = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await requireAdminAccess(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const cap = 1_000;
+    const cap = 50_000;
     const tables: Record<string, any[]> = {};
     const counts: Record<string, number> = {};
     for (const t of EXPORT_TABLES) {
-      const { data: rows } = await supabaseAdmin
-        .from(t as never)
-        .select("*")
-        .limit(cap);
-      tables[t] = (rows ?? []) as any[];
-      counts[t] = tables[t].length;
+      const { rows } = await fetchAllRows(supabaseAdmin, t, cap);
+      tables[t] = rows;
+      counts[t] = rows.length;
     }
     // Compare archive counts against current counts. On a quiet DB they
     // should match — mismatches indicate writes happened mid-export.
