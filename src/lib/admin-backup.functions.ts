@@ -32,12 +32,19 @@ const EXPORT_TABLES: readonly string[] = [
   "google_oauth_credentials",
   "telegram_channels",
   "telegram_user_links",
+  "telegram_bot_state",
+  "telegram_broadcast_subscribers",
+  "telegram_broadcast_runs",
+  "telegram_sync_steps",
   "master_titles",
   "title_aliases",
   "seasons",
   "episodes",
   "telegram_ingest",
   "media_files",
+  "scheduled_message_deletes",
+  "download_send_queue",
+  "delivery_attempts",
   "content_requests",
   "support_tickets",
   "support_messages",
@@ -46,7 +53,7 @@ const EXPORT_TABLES: readonly string[] = [
 
 // Bump when EXPORT_TABLES changes shape in a way that would make an old
 // archive unsafe to restore against the current code.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // Hard cap per table so the JSON download stays reasonable. Admins can ask
 // for a bigger window in the UI if they have a huge dataset.
