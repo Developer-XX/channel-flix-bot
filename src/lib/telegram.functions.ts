@@ -420,6 +420,82 @@ export const resyncChannels = createServerFn({ method: "POST" })
     };
   });
 
+// One-click variant: re-scan EVERY active channel. Useful after a restore
+// to repopulate any ingest rows that didn't make it into the backup, and to
+// pull anything newly posted while the bot was offline.
+export const resyncAllChannels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { parseMedia } = await import("@/lib/telegram-parser");
+    const { runTelegramBackfill } = await import("@/lib/telegram-backfill.server");
+
+    const { data: chans } = await supabaseAdmin
+      .from("telegram_channels")
+      .select("id")
+      .eq("is_active", true);
+    const channelIds = (chans ?? []).map((c: { id: string }) => c.id);
+    if (channelIds.length === 0) {
+      return { ok: true, channels: 0, scanned: 0, metadataUpdated: 0, backfillProcessed: 0 };
+    }
+
+    const { data: rows } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("id, caption, file_name, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_resolution, parsed_quality, parsed_codec, parsed_language, parsed_category")
+      .in("channel_id", channelIds)
+      .is("deleted_at", null)
+      .limit(20000);
+    let updated = 0;
+    for (const r of rows ?? []) {
+      const parsed = parseMedia(r.caption, r.file_name);
+      const patch: Record<string, unknown> = {};
+      const setIfEmpty = (k: string, cur: unknown, nxt: unknown) => {
+        if ((cur === null || cur === undefined || cur === "") && nxt != null && nxt !== "") patch[k] = nxt;
+      };
+      setIfEmpty("parsed_title", r.parsed_title, parsed.title);
+      setIfEmpty("parsed_year", r.parsed_year, parsed.year);
+      setIfEmpty("parsed_season", r.parsed_season, parsed.season);
+      setIfEmpty("parsed_episode", r.parsed_episode, parsed.episode);
+      setIfEmpty("parsed_resolution", r.parsed_resolution, parsed.resolution);
+      setIfEmpty("parsed_quality", r.parsed_quality, parsed.quality);
+      setIfEmpty("parsed_codec", r.parsed_codec, parsed.codec);
+      setIfEmpty("parsed_language", r.parsed_language, parsed.language);
+      setIfEmpty("parsed_category", r.parsed_category, parsed.category);
+      if (Object.keys(patch).length) {
+        await supabaseAdmin.from("telegram_ingest").update(patch as never).eq("id", r.id);
+        updated++;
+      }
+    }
+
+    const bf = await runTelegramBackfill();
+
+    await writeAdminAudit(context, "telegram.resync_all_channels", "success", {
+      channels: channelIds.length,
+      scanned: rows?.length ?? 0,
+      metadataUpdated: updated,
+      backfillProcessed: bf.processed,
+    });
+
+    // Refresh website indexes so any newly promoted files surface immediately.
+    try {
+      const { rebuildIndexes, bumpCacheVersion } = await import("@/lib/indexes.server");
+      await rebuildIndexes(supabaseAdmin as never);
+      await bumpCacheVersion(supabaseAdmin as never);
+    } catch (e) {
+      console.warn("[resync-all] post-rebuild failed:", (e as Error).message);
+    }
+
+    return {
+      ok: true,
+      channels: channelIds.length,
+      scanned: rows?.length ?? 0,
+      metadataUpdated: updated,
+      backfillProcessed: bf.processed,
+      newLastUpdateId: bf.newLastUpdateId,
+    };
+  });
+
 
 export const searchMasterTitles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
