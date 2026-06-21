@@ -44,15 +44,35 @@ export function DownloadButton({
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
+  // Force-join dialog state. When the server returns must_join_channel we
+  // open a modal listing every required channel and start a polling loop
+  // that re-tries `requestDownload` every few seconds — as soon as the user
+  // taps Join in Telegram, the next poll succeeds and the file is sent.
+  const [joinState, setJoinState] = useState<
+    | null
+    | {
+        rule: "and" | "or";
+        channels: Array<{ id: string; title: string; joinUrl: string; status: string }>;
+        joined: Set<string>;
+        secondsLeft: number;
+        polling: boolean;
+      }
+  >(null);
+  const joinPollRef = useRef<{ stop: boolean; cid: string } | null>(null);
+
   useEffect(() => {
     if (!cooldownUntil) return;
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, [cooldownUntil]);
 
-  const cooldownLeftSec =
-    cooldownUntil && cooldownUntil > now ? Math.ceil((cooldownUntil - now) / 1000) : 0;
-  const isCoolingDown = cooldownLeftSec > 0;
+  // Stop any active force-join polling when the dialog is dismissed or the
+  // component unmounts.
+  useEffect(() => {
+    return () => {
+      if (joinPollRef.current) joinPollRef.current.stop = true;
+    };
+  }, []);
 
   function newCorrelationId(): string {
     try {
@@ -61,6 +81,7 @@ export function DownloadButton({
       return Math.random().toString(36).slice(2, 14);
     }
   }
+
 
   function failWith(message: string, cid: string, detail?: string) {
     setErrorState({ message, detail, cid });
