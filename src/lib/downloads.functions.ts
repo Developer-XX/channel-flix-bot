@@ -223,6 +223,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     const ver = await getVerificationState(supabaseAdmin, context.userId);
     if (!ver.verified) {
       await auditFailure("needs_verification", { expiresAt: ver.expiresAt });
+      await downloadLogEarlyFailure("needs_verification", { shortener: ver.lastProvider });
       return {
         ok: false as const,
         reason: "needs_verification" as const,
@@ -240,6 +241,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     if (fileErr) throw fileErr;
     if (!file) {
       await auditFailure("file_not_found");
+      await downloadLogEarlyFailure("file_not_found", { shortener: ver.lastProvider });
       return { ok: false as const, reason: "file_not_found" as const };
     }
     const fileCategory: string | null = (file as any).master_titles?.category ?? null;
@@ -251,6 +253,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     }
     if (missing.length) {
       await auditFailure("source_missing", { missing, file_name: (file as any).file_name });
+      await downloadLogEarlyFailure("source_missing", { shortener: ver.lastProvider, category: fileCategory, titleId: file.title_id, fileId: file.id });
       return {
         ok: false as const,
         reason: "source_missing" as const,
@@ -258,6 +261,7 @@ export const requestDownload = createServerFn({ method: "POST" })
         missing,
         mediaFileId: file.id,
       };
+
     }
 
     // 2. Resolve linked Telegram id
