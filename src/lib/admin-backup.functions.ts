@@ -439,27 +439,10 @@ export const importAllData = createServerFn({ method: "POST" })
 
     const report: Record<string, TableReport> = {};
 
-    // Load live schema info once for all involved tables.
-    // (information_schema lookup below)
-
-    // information_schema is not exposed via PostgREST; use a SECURITY DEFINER RPC.
-    const { data: colsData, error: colsErr } = await supabaseAdmin.rpc(
-      "get_public_columns" as never,
-      { _tables: EXPORT_TABLES as unknown as string[] } as never,
-    );
-    if (colsErr) {
-      throw new Error(`Failed to load live schema: ${colsErr.message}`);
-    }
-
-    const liveCols = new Map<string, Map<string, { nullable: boolean; hasDefault: boolean }>>();
-    for (const row of (colsData as any[] | null) ?? []) {
-      const tn = row.table_name as string;
-      if (!liveCols.has(tn)) liveCols.set(tn, new Map());
-      liveCols.get(tn)!.set(row.column_name, {
-        nullable: row.is_nullable === "YES",
-        hasDefault: row.column_default != null,
-      });
-    }
+    // Load live schema info once for all involved tables. Falls back to direct
+    // table probes if a self-hosted/VPS PostgREST schema cache has not picked up
+    // the helper RPC yet.
+    const { columns: liveCols, tableErrors } = await loadLiveSchemaProbe(supabaseAdmin, tables);
 
     // Per-table analysis (always run for dry runs; also collected during live runs).
     for (const t of EXPORT_TABLES) {
@@ -478,7 +461,7 @@ export const importAllData = createServerFn({ method: "POST" })
       };
 
       if (!r.tableExists) {
-        r.error = "table not found in live schema";
+        r.error = tableErrors[t] ?? "table not found in live schema";
         report[t] = r;
         continue;
       }
