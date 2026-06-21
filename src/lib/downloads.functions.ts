@@ -179,6 +179,31 @@ export const requestDownload = createServerFn({ method: "POST" })
         console.warn("[download-audit] insert failed", (e as Error).message);
       }
     };
+    // Persists a row to download_logs for failure paths that bail early
+    // (verification, link, file_not_found, source_missing). The success/retry
+    // path further down records its own row with the full attempt history.
+    const downloadLogEarlyFailure = async (
+      reason: string,
+      extra: { shortener?: string | null; category?: string | null; titleId?: string | null; fileId?: string | null } = {},
+    ) => {
+      try {
+        await supabaseAdmin.from("download_logs").insert({
+          user_id: context.userId,
+          file_id: extra.fileId ?? data.mediaFileId,
+          title_id: extra.titleId ?? null,
+          source: "bot_dm",
+          delivery_status: "blocked",
+          delivery_error: reason,
+          failure_reason: reason,
+          verification_status: reason === "needs_verification" ? "pending" : "verified",
+          shortener_used: extra.shortener ?? null,
+          category: extra.category ?? null,
+        });
+      } catch (e) {
+        console.warn("[download-audit] early-failure log insert failed", (e as Error).message);
+      }
+    };
+
     const {
       makeIdempotencyKey,
       getBotUserId,
