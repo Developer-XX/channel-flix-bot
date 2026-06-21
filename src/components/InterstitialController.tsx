@@ -83,7 +83,13 @@ export function InterstitialController() {
 
   const cfg: InterstitialConfig | undefined = cfgQ.data;
   const isPremium = !!premiumQ.data?.isPremium;
-  const enabled = !!cfg?.enabled && !isPremium;
+  // Resolve premium status before enabling any interstitial trigger.
+  // Anonymous users (authed === false) are never premium — resolve immediately.
+  // Authed users must wait for the premium query so premium accounts never
+  // see an interstitial during the brief window before the gate loads.
+  const premiumResolved =
+    authed === false || (authed === true && !premiumQ.isLoading && !premiumQ.isFetching);
+  const enabled = !!cfg?.enabled && !isPremium && premiumResolved;
 
   // Imperative trigger
   const show = useCallback(
