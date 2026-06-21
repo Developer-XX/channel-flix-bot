@@ -1007,6 +1007,7 @@ function ChannelWizard() {
   const channels = useQuery({ queryKey: ["tg-channels"], queryFn: () => list() });
   const botState = useQuery({ queryKey: ["tg-bot-state-wizard"], queryFn: () => state() });
   const resync = useServerFn(resyncChannels);
+  const resyncAll = useServerFn(resyncAllChannels);
 
   const [ref, setRef] = useState("");
   const [check, setCheck] = useState<any>(null);
@@ -1014,6 +1015,7 @@ function ChannelWizard() {
   const [adminIds, setAdminIds] = useState("");
   const [pickedChannels, setPickedChannels] = useState<Set<string>>(new Set());
   const [resyncing, setResyncing] = useState(false);
+  const [resyncingAll, setResyncingAll] = useState(false);
   const togglePick = (id: string) => setPickedChannels((prev) => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
