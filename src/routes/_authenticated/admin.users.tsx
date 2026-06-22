@@ -15,6 +15,7 @@ import {
   adminSendTextBroadcast,
   adminRegisterTelegramWebhook,
 } from "@/lib/admin-users.functions";
+import { rotateTelegramBotToken } from "@/lib/telegram-rotate.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
   component: AdminUsersPage,
