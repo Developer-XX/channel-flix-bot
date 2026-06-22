@@ -233,9 +233,9 @@ export const requestDownload = createServerFn({ method: "POST" })
 
     // 1. Resolve the file + its source channel/message + category (used to
     // pick which force-join channels apply).
-    const { data: file, error: fileErr } = await supabaseAdmin
+    let { data: file, error: fileErr } = await supabaseAdmin
       .from("media_files")
-      .select("id, file_name, title_id, telegram_message_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
+      .select("id, file_name, title_id, episode_id, resolution, language, telegram_message_id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
       .eq("id", data.mediaFileId)
       .maybeSingle();
     if (fileErr) throw fileErr;
@@ -418,12 +418,54 @@ export const requestDownload = createServerFn({ method: "POST" })
     }
 
     // 4. Deliver with retries (honors 429 retry_after)
-    const { result, history, lastRetryAfterMs } = await deliverWithRetry({
+    let { result, history, lastRetryAfterMs } = await deliverWithRetry({
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
       messageId: file.telegram_message_id!,
       caption: deliveryCaption,
     });
+
+    // 4b. Stale-source recovery. The source message may have been deleted from
+    // the channel (Telegram returns "message to copy not found"). Search recent
+    // telegram_ingest rows in the same channel for a matching identity
+    // (episode_id / title_id + resolution + language), update the media_files
+    // row to point at the new message_id, and retry delivery once.
+    if (!result.ok && result.kind === "not_found") {
+      const recovered = await tryRecoverStaleSource(supabaseAdmin, {
+        channelRowId: file.channel_id!,
+        episodeId: (file as any).episode_id ?? null,
+        titleId: file.title_id,
+        resolution: (file as any).resolution ?? null,
+        language: (file as any).language ?? null,
+        excludeMessageId: file.telegram_message_id ?? null,
+      });
+      if (recovered) {
+        await supabaseAdmin
+          .from("media_files")
+          .update({
+            telegram_message_id: recovered.telegram_message_id,
+            telegram_file_id: recovered.telegram_file_id,
+            telegram_file_unique_id: recovered.telegram_file_unique_id,
+            file_name: recovered.file_name ?? (file as any).file_name,
+            caption: recovered.caption ?? null,
+            file_size: recovered.file_size ?? null,
+            mime_type: recovered.mime_type ?? null,
+            duration_seconds: recovered.duration_seconds ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", file.id);
+        (file as any).telegram_message_id = recovered.telegram_message_id;
+        const retry = await deliverWithRetry({
+          toChatId: link.telegram_user_id,
+          fromChatId: (file as any).telegram_channels.channel_id,
+          messageId: recovered.telegram_message_id,
+          caption: deliveryCaption,
+        });
+        result = retry.result;
+        history = [...history, ...retry.history];
+        lastRetryAfterMs = retry.lastRetryAfterMs ?? lastRetryAfterMs;
+      }
+    }
 
     await upsertDeliveryAttempt(supabaseAdmin, {
       userId: context.userId,
@@ -536,3 +578,80 @@ export const requestDownload = createServerFn({ method: "POST" })
     await auditFailure("delivery_failed", { kind: result.kind, error: result.error.slice(0, 300) });
     return { ok: false as const, reason: "delivery_failed" as const, error: result.error };
   });
+
+// Look up the most recent telegram_ingest row in the same channel whose parsed
+// identity (episode or title) and resolution/language match the given file.
+// Used to swap a stale message_id (deleted from the channel) for a freshly
+// uploaded resend without losing the master_titles / episodes linkage.
+async function tryRecoverStaleSource(
+  supabase: any,
+  args: {
+    channelRowId: string;
+    episodeId: string | null;
+    titleId: string | null;
+    resolution: string | null;
+    language: string | null;
+    excludeMessageId: number | null;
+  },
+): Promise<{
+  telegram_message_id: number;
+  telegram_file_id: string;
+  telegram_file_unique_id: string | null;
+  file_name: string | null;
+  caption: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  duration_seconds: number | null;
+} | null> {
+  try {
+    if (!args.channelRowId) return null;
+    // We use the channel_id (uuid foreign key) on telegram_ingest. Resolve it
+    // by joining via the channel row.
+    const { data: ch } = await supabase
+      .from("telegram_channels")
+      .select("id, channel_id")
+      .eq("id", args.channelRowId)
+      .maybeSingle();
+    if (!ch) return null;
+
+    let q = supabase
+      .from("telegram_ingest")
+      .select(
+        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+      )
+      .eq("telegram_channel_id", ch.channel_id)
+      .is("deleted_at", null)
+      .not("telegram_file_id", "is", null)
+      .order("telegram_message_id", { ascending: false })
+      .limit(50);
+    if (args.excludeMessageId != null) q = q.neq("telegram_message_id", args.excludeMessageId);
+    if (args.titleId) q = q.eq("matched_title_id", args.titleId);
+    const { data: rows } = await q;
+    if (!rows?.length) return null;
+
+    const targetRes = (args.resolution || "").toLowerCase();
+    const targetLang = (args.language || "").toLowerCase();
+    const match = rows.find((r: any) => {
+      const res = String(r.parsed_resolution || "").toLowerCase();
+      const lang = String(r.parsed_language || "").toLowerCase();
+      const resOk = !targetRes || !res || res === targetRes;
+      const langOk = !targetLang || !lang || lang === targetLang;
+      return resOk && langOk;
+    });
+    if (!match) return null;
+    return {
+      telegram_message_id: match.telegram_message_id,
+      telegram_file_id: match.telegram_file_id,
+      telegram_file_unique_id: match.telegram_file_unique_id ?? null,
+      file_name: match.file_name ?? null,
+      caption: match.caption ?? null,
+      file_size: match.file_size ?? null,
+      mime_type: match.mime_type ?? null,
+      duration_seconds: match.duration_seconds ?? null,
+    };
+  } catch (e) {
+    console.warn("[downloads] tryRecoverStaleSource failed:", (e as Error).message);
+    return null;
+  }
+}
+
