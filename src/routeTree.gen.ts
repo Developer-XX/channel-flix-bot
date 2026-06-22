@@ -43,6 +43,7 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminRequestsRouteImport } from './routes/_authenticated/admin.requests'
 import { Route as AuthenticatedAdminPremiumRouteImport } from './routes/_authenticated/admin.premium'
 import { Route as AuthenticatedAdminNotificationsRouteImport } from './routes/_authenticated/admin.notifications'
+import { Route as AuthenticatedAdminMediaRelinkRouteImport } from './routes/_authenticated/admin.media-relink'
 import { Route as AuthenticatedAdminInterstitialPerformanceRouteImport } from './routes/_authenticated/admin.interstitial-performance'
 import { Route as AuthenticatedAdminHealthRouteImport } from './routes/_authenticated/admin.health'
 import { Route as AuthenticatedAdminGoogleOauthHelpRouteImport } from './routes/_authenticated/admin.google-oauth-help'
@@ -261,6 +262,12 @@ const AuthenticatedAdminNotificationsRoute =
   AuthenticatedAdminNotificationsRouteImport.update({
     id: '/notifications',
     path: '/notifications',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminMediaRelinkRoute =
+  AuthenticatedAdminMediaRelinkRouteImport.update({
+    id: '/media-relink',
+    path: '/media-relink',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminInterstitialPerformanceRoute =
@@ -514,6 +521,7 @@ export interface FileRoutesByFullPath {
   '/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
+  '/admin/media-relink': typeof AuthenticatedAdminMediaRelinkRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -585,6 +593,7 @@ export interface FileRoutesByTo {
   '/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
   '/admin/health': typeof AuthenticatedAdminHealthRoute
   '/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
+  '/admin/media-relink': typeof AuthenticatedAdminMediaRelinkRoute
   '/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -659,6 +668,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/google-oauth-help': typeof AuthenticatedAdminGoogleOauthHelpRoute
   '/_authenticated/admin/health': typeof AuthenticatedAdminHealthRoute
   '/_authenticated/admin/interstitial-performance': typeof AuthenticatedAdminInterstitialPerformanceRoute
+  '/_authenticated/admin/media-relink': typeof AuthenticatedAdminMediaRelinkRoute
   '/_authenticated/admin/notifications': typeof AuthenticatedAdminNotificationsRoute
   '/_authenticated/admin/premium': typeof AuthenticatedAdminPremiumRoute
   '/_authenticated/admin/requests': typeof AuthenticatedAdminRequestsRoute
@@ -733,6 +743,7 @@ export interface FileRouteTypes {
     | '/admin/google-oauth-help'
     | '/admin/health'
     | '/admin/interstitial-performance'
+    | '/admin/media-relink'
     | '/admin/notifications'
     | '/admin/premium'
     | '/admin/requests'
@@ -804,6 +815,7 @@ export interface FileRouteTypes {
     | '/admin/google-oauth-help'
     | '/admin/health'
     | '/admin/interstitial-performance'
+    | '/admin/media-relink'
     | '/admin/notifications'
     | '/admin/premium'
     | '/admin/requests'
@@ -877,6 +889,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/google-oauth-help'
     | '/_authenticated/admin/health'
     | '/_authenticated/admin/interstitial-performance'
+    | '/_authenticated/admin/media-relink'
     | '/_authenticated/admin/notifications'
     | '/_authenticated/admin/premium'
     | '/_authenticated/admin/requests'
@@ -1193,6 +1206,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminNotificationsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/media-relink': {
+      id: '/_authenticated/admin/media-relink'
+      path: '/media-relink'
+      fullPath: '/admin/media-relink'
+      preLoaderRoute: typeof AuthenticatedAdminMediaRelinkRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/interstitial-performance': {
       id: '/_authenticated/admin/interstitial-performance'
       path: '/interstitial-performance'
@@ -1483,6 +1503,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminGoogleOauthHelpRoute: typeof AuthenticatedAdminGoogleOauthHelpRoute
   AuthenticatedAdminHealthRoute: typeof AuthenticatedAdminHealthRoute
   AuthenticatedAdminInterstitialPerformanceRoute: typeof AuthenticatedAdminInterstitialPerformanceRoute
+  AuthenticatedAdminMediaRelinkRoute: typeof AuthenticatedAdminMediaRelinkRoute
   AuthenticatedAdminNotificationsRoute: typeof AuthenticatedAdminNotificationsRoute
   AuthenticatedAdminPremiumRoute: typeof AuthenticatedAdminPremiumRoute
   AuthenticatedAdminRequestsRoute: typeof AuthenticatedAdminRequestsRoute
@@ -1520,6 +1541,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminHealthRoute: AuthenticatedAdminHealthRoute,
   AuthenticatedAdminInterstitialPerformanceRoute:
     AuthenticatedAdminInterstitialPerformanceRoute,
+  AuthenticatedAdminMediaRelinkRoute: AuthenticatedAdminMediaRelinkRoute,
   AuthenticatedAdminNotificationsRoute: AuthenticatedAdminNotificationsRoute,
   AuthenticatedAdminPremiumRoute: AuthenticatedAdminPremiumRoute,
   AuthenticatedAdminRequestsRoute: AuthenticatedAdminRequestsRoute,
