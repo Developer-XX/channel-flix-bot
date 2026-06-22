@@ -1495,6 +1495,7 @@ export type Database = {
           quality: string | null
           resolution: string | null
           telegram_file_id: string
+          telegram_file_unique_id: string | null
           telegram_message_id: number | null
           title_id: string | null
           updated_at: string
@@ -1517,6 +1518,7 @@ export type Database = {
           quality?: string | null
           resolution?: string | null
           telegram_file_id: string
+          telegram_file_unique_id?: string | null
           telegram_message_id?: number | null
           title_id?: string | null
           updated_at?: string
@@ -1539,6 +1541,7 @@ export type Database = {
           quality?: string | null
           resolution?: string | null
           telegram_file_id?: string
+          telegram_file_unique_id?: string | null
           telegram_message_id?: number | null
           title_id?: string | null
           updated_at?: string
