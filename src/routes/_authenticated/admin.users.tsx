@@ -27,10 +27,13 @@ function AdminUsersPage() {
   const overviewFn = useServerFn(adminBroadcastOverview);
   const sendTextFn = useServerFn(adminSendTextBroadcast);
   const registerWebhookFn = useServerFn(adminRegisterTelegramWebhook);
+  const rotateTokenFn = useServerFn(rotateTelegramBotToken);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [broadcastText, setBroadcastText] = useState("");
+  const [newToken, setNewToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
 
   const users = useQuery({
     queryKey: ["admin-users", page, search],
