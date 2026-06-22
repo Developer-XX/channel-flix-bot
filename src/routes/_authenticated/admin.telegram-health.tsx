@@ -22,6 +22,7 @@ import {
   getTelegramSyncTimeline,
   retrySyncChannel,
   runTelegramSyncHealthEval,
+  getTelegramSyncAttempts,
 } from "@/lib/telegram-sync-health.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/telegram-health")({
@@ -59,9 +60,11 @@ function TelegramHealthPage() {
   const timelineFn = useServerFn(getTelegramSyncTimeline);
   const retryFn = useServerFn(retrySyncChannel);
   const evalFn = useServerFn(runTelegramSyncHealthEval);
+  const attemptsFn = useServerFn(getTelegramSyncAttempts);
   const qc = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState<"all" | "error" | "ok">("all");
+  const [runIdFilter, setRunIdFilter] = useState<string | undefined>(undefined);
 
   const health = useQuery({
     queryKey: ["telegram-sync-health"],
@@ -69,8 +72,13 @@ function TelegramHealthPage() {
     refetchInterval: 30_000,
   });
   const timeline = useQuery({
-    queryKey: ["telegram-sync-timeline", statusFilter],
-    queryFn: () => timelineFn({ data: { limit: 100, statusFilter } }),
+    queryKey: ["telegram-sync-timeline", statusFilter, runIdFilter ?? ""],
+    queryFn: () => timelineFn({ data: { limit: 100, statusFilter, runId: runIdFilter } }),
+    refetchInterval: runIdFilter ? false : 30_000,
+  });
+  const attempts = useQuery({
+    queryKey: ["telegram-sync-attempts"],
+    queryFn: () => attemptsFn({ data: { limit: 15 } }),
     refetchInterval: 30_000,
   });
 
@@ -320,10 +328,102 @@ function TelegramHealthPage() {
         </CardContent>
       </Card>
 
+      {/* Recent run summaries */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
+          <div>
+            <CardTitle className="text-base">Recent sync attempts</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Last {attempts.data?.runs.length ?? 0} runs · current error streak:{" "}
+              <span className={(attempts.data?.streak ?? 0) > 0 ? "text-destructive font-semibold" : "text-emerald-500 font-semibold"}>
+                {attempts.data?.streak ?? 0}
+              </span>{" · "}
+              backlog (unmatched): <span className="font-semibold">{attempts.data?.backlogUnmatched ?? 0}</span>
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => attempts.refetch()}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">When</th>
+                  <th className="text-left px-3 py-2">Source</th>
+                  <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-right px-3 py-2">Steps</th>
+                  <th className="text-right px-3 py-2">Ingested</th>
+                  <th className="text-right px-3 py-2">Errors</th>
+                  <th className="text-left px-3 py-2">Notes</th>
+                  <th className="text-right px-3 py-2">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(attempts.data?.runs ?? []).map((r) => {
+                  const pill: "ok" | "error" | "warn" =
+                    r.overallStatus === "error" ? "error" :
+                    r.overallStatus === "ok" || r.overallStatus === "skipped" ? "ok" : "warn";
+                  return (
+                    <tr key={r.runId} className="border-t border-border">
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">
+                        {new Date(r.endedAt).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs">{r.source}</td>
+                      <td className="px-3 py-2">
+                        <StatusPill status={pill} />
+                        {r.skipped && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            skipped: {r.skipReason ?? "—"}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-right">{r.stepCount}</td>
+                      <td className="px-3 py-2 text-xs text-right">{r.ingestCount}</td>
+                      <td className={"px-3 py-2 text-xs text-right " + (r.errorCount > 0 ? "text-destructive font-semibold" : "")}>{r.errorCount}</td>
+                      <td className="px-3 py-2 text-xs max-w-xs truncate" title={r.fetchErrorMessage ?? undefined}>
+                        {r.fetchErrorCode ? <code className="text-destructive text-[11px]">{r.fetchErrorCode}</code> : ""}
+                        {r.fetchErrorMessage ? <span className="ml-1">{r.fetchErrorMessage}</span> : ""}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          size="sm"
+                          variant={runIdFilter === r.runId ? "default" : "outline"}
+                          onClick={() => {
+                            setRunIdFilter(runIdFilter === r.runId ? undefined : r.runId);
+                            setStatusFilter("all");
+                          }}
+                        >
+                          {runIdFilter === r.runId ? "Showing" : "View"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(!attempts.data || attempts.data.runs.length === 0) && (
+                  <tr><td colSpan={8} className="text-center text-muted-foreground text-sm py-6">No recent runs.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Timeline */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Sync step timeline</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
+          <div>
+            <CardTitle className="text-base">Sync step timeline</CardTitle>
+            {runIdFilter && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Filtered to run <code className="text-[11px]">{runIdFilter.slice(0, 8)}…</code>{" "}
+                <button className="text-primary underline" onClick={() => setRunIdFilter(undefined)}>
+                  clear
+                </button>
+              </p>
+            )}
+          </div>
           <div className="flex gap-1">
             {(["all", "error", "ok"] as const).map((s) => (
               <Button

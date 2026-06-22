@@ -25,6 +25,55 @@ export async function runTelegramBackfill(): Promise<{
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { ingestTelegramUpdate } = await import("@/lib/telegram-ingest.server");
 
+  // ── Webhook-conflict guard ──────────────────────────────────────────────
+  // Telegram rejects getUpdates with 409 Conflict while a webhook is active.
+  // The webhook (/api/public/telegram/webhook) is the primary delivery path;
+  // when it's set, backfill must NO-OP rather than spin an error streak.
+  let webhookInfo: { url?: string; pending_update_count?: number } | null = null;
+  try {
+    const whRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`, { method: "GET" });
+    const whBody: any = await whRes.json().catch(() => ({}));
+    if (whRes.ok && whBody?.ok) webhookInfo = whBody.result ?? null;
+  } catch (e) {
+    console.warn("[telegram-backfill] getWebhookInfo failed", (e as Error).message);
+  }
+  if (webhookInfo?.url) {
+    await recordSyncStep({
+      run_id: runId, source, step: "fetch_updates", status: "ok",
+      details: {
+        skipped: true,
+        reason: "webhook_active",
+        webhook_url: webhookInfo.url,
+        pending_update_count: webhookInfo.pending_update_count ?? 0,
+      },
+    });
+    await supabaseAdmin
+      .from("telegram_bot_state")
+      .update({
+        last_run_at: new Date().toISOString(),
+        last_run_status: "ok",
+        last_run_error: null,
+      })
+      .eq("id", "global");
+    // Auto-recovery: resolve any open failing-streak / spike alerts that
+    // were caused by the 409 conflict so the admin doesn't have to ack
+    // a now-impossible failure mode.
+    try {
+      await supabaseAdmin
+        .from("admin_alerts")
+        .update({
+          resolved_at: new Date().toISOString(),
+          details: { auto_recovered: true, reason: "webhook_active", webhook_url: webhookInfo.url } as never,
+        })
+        .in("kind", ["telegram_sync_failing_streak", "telegram_sync_error_spike"])
+        .is("resolved_at", null);
+    } catch (e) {
+      console.warn("[telegram-backfill] alert auto-resolve failed", (e as Error).message);
+    }
+    console.log(`[telegram-backfill] skipped: webhook active (${webhookInfo.url})`);
+    return { ok: true, processed: 0, newLastUpdateId: null, results: [] };
+  }
+
   const { data: state } = await supabaseAdmin
     .from("telegram_bot_state")
     .select("last_update_id")
