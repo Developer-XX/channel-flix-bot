@@ -187,9 +187,8 @@ export const relinkStaleMediaSources = createServerFn({ method: "POST" })
         await supabaseAdmin.from("admin_audit_log").insert({
           actor_user_id: context.userId,
           action: "media_relink_stale_source",
-          target_kind: "media_file",
-          target_id: mediaFileId,
-          details: outcome as never,
+          status: outcome.relinked ? "ok" : outcome.error ? "error" : "noop",
+          metadata: { ...outcome } as never,
         });
       } catch {
         // audit log is best-effort
