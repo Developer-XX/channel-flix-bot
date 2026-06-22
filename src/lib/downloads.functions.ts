@@ -264,6 +264,9 @@ export const requestDownload = createServerFn({ method: "POST" })
         currentMessageId: file.telegram_message_id ?? null,
       });
       if (healed) {
+        console.info(
+          `[relink] pre_delivery_healed media_file=${file.id} prev_message_id=${file.telegram_message_id ?? null}`,
+        );
         const { data: refreshed } = await supabaseAdmin
           .from("media_files")
           .select("id, file_name, title_id, episode_id, resolution, language, telegram_message_id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
