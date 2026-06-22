@@ -662,7 +662,7 @@ async function tryRecoverStaleSource(
     let q = supabase
       .from("telegram_ingest")
       .select(
-        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
       )
       .eq("telegram_channel_id", ch.channel_id)
       .is("deleted_at", null)
@@ -693,6 +693,9 @@ async function tryRecoverStaleSource(
       file_size: match.file_size ?? null,
       mime_type: match.mime_type ?? null,
       duration_seconds: match.duration_seconds ?? null,
+      parsed_quality: match.parsed_quality ?? null,
+      parsed_resolution: match.parsed_resolution ?? null,
+      parsed_language: match.parsed_language ?? null,
     };
   } catch (e) {
     console.warn("[downloads] tryRecoverStaleSource failed:", (e as Error).message);
