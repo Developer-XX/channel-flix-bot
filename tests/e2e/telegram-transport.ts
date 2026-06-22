@@ -58,9 +58,12 @@ export function installTelegramTransport(
 
 export interface WebhookPayload {
   updateId?: number;
+  messageId?: number;
   caption?: string;
   fileName?: string;
   chatId?: number;
+  fileId?: string;
+  fileUniqueId?: string;
   fileSize?: number;
 }
 
@@ -70,17 +73,18 @@ export async function fireWebhook(
   payload: WebhookPayload = {},
 ) {
   const updateId = payload.updateId ?? Date.now();
+  const messageId = payload.messageId ?? updateId;
   const body = {
     update_id: updateId,
     message: {
-      message_id: updateId,
+      message_id: messageId,
       date: Math.floor(Date.now() / 1000),
       chat: { id: payload.chatId ?? -100100100100, type: "channel", title: "E2E" },
       from: { id: 1, is_bot: true, first_name: "Bot" },
       caption: payload.caption ?? "E2E Movie 2024 1080p WEB-DL Hindi",
       document: {
-        file_id: `e2e-file-${updateId}`,
-        file_unique_id: `e2e-uniq-${updateId}`,
+        file_id: payload.fileId ?? `e2e-file-${updateId}`,
+        file_unique_id: payload.fileUniqueId ?? `e2e-uniq-${updateId}`,
         file_name: payload.fileName ?? "e2e.movie.2024.1080p.mkv",
         mime_type: "video/x-matroska",
         file_size: payload.fileSize ?? 1_500_000,

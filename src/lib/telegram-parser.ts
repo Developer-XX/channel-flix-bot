@@ -63,7 +63,7 @@ const LANG_TOKENS = [
 const LANG_RE = new RegExp(`\\b(${LANG_TOKENS.join("|")})\\b`, "gi");
 const DUAL_RE = /\b(Dual[\s._-]?Audio|Multi[\s._-]?Audio|Multi|Dubbed|Subbed|Subtitled)\b/i;
 
-const SE_RE = /\bS(\d{1,2})(?:[\s._-]?(?:Part|Pt|P)[\s._-]?(\d{1,2}))?[\s._-]?E(\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
+const SE_RE = /(?:^|[^A-Za-z0-9]|(?<=[a-z]))S(?<season>\d{1,2})(?:[\s._-]?(?:Part|Pt|P)[\s._-]?(?<part>\d{1,2}))?[\s._-]?E(?<episode>\d{1,3}(?:[\s._-]?E\d{1,3})*)\b/i;
 const SEASON_ONLY_RE = /\bSeason[\s._-]?(\d{1,2})\b/i;
 const EPISODE_ONLY_RE = /\b(?:Episode|EP|Ep)[\s._-]?(\d{1,3})\b/i;
 const PART_ONLY_RE = /\b(?:Part|Pt)[\s._-]?(\d{1,2})\b/i;
@@ -160,9 +160,9 @@ export function parseSingleSource(raw: string): ParsedMedia {
   let part: number | null = null;
   const seMatch = text.match(SE_RE);
   if (seMatch) {
-    season = parseInt(seMatch[1], 10);
-    if (seMatch[2]) part = parseInt(seMatch[2], 10);
-    const epStr = seMatch[3].match(/\d+/g);
+    season = parseInt(seMatch.groups?.season ?? "", 10);
+    if (seMatch.groups?.part) part = parseInt(seMatch.groups.part, 10);
+    const epStr = seMatch.groups?.episode?.match(/\d+/g);
     if (epStr) episode = parseInt(epStr[0], 10);
   } else {
     const so = text.match(SEASON_ONLY_RE);

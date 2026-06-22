@@ -24,6 +24,7 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
           autoPromoteToMediaFile,
           bestTitleScore,
           revalidatePromotedForTitle,
+          reconcileRecentTelegramMedia,
         } = await import("@/lib/telegram-ingest.server");
         const { bumpCacheVersion } = await import("@/lib/indexes.server");
         const { recordTrace, newRunId } = await import("@/lib/sync-trace.server");
@@ -61,6 +62,17 @@ export const Route = createFileRoute("/api/public/hooks/telegram-resync-recent")
         let demoted = 0;
         const errors: string[] = [];
         const traces: import("@/lib/sync-trace.server").TraceRow[] = [];
+
+        const reconcile = await reconcileRecentTelegramMedia(supabaseAdmin, { sinceHours: hours, limit: 250 });
+        promoted += reconcile.promoted;
+        if (reconcile.errors.length) errors.push(...reconcile.errors.slice(0, 10).map((e) => `reconcile(${e.ingestId}): ${e.error}`));
+        traces.push({
+          run_id: runId,
+          source: "resync-recent",
+          decision: reconcile.errors.length ? "skipped" : "matched",
+          reason_code: "RECENT_MEDIA_RECONCILED",
+          details: { scanned: reconcile.scanned, updated: reconcile.updated, promoted: reconcile.promoted, errorCount: reconcile.errors.length },
+        });
 
         for (const t of titles ?? []) {
           scannedTitles++;
