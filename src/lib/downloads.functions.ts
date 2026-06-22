@@ -649,6 +649,37 @@ async function tryRecoverStaleSource(
   parsed_language: string | null;
 } | null> {
   try {
+    if (args.telegramFileUniqueId) {
+      let byUnique = supabase
+        .from("telegram_ingest")
+        .select(
+          "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
+        )
+        .eq("telegram_file_unique_id", args.telegramFileUniqueId)
+        .is("deleted_at", null)
+        .not("telegram_file_id", "is", null)
+        .order("telegram_message_id", { ascending: false })
+        .limit(1);
+      if (args.excludeMessageId != null) byUnique = byUnique.neq("telegram_message_id", args.excludeMessageId);
+      const { data: uniqueRows } = await byUnique;
+      const row = uniqueRows?.[0];
+      if (row) {
+        return {
+          telegram_message_id: row.telegram_message_id,
+          telegram_file_id: row.telegram_file_id,
+          telegram_file_unique_id: row.telegram_file_unique_id ?? null,
+          file_name: row.file_name ?? null,
+          caption: row.caption ?? null,
+          file_size: row.file_size ?? null,
+          mime_type: row.mime_type ?? null,
+          duration_seconds: row.duration_seconds ?? null,
+          parsed_quality: row.parsed_quality ?? null,
+          parsed_resolution: row.parsed_resolution ?? null,
+          parsed_language: row.parsed_language ?? null,
+        };
+      }
+    }
+
     if (!args.channelRowId) return null;
     // We use the channel_id (uuid foreign key) on telegram_ingest. Resolve it
     // by joining via the channel row.
