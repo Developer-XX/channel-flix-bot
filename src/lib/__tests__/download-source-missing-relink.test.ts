@@ -73,7 +73,11 @@ function makeSupabase(state: Record<string, Row[]>) {
 }
 
 describe("source_missing resend self-heal", () => {
-  afterEach(() => vi.restoreAllMocks());
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
 
   it("re-links media_files by telegram_file_unique_id after stale source_missing and retries delivery successfully", async () => {
     const calls: Array<{ messageId: number; caption?: string }> = [];
