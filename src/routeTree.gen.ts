@@ -69,6 +69,7 @@ import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$toke
 import { Route as ApiPublicHooksTelegramSyncAlertsRouteImport } from './routes/api/public/hooks/telegram-sync-alerts'
 import { Route as ApiPublicHooksTelegramRetryPendingRouteImport } from './routes/api/public/hooks/telegram-retry-pending'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
+import { Route as ApiPublicHooksTelegramReconcileRecentRouteImport } from './routes/api/public/hooks/telegram-reconcile-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksReparseSeriesCronRouteImport } from './routes/api/public/hooks/reparse-series-cron'
 import { Route as ApiPublicHooksProcessMessageDeletesRouteImport } from './routes/api/public/hooks/process-message-deletes'
@@ -412,6 +413,12 @@ const ApiPublicHooksTelegramResyncRecentRoute =
     path: '/api/public/hooks/telegram-resync-recent',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksTelegramReconcileRecentRoute =
+  ApiPublicHooksTelegramReconcileRecentRouteImport.update({
+    id: '/api/public/hooks/telegram-reconcile-recent',
+    path: '/api/public/hooks/telegram-reconcile-recent',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksShortenerAlertsRoute =
   ApiPublicHooksShortenerAlertsRouteImport.update({
     id: '/api/public/hooks/shortener-alerts',
@@ -534,6 +541,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
+  '/api/public/hooks/telegram-reconcile-recent': typeof ApiPublicHooksTelegramReconcileRecentRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/hooks/telegram-retry-pending': typeof ApiPublicHooksTelegramRetryPendingRoute
   '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
@@ -604,6 +612,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
+  '/api/public/hooks/telegram-reconcile-recent': typeof ApiPublicHooksTelegramReconcileRecentRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/hooks/telegram-retry-pending': typeof ApiPublicHooksTelegramRetryPendingRoute
   '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
@@ -677,6 +686,7 @@ export interface FileRoutesById {
   '/api/public/hooks/process-message-deletes': typeof ApiPublicHooksProcessMessageDeletesRoute
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
+  '/api/public/hooks/telegram-reconcile-recent': typeof ApiPublicHooksTelegramReconcileRecentRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
   '/api/public/hooks/telegram-retry-pending': typeof ApiPublicHooksTelegramRetryPendingRoute
   '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
@@ -750,6 +760,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
+    | '/api/public/hooks/telegram-reconcile-recent'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/hooks/telegram-retry-pending'
     | '/api/public/hooks/telegram-sync-alerts'
@@ -820,6 +831,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
+    | '/api/public/hooks/telegram-reconcile-recent'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/hooks/telegram-retry-pending'
     | '/api/public/hooks/telegram-sync-alerts'
@@ -892,6 +904,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/process-message-deletes'
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
+    | '/api/public/hooks/telegram-reconcile-recent'
     | '/api/public/hooks/telegram-resync-recent'
     | '/api/public/hooks/telegram-retry-pending'
     | '/api/public/hooks/telegram-sync-alerts'
@@ -928,6 +941,7 @@ export interface RootRouteChildren {
   ApiPublicHooksProcessMessageDeletesRoute: typeof ApiPublicHooksProcessMessageDeletesRoute
   ApiPublicHooksReparseSeriesCronRoute: typeof ApiPublicHooksReparseSeriesCronRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
+  ApiPublicHooksTelegramReconcileRecentRoute: typeof ApiPublicHooksTelegramReconcileRecentRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
   ApiPublicHooksTelegramRetryPendingRoute: typeof ApiPublicHooksTelegramRetryPendingRoute
   ApiPublicHooksTelegramSyncAlertsRoute: typeof ApiPublicHooksTelegramSyncAlertsRoute
@@ -1361,6 +1375,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksTelegramResyncRecentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/telegram-reconcile-recent': {
+      id: '/api/public/hooks/telegram-reconcile-recent'
+      path: '/api/public/hooks/telegram-reconcile-recent'
+      fullPath: '/api/public/hooks/telegram-reconcile-recent'
+      preLoaderRoute: typeof ApiPublicHooksTelegramReconcileRecentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/shortener-alerts': {
       id: '/api/public/hooks/shortener-alerts'
       path: '/api/public/hooks/shortener-alerts'
@@ -1578,6 +1599,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksProcessMessageDeletesRoute,
   ApiPublicHooksReparseSeriesCronRoute: ApiPublicHooksReparseSeriesCronRoute,
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
+  ApiPublicHooksTelegramReconcileRecentRoute:
+    ApiPublicHooksTelegramReconcileRecentRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
   ApiPublicHooksTelegramRetryPendingRoute:
