@@ -45,6 +45,18 @@ describe("caption-priority parsing (caption swap scenarios)", () => {
     expect(after.title.toLowerCase()).toContain("doraemon");
   });
 
+  it("parses SxxEyy even when Telegram caption misses the space before S", () => {
+    const out = parseMedia(
+      "Attack On TitanS01E24 1080p Hindi",
+      "[@Anime_Hindi_SD_Official] - [S E] [].mp4",
+    );
+    expect(out.title).toBe("Attack On Titan");
+    expect(out.season).toBe(1);
+    expect(out.episode).toBe(24);
+    expect(out.resolution).toBe("1080p");
+    expect(out.language).toBe("Hindi");
+  });
+
   it("falls back to filename when caption is empty", () => {
     const out = parseMedia(null, "Naruto.S04E12.1080p.HEVC.mkv");
     expect(out.title.toLowerCase()).toContain("naruto");

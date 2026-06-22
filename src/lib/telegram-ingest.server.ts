@@ -298,12 +298,28 @@ export async function ingestTelegramUpdate(
   // `match_locked = true` means an admin manually assigned this row to a
   // title; the automatic matcher must NOT overwrite that assignment on a
   // later backfill / redeploy / channel re-scan.
-  const { data: priorIngest } = await supabase
+  let { data: priorIngest } = await supabase
     .from("telegram_ingest")
-    .select("id, matched_title_id, promoted_media_file_id, caption, match_score, match_locked")
+    .select("id, matched_title_id, promoted_media_file_id, caption, match_score, match_locked, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id")
     .eq("telegram_channel_id", tgChannelId)
     .eq("telegram_message_id", tgMessageId)
     .maybeSingle();
+  if (!priorIngest && file.file_unique_id) {
+    const { data } = await supabase
+      .from("telegram_ingest")
+      .select("id, matched_title_id, promoted_media_file_id, caption, match_score, match_locked, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id")
+      .eq("telegram_file_unique_id", file.file_unique_id)
+      .maybeSingle();
+    priorIngest = data ?? null;
+  }
+  if (!priorIngest && file.file_id) {
+    const { data } = await supabase
+      .from("telegram_ingest")
+      .select("id, matched_title_id, promoted_media_file_id, caption, match_score, match_locked, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id")
+      .eq("telegram_file_id", file.file_id)
+      .maybeSingle();
+    priorIngest = data ?? null;
+  }
 
   const parsed = parseMedia(caption, file.file_name);
   const settings = await loadMatchingSettings(supabase);
@@ -314,45 +330,57 @@ export async function ingestTelegramUpdate(
   const status = effectiveTitleId ? "matched" : "unmatched";
 
 
-  const { data: ingestRow, error: ingestErr } = await supabase
-    .from("telegram_ingest")
-    .upsert(
-      {
-        channel_id: chanRow?.id ?? null,
-        telegram_channel_id: tgChannelId,
-        telegram_message_id: tgMessageId,
-        telegram_file_id: file.file_id,
-        telegram_file_unique_id: file.file_unique_id,
-        file_name: file.file_name,
-        caption,
-        mime_type: file.mime_type,
-        file_size: file.file_size,
-        duration_seconds: file.duration_seconds,
-        parsed_title: parsed.title,
-        parsed_year: parsed.year,
-        parsed_season: parsed.season,
-        parsed_episode: parsed.episode,
-        parsed_quality: parsed.quality,
-        parsed_resolution: parsed.resolution,
-        parsed_codec: parsed.codec,
-        parsed_language: parsed.language,
-        parsed_category: parsed.category,
-        match_status: status,
-        matched_title_id: effectiveTitleId,
-        match_score: effectiveScore,
-        update_id: update.update_id,
-        raw_update: update as any,
-      },
-      { onConflict: "telegram_channel_id,telegram_message_id" },
-    )
-    .select("id")
-    .single();
+  const ingestPayload = {
+    channel_id: chanRow?.id ?? null,
+    telegram_channel_id: tgChannelId,
+    telegram_message_id: tgMessageId,
+    telegram_file_id: file.file_id,
+    telegram_file_unique_id: file.file_unique_id,
+    file_name: file.file_name,
+    caption,
+    mime_type: file.mime_type,
+    file_size: file.file_size,
+    duration_seconds: file.duration_seconds,
+    parsed_title: parsed.title,
+    parsed_year: parsed.year,
+    parsed_season: parsed.season,
+    parsed_episode: parsed.episode,
+    parsed_quality: parsed.quality,
+    parsed_resolution: parsed.resolution,
+    parsed_codec: parsed.codec,
+    parsed_language: parsed.language,
+    parsed_category: parsed.category,
+    match_status: status,
+    matched_title_id: effectiveTitleId,
+    match_score: effectiveScore,
+    update_id: update.update_id,
+    raw_update: update as any,
+    idempotency_key: `${tgChannelId}:${tgMessageId}`,
+  };
+
+  const ingestWrite = priorIngest?.id
+    ? await supabase
+        .from("telegram_ingest")
+        .update(ingestPayload)
+        .eq("id", priorIngest.id)
+        .select("id")
+        .single()
+    : await supabase
+        .from("telegram_ingest")
+        .upsert(ingestPayload, { onConflict: "telegram_channel_id,telegram_message_id" })
+        .select("id")
+        .single();
+  const ingestRow = ingestWrite.data;
+  const ingestErr = ingestWrite.error;
 
   if (ingestErr) {
     await supabase.from("telegram_webhook_events")
       .update({ status: "error", error: ingestErr.message })
       .eq("update_id", update.update_id);
     throw ingestErr;
+  }
+  if (!ingestRow) {
+    throw new Error("telegram_ingest write failed");
   }
 
   await supabase.from("telegram_webhook_events")
@@ -594,27 +622,52 @@ export async function autoPromoteToMediaFile(
     }
   }
 
-  // Locate an existing media_files row by Telegram's stable file_unique_id
-  // first (survives delete + re-upload of the same physical file), then fall
-  // back to file_id. If found, UPDATE in place so the resent post refreshes
-  // file_id, message_id, caption, file_name, badges, etc. Otherwise INSERT.
-  let existingId: string | null = null;
+  // Locate any row that could represent this Telegram file. Resends can change
+  // file_id and message_id while file_unique_id stays stable; older broken
+  // runs may also have created one row for the old unique id and another for
+  // the new channel/message pair. Pick one canonical row and free unique fields
+  // on the rest before updating, so the website shows exactly one active file.
+  type MediaCandidate = {
+    id: string;
+    telegram_file_id: string;
+    telegram_file_unique_id: string | null;
+    channel_id: string | null;
+    telegram_message_id: number | null;
+  };
+  const candidates = new Map<string, MediaCandidate>();
+  const remember = (row: MediaCandidate | null | undefined) => {
+    if (row?.id) candidates.set(row.id, row);
+  };
   if (args.telegramFileUniqueId) {
-    const { data: byUniq } = await supabase
+    const { data } = await supabase
       .from("media_files")
-      .select("id")
+      .select("id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_message_id")
       .eq("telegram_file_unique_id", args.telegramFileUniqueId)
       .maybeSingle();
-    existingId = byUniq?.id ?? null;
+    remember(data as MediaCandidate | null);
   }
-  if (!existingId) {
-    const { data: byFile } = await supabase
+  if (args.channelRowId && args.telegramMessageId != null) {
+    const { data } = await supabase
       .from("media_files")
-      .select("id")
-      .eq("telegram_file_id", args.telegramFileId)
+      .select("id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_message_id")
+      .eq("channel_id", args.channelRowId)
+      .eq("telegram_message_id", args.telegramMessageId)
       .maybeSingle();
-    existingId = byFile?.id ?? null;
+    remember(data as MediaCandidate | null);
   }
+  const { data: byFile } = await supabase
+    .from("media_files")
+    .select("id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_message_id")
+    .eq("telegram_file_id", args.telegramFileId)
+    .maybeSingle();
+  remember(byFile as MediaCandidate | null);
+
+  const candidateRows = Array.from(candidates.values());
+  const existingId =
+    candidateRows.find((r) => r.telegram_file_id === args.telegramFileId)?.id ??
+    candidateRows.find((r) => r.telegram_file_unique_id && r.telegram_file_unique_id === args.telegramFileUniqueId)?.id ??
+    candidateRows.find((r) => r.channel_id === args.channelRowId && r.telegram_message_id === args.telegramMessageId)?.id ??
+    null;
 
   const payload = {
     title_id: args.titleId,
@@ -637,6 +690,23 @@ export async function autoPromoteToMediaFile(
     deleted_reason: null,
     updated_at: new Date().toISOString(),
   };
+
+  const duplicateRows = candidateRows.filter((r) => r.id !== existingId);
+  for (const duplicate of duplicateRows) {
+    await supabase
+      .from("media_files")
+      .update({
+        is_active: false,
+        deleted_at: new Date().toISOString(),
+        deleted_reason: "duplicate_telegram_resend",
+        telegram_file_id: `duplicate:${duplicate.id}:${duplicate.telegram_file_id}`,
+        telegram_file_unique_id: null,
+        channel_id: null,
+        telegram_message_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", duplicate.id);
+  }
 
   let file: { id: string } | null = null;
   let fileErr: any = null;
@@ -672,6 +742,92 @@ export async function autoPromoteToMediaFile(
     .eq("id", args.ingestId);
 
   return file.id;
+}
+
+export async function reconcileRecentTelegramMedia(
+  supabase: SupabaseClient<any, any, any>,
+  opts?: { sinceHours?: number; limit?: number },
+): Promise<{ scanned: number; updated: number; promoted: number; errors: Array<{ ingestId: string; error: string }> }> {
+  const sinceHours = Math.max(1, Math.min(168, opts?.sinceHours ?? 24));
+  const limit = Math.max(1, Math.min(500, opts?.limit ?? 150));
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+  const settings = await loadMatchingSettings(supabase);
+  const { data: rows } = await supabase
+    .from("telegram_ingest")
+    .select("id, channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, mime_type, file_size, duration_seconds, parsed_title, parsed_year, parsed_season, parsed_episode, parsed_quality, parsed_resolution, parsed_codec, parsed_language, parsed_category, matched_title_id, match_score, match_locked")
+    .gte("updated_at", since)
+    .is("deleted_at", null)
+    .not("telegram_file_id", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  let updated = 0;
+  let promoted = 0;
+  const errors: Array<{ ingestId: string; error: string }> = [];
+
+  for (const row of rows ?? []) {
+    try {
+      const parsed = parseMedia(row.caption, row.file_name);
+      const locked = !!row.match_locked && !!row.matched_title_id;
+      const match = locked
+        ? { matchedTitleId: row.matched_title_id, matchScore: row.match_score ?? null }
+        : await runMatcher(supabase, parsed, settings);
+      const titleId = match.matchedTitleId ?? null;
+      const patch = {
+        parsed_title: parsed.title,
+        parsed_year: parsed.year,
+        parsed_season: parsed.season,
+        parsed_episode: parsed.episode,
+        parsed_quality: parsed.quality,
+        parsed_resolution: parsed.resolution,
+        parsed_codec: parsed.codec,
+        parsed_language: parsed.language,
+        parsed_category: parsed.category,
+        match_status: titleId ? "matched" : "unmatched",
+        matched_title_id: titleId,
+        match_score: match.matchScore,
+        last_error: null,
+      };
+      const changed =
+        row.parsed_title !== patch.parsed_title ||
+        row.parsed_season !== patch.parsed_season ||
+        row.parsed_episode !== patch.parsed_episode ||
+        row.parsed_resolution !== patch.parsed_resolution ||
+        row.parsed_quality !== patch.parsed_quality ||
+        row.parsed_language !== patch.parsed_language ||
+        row.matched_title_id !== patch.matched_title_id;
+      if (changed) {
+        await supabase.from("telegram_ingest").update(patch).eq("id", row.id);
+        updated++;
+      }
+      if (titleId && row.telegram_file_id) {
+        await autoPromoteToMediaFile(supabase, {
+          ingestId: row.id,
+          titleId,
+          channelRowId: row.channel_id,
+          telegramFileId: row.telegram_file_id,
+          telegramFileUniqueId: row.telegram_file_unique_id,
+          telegramMessageId: row.telegram_message_id,
+          fileName: row.file_name ?? parsed.title ?? "file",
+          caption: row.caption,
+          mimeType: row.mime_type,
+          fileSize: row.file_size,
+          durationSeconds: row.duration_seconds,
+          quality: parsed.quality,
+          resolution: parsed.resolution,
+          language: parsed.language,
+          season: parsed.season,
+          episode: parsed.episode,
+          part: parsed.part,
+        });
+        promoted++;
+      }
+    } catch (e) {
+      errors.push({ ingestId: row.id, error: (e as Error).message });
+    }
+  }
+
+  return { scanned: rows?.length ?? 0, updated, promoted, errors };
 }
 
 /**
