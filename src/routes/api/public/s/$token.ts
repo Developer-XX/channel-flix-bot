@@ -40,7 +40,7 @@ export const Route = createFileRoute("/api/public/s/$token")({
         const json = wantsJson(request);
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { consumeToken } = await import("@/lib/verification.server");
-        const { getPublicBaseUrl } = await import("@/lib/site-url.server");
+        const { getPublicBaseUrlAsync } = await import("@/lib/site-url.server");
 
         const ip =
           request.headers.get("x-forwarded-for") ??
