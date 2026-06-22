@@ -943,6 +943,13 @@ export async function tryRelinkByIngest(
     if (best.parsed_resolution) patch.resolution = best.parsed_resolution;
     if (best.parsed_language) patch.language = best.parsed_language;
 
+    await retireMediaSourceCollisions(supabase, args.mediaFileId, {
+      telegramFileId: best.telegram_file_id,
+      telegramFileUniqueId: best.telegram_file_unique_id,
+      channelRowId: best.channel_id,
+      telegramMessageId: best.telegram_message_id,
+    });
+
     const { error } = await supabase
       .from("media_files")
       .update(patch)
