@@ -60,9 +60,11 @@ function TelegramHealthPage() {
   const timelineFn = useServerFn(getTelegramSyncTimeline);
   const retryFn = useServerFn(retrySyncChannel);
   const evalFn = useServerFn(runTelegramSyncHealthEval);
+  const attemptsFn = useServerFn(getTelegramSyncAttempts);
   const qc = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState<"all" | "error" | "ok">("all");
+  const [runIdFilter, setRunIdFilter] = useState<string | undefined>(undefined);
 
   const health = useQuery({
     queryKey: ["telegram-sync-health"],
@@ -70,8 +72,13 @@ function TelegramHealthPage() {
     refetchInterval: 30_000,
   });
   const timeline = useQuery({
-    queryKey: ["telegram-sync-timeline", statusFilter],
-    queryFn: () => timelineFn({ data: { limit: 100, statusFilter } }),
+    queryKey: ["telegram-sync-timeline", statusFilter, runIdFilter ?? ""],
+    queryFn: () => timelineFn({ data: { limit: 100, statusFilter, runId: runIdFilter } }),
+    refetchInterval: runIdFilter ? false : 30_000,
+  });
+  const attempts = useQuery({
+    queryKey: ["telegram-sync-attempts"],
+    queryFn: () => attemptsFn({ data: { limit: 15 } }),
     refetchInterval: 30_000,
   });
 
