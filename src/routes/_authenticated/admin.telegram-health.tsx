@@ -22,6 +22,7 @@ import {
   getTelegramSyncTimeline,
   retrySyncChannel,
   runTelegramSyncHealthEval,
+  getTelegramSyncAttempts,
 } from "@/lib/telegram-sync-health.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/telegram-health")({
