@@ -907,6 +907,7 @@ export async function tryRelinkByIngest(
       file_size: number | null;
       mime_type: string | null;
       duration_seconds: number | null;
+      parsed_title: string | null;
       parsed_quality: string | null;
       parsed_season: number | null;
       parsed_episode: number | null;
@@ -915,21 +916,43 @@ export async function tryRelinkByIngest(
       matched_title_id: string | null;
     };
 
+    const log = (stage: string, info: Record<string, unknown>) => {
+      try {
+        console.info(
+          `[relink] media_file=${args.mediaFileId} stage=${stage} ${JSON.stringify({
+            unique_id: args.telegramFileUniqueId,
+            channel: args.channelRowId,
+            title: args.titleId,
+            episode: args.episodeId,
+            resolution: args.resolution,
+            language: args.language,
+            current_message_id: args.currentMessageId,
+            ...info,
+          })}`,
+        );
+      } catch {}
+    };
+
     let best: IngestRow | null = null;
+    let matchedVia: "unique_id" | "channel_title_episode" | "channel_normalized_title" | null = null;
+    const SELECT_COLS =
+      "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_title, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id";
 
     if (args.telegramFileUniqueId) {
       const { data } = await supabase
         .from("telegram_ingest")
-        .select(
-          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id",
-        )
+        .select(SELECT_COLS)
         .eq("telegram_file_unique_id", args.telegramFileUniqueId)
         .is("deleted_at", null)
         .not("telegram_file_id", "is", null)
         .order("telegram_message_id", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (data) best = data as IngestRow;
+      if (data) {
+        best = data as IngestRow;
+        matchedVia = "unique_id";
+      }
+      log("unique_id_lookup", { hit: !!data });
     }
 
     if (!best && args.channelRowId) {
@@ -940,43 +963,99 @@ export async function tryRelinkByIngest(
         .maybeSingle();
       if (ch?.channel_id) {
         const episodeIdentity = await getEpisodeIdentity(supabase, args.episodeId);
-        let q = supabase
-          .from("telegram_ingest")
-          .select(
-            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id",
-          )
-          .eq("telegram_channel_id", ch.channel_id)
-          .is("deleted_at", null)
-          .not("telegram_file_id", "is", null)
-          .order("telegram_message_id", { ascending: false })
-          .limit(50);
-        if (args.titleId) q = q.eq("matched_title_id", args.titleId);
-        if (episodeIdentity?.season != null) q = q.eq("parsed_season", episodeIdentity.season);
-        if (episodeIdentity?.episode != null) q = q.eq("parsed_episode", episodeIdentity.episode);
-        const { data: rows } = await q;
+        const titleSet = await getTitleIdentitySet(supabase, args.titleId);
+
         const targetRes = (args.resolution || "").toLowerCase();
         const targetLang = (args.language || "").toLowerCase();
-        const candidates = (rows ?? []) as IngestRow[];
-        const exactMatch = candidates.find((r) => {
+        const pickBest = (candidates: IngestRow[]) => {
+          const exact = candidates.find((r) => {
             const res = String(r.parsed_resolution || "").toLowerCase();
             const lang = String(r.parsed_language || "").toLowerCase();
             const resOk = !targetRes || !res || res === targetRes;
             const langOk = !targetLang || !lang || lang === targetLang;
             return resOk && langOk;
-          }) ?? null;
-        const languageMatch = candidates.find((r) => {
-          const lang = String(r.parsed_language || "").toLowerCase();
-          return !targetLang || !lang || lang === targetLang;
-        }) ?? null;
-        best = exactMatch ?? languageMatch ?? candidates[0] ?? null;
+          });
+          const lang = candidates.find((r) => {
+            const l = String(r.parsed_language || "").toLowerCase();
+            return !targetLang || !l || l === targetLang;
+          });
+          return exact ?? lang ?? candidates[0] ?? null;
+        };
+
+        // Tier A: matched_title_id ∈ titleSet (+ episode/season filters)
+        let q = supabase
+          .from("telegram_ingest")
+          .select(SELECT_COLS)
+          .eq("telegram_channel_id", ch.channel_id)
+          .is("deleted_at", null)
+          .not("telegram_file_id", "is", null)
+          .order("telegram_message_id", { ascending: false })
+          .limit(50);
+        if (titleSet.titleIds.length) q = q.in("matched_title_id", titleSet.titleIds);
+        if (episodeIdentity?.season != null) q = q.eq("parsed_season", episodeIdentity.season);
+        if (episodeIdentity?.episode != null) q = q.eq("parsed_episode", episodeIdentity.episode);
+        const { data: rowsA } = await q;
+        const candidatesA = (rowsA ?? []) as IngestRow[];
+        best = pickBest(candidatesA);
+        if (best) matchedVia = "channel_title_episode";
+        log("channel_title_lookup", {
+          title_id_set: titleSet.titleIds.length,
+          season: episodeIdentity?.season ?? null,
+          episode: episodeIdentity?.episode ?? null,
+          candidates: candidatesA.length,
+          hit: !!best,
+        });
+
+        // Tier B: no title rows found — fall back to normalized parsed_title
+        // match within the same channel (+ episode/season). This rescues resends
+        // whose ingest row failed to auto-match a title row.
+        if (!best && titleSet.normalizedTitles.length) {
+          let q2 = supabase
+            .from("telegram_ingest")
+            .select(SELECT_COLS)
+            .eq("telegram_channel_id", ch.channel_id)
+            .is("deleted_at", null)
+            .not("telegram_file_id", "is", null)
+            .order("telegram_message_id", { ascending: false })
+            .limit(100);
+          if (episodeIdentity?.season != null) q2 = q2.eq("parsed_season", episodeIdentity.season);
+          if (episodeIdentity?.episode != null) q2 = q2.eq("parsed_episode", episodeIdentity.episode);
+          const { data: rowsB } = await q2;
+          const titleKeySet = new Set(titleSet.normalizedTitles);
+          const candidatesB = ((rowsB ?? []) as IngestRow[]).filter((r) => {
+            const n = normalizeTitleKey(r.parsed_title);
+            if (!n) return false;
+            for (const key of titleKeySet) {
+              if (n === key || n.includes(key) || key.includes(n)) return true;
+            }
+            return false;
+          });
+          best = pickBest(candidatesB);
+          if (best) matchedVia = "channel_normalized_title";
+          log("channel_normalized_title_lookup", {
+            normalized_keys: titleSet.normalizedTitles.length,
+            candidates: candidatesB.length,
+            hit: !!best,
+          });
+        }
+      } else {
+        log("channel_lookup_miss", {});
       }
     }
 
-    if (!best) return false;
+    if (!best) {
+      log("no_match", {});
+      return false;
+    }
     if (
       best.telegram_message_id === args.currentMessageId &&
       best.channel_id === args.channelRowId
     ) {
+      log("already_current", {
+        matched_via: matchedVia,
+        candidate_unique_id: best.telegram_file_unique_id,
+        candidate_message_id: best.telegram_message_id,
+      });
       return false;
     }
 
@@ -1009,8 +1088,15 @@ export async function tryRelinkByIngest(
       .eq("id", args.mediaFileId);
     if (error) {
       console.warn("[downloads] tryRelinkByIngest update failed:", error.message);
+      log("update_failed", { matched_via: matchedVia, error: error.message });
       return false;
     }
+    log("relinked", {
+      matched_via: matchedVia,
+      candidate_unique_id: best.telegram_file_unique_id,
+      candidate_message_id: best.telegram_message_id,
+      candidate_channel: best.channel_id,
+    });
     return true;
   } catch (e) {
     console.warn("[downloads] tryRelinkByIngest failed:", (e as Error).message);
