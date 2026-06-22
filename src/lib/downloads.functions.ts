@@ -775,6 +775,7 @@ async function tryRelinkByIngest(
       file_size: number | null;
       mime_type: string | null;
       duration_seconds: number | null;
+      parsed_quality: string | null;
       parsed_resolution: string | null;
       parsed_language: string | null;
       matched_title_id: string | null;
@@ -786,7 +787,7 @@ async function tryRelinkByIngest(
       const { data } = await supabase
         .from("telegram_ingest")
         .select(
-          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
         )
         .eq("telegram_file_unique_id", args.telegramFileUniqueId)
         .is("deleted_at", null)
@@ -807,7 +808,7 @@ async function tryRelinkByIngest(
         let q = supabase
           .from("telegram_ingest")
           .select(
-            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
           )
           .eq("telegram_channel_id", ch.channel_id)
           .is("deleted_at", null)
@@ -818,14 +819,19 @@ async function tryRelinkByIngest(
         const { data: rows } = await q;
         const targetRes = (args.resolution || "").toLowerCase();
         const targetLang = (args.language || "").toLowerCase();
-        best =
-          ((rows ?? []) as IngestRow[]).find((r) => {
+        const candidates = (rows ?? []) as IngestRow[];
+        const exactMatch = candidates.find((r) => {
             const res = String(r.parsed_resolution || "").toLowerCase();
             const lang = String(r.parsed_language || "").toLowerCase();
             const resOk = !targetRes || !res || res === targetRes;
             const langOk = !targetLang || !lang || lang === targetLang;
             return resOk && langOk;
           }) ?? null;
+        const languageMatch = candidates.find((r) => {
+          const lang = String(r.parsed_language || "").toLowerCase();
+          return !targetLang || !lang || lang === targetLang;
+        }) ?? null;
+        best = exactMatch ?? languageMatch ?? candidates[0] ?? null;
       }
     }
 
@@ -849,6 +855,9 @@ async function tryRelinkByIngest(
     if (best.file_size != null) patch.file_size = best.file_size;
     if (best.mime_type) patch.mime_type = best.mime_type;
     if (best.duration_seconds != null) patch.duration_seconds = best.duration_seconds;
+    if (best.parsed_quality) patch.quality = best.parsed_quality;
+    if (best.parsed_resolution) patch.resolution = best.parsed_resolution;
+    if (best.parsed_language) patch.language = best.parsed_language;
 
     const { error } = await supabase
       .from("media_files")
