@@ -418,12 +418,54 @@ export const requestDownload = createServerFn({ method: "POST" })
     }
 
     // 4. Deliver with retries (honors 429 retry_after)
-    const { result, history, lastRetryAfterMs } = await deliverWithRetry({
+    let { result, history, lastRetryAfterMs } = await deliverWithRetry({
       toChatId: link.telegram_user_id,
       fromChatId: (file as any).telegram_channels.channel_id,
       messageId: file.telegram_message_id!,
       caption: deliveryCaption,
     });
+
+    // 4b. Stale-source recovery. The source message may have been deleted from
+    // the channel (Telegram returns "message to copy not found"). Search recent
+    // telegram_ingest rows in the same channel for a matching identity
+    // (episode_id / title_id + resolution + language), update the media_files
+    // row to point at the new message_id, and retry delivery once.
+    if (!result.ok && result.kind === "not_found") {
+      const recovered = await tryRecoverStaleSource(supabaseAdmin, {
+        channelRowId: file.channel_id!,
+        episodeId: (file as any).episode_id ?? null,
+        titleId: file.title_id,
+        resolution: (file as any).resolution ?? null,
+        language: (file as any).language ?? null,
+        excludeMessageId: file.telegram_message_id ?? null,
+      });
+      if (recovered) {
+        await supabaseAdmin
+          .from("media_files")
+          .update({
+            telegram_message_id: recovered.telegram_message_id,
+            telegram_file_id: recovered.telegram_file_id,
+            telegram_file_unique_id: recovered.telegram_file_unique_id,
+            file_name: recovered.file_name ?? (file as any).file_name,
+            caption: recovered.caption ?? null,
+            file_size: recovered.file_size ?? null,
+            mime_type: recovered.mime_type ?? null,
+            duration_seconds: recovered.duration_seconds ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", file.id);
+        (file as any).telegram_message_id = recovered.telegram_message_id;
+        const retry = await deliverWithRetry({
+          toChatId: link.telegram_user_id,
+          fromChatId: (file as any).telegram_channels.channel_id,
+          messageId: recovered.telegram_message_id,
+          caption: deliveryCaption,
+        });
+        result = retry.result;
+        history = [...history, ...retry.history];
+        lastRetryAfterMs = retry.lastRetryAfterMs ?? lastRetryAfterMs;
+      }
+    }
 
     await upsertDeliveryAttempt(supabaseAdmin, {
       userId: context.userId,
