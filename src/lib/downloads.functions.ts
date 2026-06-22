@@ -626,6 +626,63 @@ export const requestDownload = createServerFn({ method: "POST" })
     return { ok: false as const, reason: "delivery_failed" as const, error: result.error };
   });
 
+async function retireMediaSourceCollisions(
+  supabase: any,
+  keepMediaFileId: string,
+  source: {
+    telegramFileId: string | null;
+    telegramFileUniqueId: string | null;
+    channelRowId: string | null;
+    telegramMessageId: number | null;
+  },
+): Promise<void> {
+  const ids = new Set<string>();
+  const remember = (rows: Array<{ id: string }> | null | undefined) => {
+    for (const row of rows ?? []) if (row.id && row.id !== keepMediaFileId) ids.add(row.id);
+  };
+  if (source.telegramFileUniqueId) {
+    const { data } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("telegram_file_unique_id", source.telegramFileUniqueId)
+      .neq("id", keepMediaFileId);
+    remember(data);
+  }
+  if (source.telegramFileId) {
+    const { data } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("telegram_file_id", source.telegramFileId)
+      .neq("id", keepMediaFileId);
+    remember(data);
+  }
+  if (source.channelRowId && source.telegramMessageId != null) {
+    const { data } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("channel_id", source.channelRowId)
+      .eq("telegram_message_id", source.telegramMessageId)
+      .neq("id", keepMediaFileId);
+    remember(data);
+  }
+  if (!ids.size) return;
+  for (const id of ids) {
+    await supabase
+      .from("media_files")
+      .update({
+        is_active: false,
+        deleted_at: new Date().toISOString(),
+        deleted_reason: "superseded_by_source_relink",
+        telegram_file_id: `duplicate:${id}:${source.telegramFileId ?? "unknown"}`,
+        telegram_file_unique_id: null,
+        channel_id: null,
+        telegram_message_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+  }
+}
+
 // Look up the most recent telegram_ingest row in the same channel whose parsed
 // identity (episode or title) and resolution/language match the given file.
 // Used to swap a stale message_id (deleted from the channel) for a freshly
