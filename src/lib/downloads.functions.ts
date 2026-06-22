@@ -642,7 +642,7 @@ async function getEpisodeIdentity(
   };
 }
 
-async function tryRecoverStaleSource(
+export async function tryRecoverStaleSource(
   supabase: any,
   args: {
     channelRowId: string;
@@ -771,7 +771,7 @@ async function tryRecoverStaleSource(
 //      message_id (the canonical Telegram identity).
 //   2) Same channel + matched_title_id (+ resolution/language when available)
 //      — covers re-encoded resends that get a fresh unique_id.
-async function tryRelinkByIngest(
+export async function tryRelinkByIngest(
   supabase: any,
   args: {
     mediaFileId: string;
