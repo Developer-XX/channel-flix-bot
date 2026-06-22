@@ -431,6 +431,7 @@ export async function ingestTelegramUpdate(
         titleId: effectiveTitleId!,
         channelRowId: chanRow?.id ?? null,
         telegramFileId: file.file_id,
+        telegramFileUniqueId: file.file_unique_id,
         telegramMessageId: tgMessageId,
         fileName: file.file_name ?? parsed.title ?? "file",
         caption,
@@ -444,6 +445,7 @@ export async function ingestTelegramUpdate(
         episode: parsed.episode,
         part: parsed.part,
       });
+
       await writeMatchAudit(supabase, {
         ingestId: ingestRow.id,
         titleId: match.matchedTitleId,
