@@ -99,7 +99,7 @@ export const Route = createFileRoute("/api/public/s/$token")({
               .maybeSingle();
             slug = ((f as any)?.master_titles?.slug as string | null) ?? null;
           }
-          const origin = getPublicBaseUrl();
+          const origin = await getPublicBaseUrlAsync();
           if (!origin) {
             return respond(500, { ok: false, reason: "source_missing", missingField: "PUBLIC_BASE_URL" });
           }
