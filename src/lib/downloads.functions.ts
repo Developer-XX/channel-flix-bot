@@ -628,6 +628,7 @@ async function tryRecoverStaleSource(
   supabase: any,
   args: {
     channelRowId: string;
+    telegramFileUniqueId: string | null;
     episodeId: string | null;
     titleId: string | null;
     resolution: string | null;
@@ -643,6 +644,9 @@ async function tryRecoverStaleSource(
   file_size: number | null;
   mime_type: string | null;
   duration_seconds: number | null;
+  parsed_quality: string | null;
+  parsed_resolution: string | null;
+  parsed_language: string | null;
 } | null> {
   try {
     if (!args.channelRowId) return null;
