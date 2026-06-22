@@ -741,6 +741,31 @@ export async function autoPromoteToMediaFile(
     })
     .eq("id", args.ingestId);
 
+  // Resend reconciliation: when the same physical file (same file_unique_id) was
+  // previously ingested under a different message_id, retire those older ingest
+  // rows so only the latest resend remains the source of truth. The media_files
+  // row is updated in place above, so title links / episode links are preserved.
+  if (args.telegramFileUniqueId) {
+    try {
+      const nowIso = new Date().toISOString();
+      await supabase
+        .from("telegram_ingest")
+        .update({
+          deleted_at: nowIso,
+          deleted_reason: "superseded_by_resend",
+          promoted_media_file_id: null,
+        })
+        .eq("telegram_file_unique_id", args.telegramFileUniqueId)
+        .neq("id", args.ingestId)
+        .is("deleted_at", null);
+    } catch (e) {
+      console.warn(
+        "[telegram-ingest] failed to retire superseded ingest rows:",
+        (e as Error).message,
+      );
+    }
+  }
+
   return file.id;
 }
 
