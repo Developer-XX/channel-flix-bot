@@ -409,7 +409,8 @@ export const requestDownload = createServerFn({ method: "POST" })
       "▶️ Playback tip: if the video won't play or the audio is missing, open this file in <b>MX Player</b> or <b>VLC</b> — both are free and handle every format (MKV, multi-audio, HEVC). Stock gallery players often skip the audio track.";
     const tipRaw = (await getSetting("DOWNLOAD_CAPTION_TIP")) ?? "";
     const tip = tipRaw.trim() || defaultTip;
-    const deliveryCaption = `📥 <b>${file.file_name ?? "Your file"}</b>\nDelivered by StreamVault\n\n${tip}`;
+    const makeDeliveryCaption = () => `📥 <b>${file.file_name ?? "Your file"}</b>\nDelivered by StreamVault\n\n${tip}`;
+    let deliveryCaption = makeDeliveryCaption();
 
     // 3b. Claim/insert the queue row (PK = idempotency key).
     const queue = await claimOrFetchQueueRow(supabaseAdmin, {
@@ -461,6 +462,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     if (!result.ok && result.kind === "not_found") {
       const recovered = await tryRecoverStaleSource(supabaseAdmin, {
         channelRowId: file.channel_id!,
+        telegramFileUniqueId: (file as any).telegram_file_unique_id ?? null,
         episodeId: (file as any).episode_id ?? null,
         titleId: file.title_id,
         resolution: (file as any).resolution ?? null,
@@ -479,10 +481,21 @@ export const requestDownload = createServerFn({ method: "POST" })
             file_size: recovered.file_size ?? null,
             mime_type: recovered.mime_type ?? null,
             duration_seconds: recovered.duration_seconds ?? null,
+            quality: recovered.parsed_quality ?? (file as any).quality ?? null,
+            resolution: recovered.parsed_resolution ?? (file as any).resolution ?? null,
+            language: recovered.parsed_language ?? (file as any).language ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", file.id);
         (file as any).telegram_message_id = recovered.telegram_message_id;
+        (file as any).telegram_file_id = recovered.telegram_file_id;
+        (file as any).telegram_file_unique_id = recovered.telegram_file_unique_id;
+        if (recovered.file_name) (file as any).file_name = recovered.file_name;
+        if (recovered.caption !== null) (file as any).caption = recovered.caption;
+        if (recovered.parsed_quality) (file as any).quality = recovered.parsed_quality;
+        if (recovered.parsed_resolution) (file as any).resolution = recovered.parsed_resolution;
+        if (recovered.parsed_language) (file as any).language = recovered.parsed_language;
+        deliveryCaption = makeDeliveryCaption();
         const retry = await deliverWithRetry({
           toChatId: link.telegram_user_id,
           fromChatId: (file as any).telegram_channels.channel_id,
