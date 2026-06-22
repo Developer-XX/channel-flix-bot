@@ -431,6 +431,7 @@ export async function ingestTelegramUpdate(
         titleId: effectiveTitleId!,
         channelRowId: chanRow?.id ?? null,
         telegramFileId: file.file_id,
+        telegramFileUniqueId: file.file_unique_id,
         telegramMessageId: tgMessageId,
         fileName: file.file_name ?? parsed.title ?? "file",
         caption,
@@ -444,6 +445,7 @@ export async function ingestTelegramUpdate(
         episode: parsed.episode,
         part: parsed.part,
       });
+
       await writeMatchAudit(supabase, {
         ingestId: ingestRow.id,
         titleId: match.matchedTitleId,
@@ -520,6 +522,7 @@ export async function autoPromoteToMediaFile(
     titleId: string;
     channelRowId: string | null;
     telegramFileId: string;
+    telegramFileUniqueId?: string | null;
     telegramMessageId: number;
     fileName: string;
     caption: string | null;
@@ -534,6 +537,7 @@ export async function autoPromoteToMediaFile(
     part?: number | null;
   },
 ): Promise<string | null> {
+
   let episodeId: string | null = null;
 
   if (args.season != null) {
@@ -590,30 +594,72 @@ export async function autoPromoteToMediaFile(
     }
   }
 
-  const { data: file, error: fileErr } = await supabase
-    .from("media_files")
-    .upsert(
-      {
-        title_id: args.titleId,
-        episode_id: episodeId,
-        channel_id: args.channelRowId,
-        telegram_file_id: args.telegramFileId,
-        telegram_message_id: args.telegramMessageId,
-        file_name: args.fileName,
-        caption: args.caption,
-        file_size: args.fileSize,
-        mime_type: args.mimeType,
-        quality: args.quality,
-        resolution: args.resolution,
-        language: args.language,
-        duration_seconds: args.durationSeconds,
-        is_active: true,
-      },
-      { onConflict: "telegram_file_id" },
-    )
-    .select("id")
-    .single();
-  if (fileErr) throw fileErr;
+  // Locate an existing media_files row by Telegram's stable file_unique_id
+  // first (survives delete + re-upload of the same physical file), then fall
+  // back to file_id. If found, UPDATE in place so the resent post refreshes
+  // file_id, message_id, caption, file_name, badges, etc. Otherwise INSERT.
+  let existingId: string | null = null;
+  if (args.telegramFileUniqueId) {
+    const { data: byUniq } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("telegram_file_unique_id", args.telegramFileUniqueId)
+      .maybeSingle();
+    existingId = byUniq?.id ?? null;
+  }
+  if (!existingId) {
+    const { data: byFile } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("telegram_file_id", args.telegramFileId)
+      .maybeSingle();
+    existingId = byFile?.id ?? null;
+  }
+
+  const payload = {
+    title_id: args.titleId,
+    episode_id: episodeId,
+    channel_id: args.channelRowId,
+    telegram_file_id: args.telegramFileId,
+    telegram_file_unique_id: args.telegramFileUniqueId ?? null,
+    telegram_message_id: args.telegramMessageId,
+    file_name: args.fileName,
+    caption: args.caption,
+    file_size: args.fileSize,
+    mime_type: args.mimeType,
+    quality: args.quality,
+    resolution: args.resolution,
+    language: args.language,
+    duration_seconds: args.durationSeconds,
+    is_active: true,
+    deleted_at: null,
+    deleted_by: null,
+    deleted_reason: null,
+    updated_at: new Date().toISOString(),
+  };
+
+  let file: { id: string } | null = null;
+  let fileErr: any = null;
+  if (existingId) {
+    const { data, error } = await supabase
+      .from("media_files")
+      .update(payload)
+      .eq("id", existingId)
+      .select("id")
+      .single();
+    file = data ?? null;
+    fileErr = error;
+  } else {
+    const { data, error } = await supabase
+      .from("media_files")
+      .insert(payload)
+      .select("id")
+      .single();
+    file = data ?? null;
+    fileErr = error;
+  }
+  if (fileErr || !file) throw fileErr ?? new Error("media_files upsert failed");
+
 
   await supabase
     .from("telegram_ingest")
