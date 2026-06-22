@@ -514,6 +514,13 @@ export const requestDownload = createServerFn({ method: "POST" })
         result = retry.result;
         history = [...history, ...retry.history];
         lastRetryAfterMs = retry.lastRetryAfterMs ?? lastRetryAfterMs;
+        console.info(
+          `[relink] post_failure_retry media_file=${file.id} candidate_unique_id=${recovered.telegram_file_unique_id ?? null} candidate_message_id=${recovered.telegram_message_id} delivered=${result.ok}${result.ok ? "" : ` kind=${result.kind}`}`,
+        );
+      } else {
+        console.info(
+          `[relink] post_failure_no_candidate media_file=${file.id} prev_message_id=${file.telegram_message_id ?? null}`,
+        );
       }
     }
 
