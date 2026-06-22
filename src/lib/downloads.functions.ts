@@ -705,6 +705,54 @@ async function getEpisodeIdentity(
   };
 }
 
+// Normalize a title for fuzzy comparison: lower-case, strip diacritics + non
+// alphanumerics. Mirrors how parsed_title is stored without doing a DB call.
+export function normalizeTitleKey(value: string | null | undefined): string {
+  if (!value) return "";
+  return String(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+// Resolves the canonical title_id set: the title row itself + any title_aliases
+// rows that share its title. Used when matched_title_id on a resent ingest row
+// happens to point at an alias-side title rather than the canonical one.
+async function getTitleIdentitySet(
+  supabase: any,
+  titleId: string | null,
+): Promise<{ titleIds: string[]; normalizedTitles: string[] }> {
+  if (!titleId) return { titleIds: [], normalizedTitles: [] };
+  const titleIds = new Set<string>([titleId]);
+  const titles = new Set<string>();
+  try {
+    const { data: master } = await supabase
+      .from("master_titles")
+      .select("id, title, original_title, slug")
+      .eq("id", titleId)
+      .maybeSingle();
+    if (master) {
+      for (const v of [master.title, master.original_title, master.slug]) {
+        const n = normalizeTitleKey(v);
+        if (n) titles.add(n);
+      }
+    }
+    const { data: aliases } = await supabase
+      .from("title_aliases")
+      .select("title_id, alias, normalized_alias")
+      .eq("title_id", titleId);
+    for (const a of aliases ?? []) {
+      if (a.title_id) titleIds.add(a.title_id);
+      const n = a.normalized_alias || normalizeTitleKey(a.alias);
+      if (n) titles.add(n);
+    }
+  } catch (e) {
+    console.warn("[downloads] getTitleIdentitySet failed:", (e as Error).message);
+  }
+  return { titleIds: [...titleIds], normalizedTitles: [...titles] };
+}
+
 export async function tryRecoverStaleSource(
   supabase: any,
   args: {
