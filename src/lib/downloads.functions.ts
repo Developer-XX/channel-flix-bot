@@ -676,13 +676,18 @@ async function tryRecoverStaleSource(
 
     const targetRes = (args.resolution || "").toLowerCase();
     const targetLang = (args.language || "").toLowerCase();
-    const match = rows.find((r: any) => {
+    const exactMatch = rows.find((r: any) => {
       const res = String(r.parsed_resolution || "").toLowerCase();
       const lang = String(r.parsed_language || "").toLowerCase();
       const resOk = !targetRes || !res || res === targetRes;
       const langOk = !targetLang || !lang || lang === targetLang;
       return resOk && langOk;
     });
+    const languageMatch = rows.find((r: any) => {
+      const lang = String(r.parsed_language || "").toLowerCase();
+      return !targetLang || !lang || lang === targetLang;
+    });
+    const match = exactMatch ?? languageMatch ?? rows[0];
     if (!match) return null;
     return {
       telegram_message_id: match.telegram_message_id,
