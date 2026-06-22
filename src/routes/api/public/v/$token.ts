@@ -16,7 +16,7 @@ export const Route = createFileRoute("/api/public/v/$token")({
       GET: async ({ params, request }) => {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { consumeToken } = await import("@/lib/verification.server");
-        const { getPublicBaseUrl, isBrokenOrigin } = await import("@/lib/site-url.server");
+        const { getPublicBaseUrlAsync, isBrokenOrigin } = await import("@/lib/site-url.server");
 
         const ip =
           request.headers.get("x-forwarded-for") ??
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/api/public/v/$token")({
         const requestOrigin = (() => {
           try { return new URL(request.url).origin; } catch { return null; }
         })();
-        const origin = getPublicBaseUrl();
+        const origin = await getPublicBaseUrlAsync();
         const originMismatch = requestOrigin && requestOrigin !== origin;
 
         // Structured log for the diagnostics panel + tail logs. Never logs PII
