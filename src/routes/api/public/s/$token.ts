@@ -40,14 +40,14 @@ export const Route = createFileRoute("/api/public/s/$token")({
         const json = wantsJson(request);
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { consumeToken } = await import("@/lib/verification.server");
-        const { getPublicBaseUrl } = await import("@/lib/site-url.server");
+        const { getPublicBaseUrlAsync } = await import("@/lib/site-url.server");
 
         const ip =
           request.headers.get("x-forwarded-for") ??
           request.headers.get("cf-connecting-ip") ??
           null;
 
-        const respond = (
+        const respond = async (
           status: number,
           payload: { ok: boolean; reason: Reason; missingField?: string | null; targetUrl?: string | null },
         ) => {
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/api/public/s/$token")({
               headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
             });
           }
-          const origin = getPublicBaseUrl();
+          const origin = await getPublicBaseUrlAsync();
           if (payload.ok && payload.targetUrl) return Response.redirect(payload.targetUrl, 303);
           const u = new URL(`${origin}/`);
           u.searchParams.set("verify_error", payload.reason);
@@ -99,7 +99,7 @@ export const Route = createFileRoute("/api/public/s/$token")({
               .maybeSingle();
             slug = ((f as any)?.master_titles?.slug as string | null) ?? null;
           }
-          const origin = getPublicBaseUrl();
+          const origin = await getPublicBaseUrlAsync();
           if (!origin) {
             return respond(500, { ok: false, reason: "source_missing", missingField: "PUBLIC_BASE_URL" });
           }

@@ -1,0 +1,1 @@
+UPDATE public.app_settings SET value = 'https://movies.vybeprints.info', updated_at = now() WHERE key = 'PUBLIC_BASE_URL';

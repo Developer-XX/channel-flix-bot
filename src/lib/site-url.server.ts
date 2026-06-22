@@ -12,19 +12,25 @@
 
 const FALLBACK = "https://channel-flix-bot.lovable.app";
 
+function normalize(raw: string | null | undefined): string {
+  if (!raw) return FALLBACK;
+  let s = raw.trim().replace(/\/+$/, "");
+  if (!s) return FALLBACK;
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  return s;
+}
+
 function fromEnv(): string {
-  return (
+  return normalize(
     process.env.PUBLIC_BASE_URL ??
-    process.env.SITE_URL ??
-    process.env.PUBLIC_SITE_URL ??
-    FALLBACK
-  ).replace(/\/+$/, "");
+      process.env.SITE_URL ??
+      process.env.PUBLIC_SITE_URL ??
+      FALLBACK,
+  );
 }
 
 // Sync read (kept for code paths that can't await — uses env-only).
 export function getPublicBaseUrl(): string {
-  // The async variant is preferred everywhere new. Keeping sync version env-only
-  // avoids a top-level await in callers.
   return fromEnv();
 }
 
@@ -33,7 +39,7 @@ export async function getPublicBaseUrlAsync(): Promise<string> {
   try {
     const { getSetting } = await import("@/lib/runtime-settings.server");
     const v = await getSetting("PUBLIC_BASE_URL");
-    if (v) return v.replace(/\/+$/, "");
+    if (v && v.trim()) return normalize(v);
   } catch {}
   return fromEnv();
 }
@@ -48,6 +54,7 @@ export function getPublicBaseUrlSource(): {
   if (process.env.PUBLIC_SITE_URL) return { url: fromEnv(), source: "PUBLIC_SITE_URL", fallback: FALLBACK };
   return { url: FALLBACK, source: "fallback", fallback: FALLBACK };
 }
+
 
 // Heuristic: a host looks "broken" (non-shareable) when it's the per-preview
 // Lovable subdomain that rotates per build, or any localhost / IP.
