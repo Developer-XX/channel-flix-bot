@@ -624,6 +624,24 @@ export const requestDownload = createServerFn({ method: "POST" })
 // identity (episode or title) and resolution/language match the given file.
 // Used to swap a stale message_id (deleted from the channel) for a freshly
 // uploaded resend without losing the master_titles / episodes linkage.
+async function getEpisodeIdentity(
+  supabase: any,
+  episodeId: string | null,
+): Promise<{ season: number | null; episode: number | null } | null> {
+  if (!episodeId) return null;
+  const { data } = await supabase
+    .from("episodes")
+    .select("episode_number, seasons(season_number)")
+    .eq("id", episodeId)
+    .maybeSingle();
+  if (!data) return null;
+  const rawEpisode = typeof data.episode_number === "number" ? data.episode_number : null;
+  return {
+    season: typeof data.seasons?.season_number === "number" ? data.seasons.season_number : null,
+    episode: rawEpisode != null && rawEpisode > 100 ? rawEpisode % 100 : rawEpisode,
+  };
+}
+
 async function tryRecoverStaleSource(
   supabase: any,
   args: {
@@ -681,6 +699,7 @@ async function tryRecoverStaleSource(
     }
 
     if (!args.channelRowId) return null;
+    const episodeIdentity = await getEpisodeIdentity(supabase, args.episodeId);
     // We use the channel_id (uuid foreign key) on telegram_ingest. Resolve it
     // by joining via the channel row.
     const { data: ch } = await supabase
@@ -693,7 +712,7 @@ async function tryRecoverStaleSource(
     let q = supabase
       .from("telegram_ingest")
       .select(
-        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
+        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_season, parsed_episode, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
       )
       .eq("telegram_channel_id", ch.channel_id)
       .is("deleted_at", null)
@@ -702,6 +721,8 @@ async function tryRecoverStaleSource(
       .limit(50);
     if (args.excludeMessageId != null) q = q.neq("telegram_message_id", args.excludeMessageId);
     if (args.titleId) q = q.eq("matched_title_id", args.titleId);
+    if (episodeIdentity?.season != null) q = q.eq("parsed_season", episodeIdentity.season);
+    if (episodeIdentity?.episode != null) q = q.eq("parsed_episode", episodeIdentity.episode);
     const { data: rows } = await q;
     if (!rows?.length) return null;
 
