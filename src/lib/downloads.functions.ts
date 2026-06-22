@@ -860,6 +860,8 @@ export async function tryRelinkByIngest(
       mime_type: string | null;
       duration_seconds: number | null;
       parsed_quality: string | null;
+      parsed_season: number | null;
+      parsed_episode: number | null;
       parsed_resolution: string | null;
       parsed_language: string | null;
       matched_title_id: string | null;
@@ -871,7 +873,7 @@ export async function tryRelinkByIngest(
       const { data } = await supabase
         .from("telegram_ingest")
         .select(
-          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
+          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id",
         )
         .eq("telegram_file_unique_id", args.telegramFileUniqueId)
         .is("deleted_at", null)
@@ -889,10 +891,11 @@ export async function tryRelinkByIngest(
         .eq("id", args.channelRowId)
         .maybeSingle();
       if (ch?.channel_id) {
+        const episodeIdentity = await getEpisodeIdentity(supabase, args.episodeId);
         let q = supabase
           .from("telegram_ingest")
           .select(
-            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
+            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id",
           )
           .eq("telegram_channel_id", ch.channel_id)
           .is("deleted_at", null)
@@ -900,6 +903,8 @@ export async function tryRelinkByIngest(
           .order("telegram_message_id", { ascending: false })
           .limit(50);
         if (args.titleId) q = q.eq("matched_title_id", args.titleId);
+        if (episodeIdentity?.season != null) q = q.eq("parsed_season", episodeIdentity.season);
+        if (episodeIdentity?.episode != null) q = q.eq("parsed_episode", episodeIdentity.episode);
         const { data: rows } = await q;
         const targetRes = (args.resolution || "").toLowerCase();
         const targetLang = (args.language || "").toLowerCase();
