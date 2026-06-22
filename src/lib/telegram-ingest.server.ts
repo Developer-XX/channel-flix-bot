@@ -522,6 +522,7 @@ export async function autoPromoteToMediaFile(
     titleId: string;
     channelRowId: string | null;
     telegramFileId: string;
+    telegramFileUniqueId?: string | null;
     telegramMessageId: number;
     fileName: string;
     caption: string | null;
@@ -536,6 +537,7 @@ export async function autoPromoteToMediaFile(
     part?: number | null;
   },
 ): Promise<string | null> {
+
   let episodeId: string | null = null;
 
   if (args.season != null) {
