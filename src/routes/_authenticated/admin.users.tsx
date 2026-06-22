@@ -71,6 +71,18 @@ function AdminUsersPage() {
     onError: (e: any) => toast.error(e?.message ?? "setWebhook failed"),
   });
 
+  const rotate = useMutation({
+    mutationFn: (token: string) => rotateTokenFn({ data: { newToken: token, confirm: "ROTATE" as const } }),
+    onSuccess: (r) => {
+      const prev = r.previousBot ? `@${r.previousBot.username ?? r.previousBot.id}` : "(none)";
+      const next = `@${r.newBot.username ?? r.newBot.id}`;
+      const hook = r.webhook.ok ? `webhook → ${r.webhook.url}` : `webhook FAILED: ${r.webhook.error}`;
+      toast.success(`Rotated ${prev} → ${next} · old cleared: ${String(r.oldWebhookCleared)} · ${hook}`, { duration: 10000 });
+      setNewToken("");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Rotation failed"),
+  });
+
   return (
     <div className="p-3 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-2 flex-wrap">
