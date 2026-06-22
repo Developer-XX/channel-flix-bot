@@ -245,21 +245,49 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "file_not_found" as const };
     }
     const fileCategory: string | null = (file as any).master_titles?.category ?? null;
+
+    // Pre-delivery self-heal. Re-link the media_files row to the newest
+    // matching telegram_ingest row BEFORE failing for missing source fields or
+    // attempting delivery. Prefer telegram_file_unique_id (same physical file
+    // resent under a new message_id), then fall back to channel + identity
+    // (title/episode + resolution + language) for resends with a new
+    // unique_id (re-encoded uploads).
+    {
+      const healed = await tryRelinkByIngest(supabaseAdmin, {
+        mediaFileId: file.id,
+        telegramFileUniqueId: (file as any).telegram_file_unique_id ?? null,
+        channelRowId: file.channel_id ?? null,
+        episodeId: (file as any).episode_id ?? null,
+        titleId: file.title_id,
+        resolution: (file as any).resolution ?? null,
+        language: (file as any).language ?? null,
+        currentMessageId: file.telegram_message_id ?? null,
+      });
+      if (healed) {
+        const { data: refreshed } = await supabaseAdmin
+          .from("media_files")
+          .select("id, file_name, title_id, episode_id, resolution, language, telegram_message_id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
+          .eq("id", file.id)
+          .maybeSingle();
+        if (refreshed) file = refreshed as typeof file;
+      }
+    }
+
     const missing: string[] = [];
-    if (!file.telegram_message_id) missing.push("telegram_message_id");
-    if (!file.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
-    if (file.channel_id && !(file as any).telegram_channels?.channel_id) {
+    if (!file!.telegram_message_id) missing.push("telegram_message_id");
+    if (!file!.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
+    if (file!.channel_id && !(file as any).telegram_channels?.channel_id) {
       missing.push("telegram_channels.channel_id (channel row missing Telegram chat id)");
     }
     if (missing.length) {
       await auditFailure("source_missing", { missing, file_name: (file as any).file_name });
-      await downloadLogEarlyFailure("source_missing", { shortener: ver.lastProvider, category: fileCategory, titleId: file.title_id, fileId: file.id });
+      await downloadLogEarlyFailure("source_missing", { shortener: ver.lastProvider, category: fileCategory, titleId: file!.title_id, fileId: file!.id });
       return {
         ok: false as const,
         reason: "source_missing" as const,
-        detail: `Missing source field(s): ${missing.join(", ")}. File id: ${file.id}.`,
+        detail: `Missing source field(s): ${missing.join(", ")}. File id: ${file!.id}.`,
         missing,
-        mediaFileId: file.id,
+        mediaFileId: file!.id,
       };
 
     }
@@ -655,3 +683,128 @@ async function tryRecoverStaleSource(
   }
 }
 
+
+// Pre-delivery self-heal. Looks for a newer telegram_ingest row that should
+// own this media_files record and rewrites the row's source pointers in place
+// (telegram_file_id / unique_id / message_id / channel_id and refreshed
+// caption + file metadata). Returns true when the row was updated.
+//
+// Match priority:
+//   1) telegram_file_unique_id — same physical file resent under a new
+//      message_id (the canonical Telegram identity).
+//   2) Same channel + matched_title_id (+ resolution/language when available)
+//      — covers re-encoded resends that get a fresh unique_id.
+async function tryRelinkByIngest(
+  supabase: any,
+  args: {
+    mediaFileId: string;
+    telegramFileUniqueId: string | null;
+    channelRowId: string | null;
+    episodeId: string | null;
+    titleId: string | null;
+    resolution: string | null;
+    language: string | null;
+    currentMessageId: number | null;
+  },
+): Promise<boolean> {
+  try {
+    type IngestRow = {
+      channel_id: string | null;
+      telegram_channel_id: number | null;
+      telegram_message_id: number;
+      telegram_file_id: string;
+      telegram_file_unique_id: string | null;
+      file_name: string | null;
+      caption: string | null;
+      file_size: number | null;
+      mime_type: string | null;
+      duration_seconds: number | null;
+      parsed_resolution: string | null;
+      parsed_language: string | null;
+      matched_title_id: string | null;
+    };
+
+    let best: IngestRow | null = null;
+
+    if (args.telegramFileUniqueId) {
+      const { data } = await supabase
+        .from("telegram_ingest")
+        .select(
+          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+        )
+        .eq("telegram_file_unique_id", args.telegramFileUniqueId)
+        .is("deleted_at", null)
+        .not("telegram_file_id", "is", null)
+        .order("telegram_message_id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) best = data as IngestRow;
+    }
+
+    if (!best && args.channelRowId) {
+      const { data: ch } = await supabase
+        .from("telegram_channels")
+        .select("id, channel_id")
+        .eq("id", args.channelRowId)
+        .maybeSingle();
+      if (ch?.channel_id) {
+        let q = supabase
+          .from("telegram_ingest")
+          .select(
+            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+          )
+          .eq("telegram_channel_id", ch.channel_id)
+          .is("deleted_at", null)
+          .not("telegram_file_id", "is", null)
+          .order("telegram_message_id", { ascending: false })
+          .limit(50);
+        if (args.titleId) q = q.eq("matched_title_id", args.titleId);
+        const { data: rows } = await q;
+        const targetRes = (args.resolution || "").toLowerCase();
+        const targetLang = (args.language || "").toLowerCase();
+        best =
+          ((rows ?? []) as IngestRow[]).find((r) => {
+            const res = String(r.parsed_resolution || "").toLowerCase();
+            const lang = String(r.parsed_language || "").toLowerCase();
+            const resOk = !targetRes || !res || res === targetRes;
+            const langOk = !targetLang || !lang || lang === targetLang;
+            return resOk && langOk;
+          }) ?? null;
+      }
+    }
+
+    if (!best) return false;
+    if (
+      best.telegram_message_id === args.currentMessageId &&
+      best.channel_id === args.channelRowId
+    ) {
+      return false;
+    }
+
+    const patch: Record<string, unknown> = {
+      telegram_message_id: best.telegram_message_id,
+      telegram_file_id: best.telegram_file_id,
+      telegram_file_unique_id: best.telegram_file_unique_id,
+      updated_at: new Date().toISOString(),
+    };
+    if (best.channel_id) patch.channel_id = best.channel_id;
+    if (best.file_name) patch.file_name = best.file_name;
+    if (best.caption !== null && best.caption !== undefined) patch.caption = best.caption;
+    if (best.file_size != null) patch.file_size = best.file_size;
+    if (best.mime_type) patch.mime_type = best.mime_type;
+    if (best.duration_seconds != null) patch.duration_seconds = best.duration_seconds;
+
+    const { error } = await supabase
+      .from("media_files")
+      .update(patch)
+      .eq("id", args.mediaFileId);
+    if (error) {
+      console.warn("[downloads] tryRelinkByIngest update failed:", error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn("[downloads] tryRelinkByIngest failed:", (e as Error).message);
+    return false;
+  }
+}
