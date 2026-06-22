@@ -409,7 +409,8 @@ export const requestDownload = createServerFn({ method: "POST" })
       "▶️ Playback tip: if the video won't play or the audio is missing, open this file in <b>MX Player</b> or <b>VLC</b> — both are free and handle every format (MKV, multi-audio, HEVC). Stock gallery players often skip the audio track.";
     const tipRaw = (await getSetting("DOWNLOAD_CAPTION_TIP")) ?? "";
     const tip = tipRaw.trim() || defaultTip;
-    const deliveryCaption = `📥 <b>${file.file_name ?? "Your file"}</b>\nDelivered by StreamVault\n\n${tip}`;
+    const makeDeliveryCaption = () => `📥 <b>${file.file_name ?? "Your file"}</b>\nDelivered by StreamVault\n\n${tip}`;
+    let deliveryCaption = makeDeliveryCaption();
 
     // 3b. Claim/insert the queue row (PK = idempotency key).
     const queue = await claimOrFetchQueueRow(supabaseAdmin, {
@@ -461,6 +462,7 @@ export const requestDownload = createServerFn({ method: "POST" })
     if (!result.ok && result.kind === "not_found") {
       const recovered = await tryRecoverStaleSource(supabaseAdmin, {
         channelRowId: file.channel_id!,
+        telegramFileUniqueId: (file as any).telegram_file_unique_id ?? null,
         episodeId: (file as any).episode_id ?? null,
         titleId: file.title_id,
         resolution: (file as any).resolution ?? null,
@@ -468,6 +470,12 @@ export const requestDownload = createServerFn({ method: "POST" })
         excludeMessageId: file.telegram_message_id ?? null,
       });
       if (recovered) {
+        await retireMediaSourceCollisions(supabaseAdmin, file.id, {
+          telegramFileId: recovered.telegram_file_id,
+          telegramFileUniqueId: recovered.telegram_file_unique_id,
+          channelRowId: file.channel_id ?? null,
+          telegramMessageId: recovered.telegram_message_id,
+        });
         await supabaseAdmin
           .from("media_files")
           .update({
@@ -479,10 +487,21 @@ export const requestDownload = createServerFn({ method: "POST" })
             file_size: recovered.file_size ?? null,
             mime_type: recovered.mime_type ?? null,
             duration_seconds: recovered.duration_seconds ?? null,
+            quality: recovered.parsed_quality ?? (file as any).quality ?? null,
+            resolution: recovered.parsed_resolution ?? (file as any).resolution ?? null,
+            language: recovered.parsed_language ?? (file as any).language ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", file.id);
         (file as any).telegram_message_id = recovered.telegram_message_id;
+        (file as any).telegram_file_id = recovered.telegram_file_id;
+        (file as any).telegram_file_unique_id = recovered.telegram_file_unique_id;
+        if (recovered.file_name) (file as any).file_name = recovered.file_name;
+        if (recovered.caption !== null) (file as any).caption = recovered.caption;
+        if (recovered.parsed_quality) (file as any).quality = recovered.parsed_quality;
+        if (recovered.parsed_resolution) (file as any).resolution = recovered.parsed_resolution;
+        if (recovered.parsed_language) (file as any).language = recovered.parsed_language;
+        deliveryCaption = makeDeliveryCaption();
         const retry = await deliverWithRetry({
           toChatId: link.telegram_user_id,
           fromChatId: (file as any).telegram_channels.channel_id,
@@ -607,14 +626,90 @@ export const requestDownload = createServerFn({ method: "POST" })
     return { ok: false as const, reason: "delivery_failed" as const, error: result.error };
   });
 
+async function retireMediaSourceCollisions(
+  supabase: any,
+  keepMediaFileId: string,
+  source: {
+    telegramFileId: string | null;
+    telegramFileUniqueId: string | null;
+    channelRowId: string | null;
+    telegramMessageId: number | null;
+  },
+): Promise<void> {
+  const ids = new Set<string>();
+  const remember = (rows: Array<{ id: string }> | null | undefined) => {
+    for (const row of rows ?? []) if (row.id && row.id !== keepMediaFileId) ids.add(row.id);
+  };
+  if (source.telegramFileUniqueId) {
+    const { data } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("telegram_file_unique_id", source.telegramFileUniqueId)
+      .neq("id", keepMediaFileId);
+    remember(data);
+  }
+  if (source.telegramFileId) {
+    const { data } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("telegram_file_id", source.telegramFileId)
+      .neq("id", keepMediaFileId);
+    remember(data);
+  }
+  if (source.channelRowId && source.telegramMessageId != null) {
+    const { data } = await supabase
+      .from("media_files")
+      .select("id")
+      .eq("channel_id", source.channelRowId)
+      .eq("telegram_message_id", source.telegramMessageId)
+      .neq("id", keepMediaFileId);
+    remember(data);
+  }
+  if (!ids.size) return;
+  for (const id of ids) {
+    await supabase
+      .from("media_files")
+      .update({
+        is_active: false,
+        deleted_at: new Date().toISOString(),
+        deleted_reason: "superseded_by_source_relink",
+        telegram_file_id: `duplicate:${id}:${source.telegramFileId ?? "unknown"}`,
+        telegram_file_unique_id: null,
+        channel_id: null,
+        telegram_message_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+  }
+}
+
 // Look up the most recent telegram_ingest row in the same channel whose parsed
 // identity (episode or title) and resolution/language match the given file.
 // Used to swap a stale message_id (deleted from the channel) for a freshly
 // uploaded resend without losing the master_titles / episodes linkage.
-async function tryRecoverStaleSource(
+async function getEpisodeIdentity(
+  supabase: any,
+  episodeId: string | null,
+): Promise<{ season: number | null; episode: number | null } | null> {
+  if (!episodeId) return null;
+  const { data } = await supabase
+    .from("episodes")
+    .select("episode_number, seasons(season_number)")
+    .eq("id", episodeId)
+    .maybeSingle();
+  if (!data) return null;
+  const rawEpisode = typeof data.episode_number === "number" ? data.episode_number : null;
+  return {
+    season: typeof data.seasons?.season_number === "number" ? data.seasons.season_number : null,
+    episode: rawEpisode != null && rawEpisode > 100 ? rawEpisode % 100 : rawEpisode,
+  };
+}
+
+export async function tryRecoverStaleSource(
   supabase: any,
   args: {
     channelRowId: string;
+    telegramFileUniqueId: string | null;
     episodeId: string | null;
     titleId: string | null;
     resolution: string | null;
@@ -630,9 +725,44 @@ async function tryRecoverStaleSource(
   file_size: number | null;
   mime_type: string | null;
   duration_seconds: number | null;
+  parsed_quality: string | null;
+  parsed_resolution: string | null;
+  parsed_language: string | null;
 } | null> {
   try {
+    if (args.telegramFileUniqueId) {
+      let byUnique = supabase
+        .from("telegram_ingest")
+        .select(
+          "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
+        )
+        .eq("telegram_file_unique_id", args.telegramFileUniqueId)
+        .is("deleted_at", null)
+        .not("telegram_file_id", "is", null)
+        .order("telegram_message_id", { ascending: false })
+        .limit(1);
+      if (args.excludeMessageId != null) byUnique = byUnique.neq("telegram_message_id", args.excludeMessageId);
+      const { data: uniqueRows } = await byUnique;
+      const row = uniqueRows?.[0];
+      if (row) {
+        return {
+          telegram_message_id: row.telegram_message_id,
+          telegram_file_id: row.telegram_file_id,
+          telegram_file_unique_id: row.telegram_file_unique_id ?? null,
+          file_name: row.file_name ?? null,
+          caption: row.caption ?? null,
+          file_size: row.file_size ?? null,
+          mime_type: row.mime_type ?? null,
+          duration_seconds: row.duration_seconds ?? null,
+          parsed_quality: row.parsed_quality ?? null,
+          parsed_resolution: row.parsed_resolution ?? null,
+          parsed_language: row.parsed_language ?? null,
+        };
+      }
+    }
+
     if (!args.channelRowId) return null;
+    const episodeIdentity = await getEpisodeIdentity(supabase, args.episodeId);
     // We use the channel_id (uuid foreign key) on telegram_ingest. Resolve it
     // by joining via the channel row.
     const { data: ch } = await supabase
@@ -645,7 +775,7 @@ async function tryRecoverStaleSource(
     let q = supabase
       .from("telegram_ingest")
       .select(
-        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+        "telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_season, parsed_episode, parsed_quality, parsed_resolution, parsed_language, matched_title_id",
       )
       .eq("telegram_channel_id", ch.channel_id)
       .is("deleted_at", null)
@@ -654,18 +784,25 @@ async function tryRecoverStaleSource(
       .limit(50);
     if (args.excludeMessageId != null) q = q.neq("telegram_message_id", args.excludeMessageId);
     if (args.titleId) q = q.eq("matched_title_id", args.titleId);
+    if (episodeIdentity?.season != null) q = q.eq("parsed_season", episodeIdentity.season);
+    if (episodeIdentity?.episode != null) q = q.eq("parsed_episode", episodeIdentity.episode);
     const { data: rows } = await q;
     if (!rows?.length) return null;
 
     const targetRes = (args.resolution || "").toLowerCase();
     const targetLang = (args.language || "").toLowerCase();
-    const match = rows.find((r: any) => {
+    const exactMatch = rows.find((r: any) => {
       const res = String(r.parsed_resolution || "").toLowerCase();
       const lang = String(r.parsed_language || "").toLowerCase();
       const resOk = !targetRes || !res || res === targetRes;
       const langOk = !targetLang || !lang || lang === targetLang;
       return resOk && langOk;
     });
+    const languageMatch = rows.find((r: any) => {
+      const lang = String(r.parsed_language || "").toLowerCase();
+      return !targetLang || !lang || lang === targetLang;
+    });
+    const match = exactMatch ?? languageMatch ?? rows[0];
     if (!match) return null;
     return {
       telegram_message_id: match.telegram_message_id,
@@ -676,6 +813,9 @@ async function tryRecoverStaleSource(
       file_size: match.file_size ?? null,
       mime_type: match.mime_type ?? null,
       duration_seconds: match.duration_seconds ?? null,
+      parsed_quality: match.parsed_quality ?? null,
+      parsed_resolution: match.parsed_resolution ?? null,
+      parsed_language: match.parsed_language ?? null,
     };
   } catch (e) {
     console.warn("[downloads] tryRecoverStaleSource failed:", (e as Error).message);
@@ -694,7 +834,7 @@ async function tryRecoverStaleSource(
 //      message_id (the canonical Telegram identity).
 //   2) Same channel + matched_title_id (+ resolution/language when available)
 //      — covers re-encoded resends that get a fresh unique_id.
-async function tryRelinkByIngest(
+export async function tryRelinkByIngest(
   supabase: any,
   args: {
     mediaFileId: string;
@@ -719,6 +859,9 @@ async function tryRelinkByIngest(
       file_size: number | null;
       mime_type: string | null;
       duration_seconds: number | null;
+      parsed_quality: string | null;
+      parsed_season: number | null;
+      parsed_episode: number | null;
       parsed_resolution: string | null;
       parsed_language: string | null;
       matched_title_id: string | null;
@@ -730,7 +873,7 @@ async function tryRelinkByIngest(
       const { data } = await supabase
         .from("telegram_ingest")
         .select(
-          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+          "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id",
         )
         .eq("telegram_file_unique_id", args.telegramFileUniqueId)
         .is("deleted_at", null)
@@ -748,10 +891,11 @@ async function tryRelinkByIngest(
         .eq("id", args.channelRowId)
         .maybeSingle();
       if (ch?.channel_id) {
+        const episodeIdentity = await getEpisodeIdentity(supabase, args.episodeId);
         let q = supabase
           .from("telegram_ingest")
           .select(
-            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_resolution, parsed_language, matched_title_id",
+            "channel_id, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_file_unique_id, file_name, caption, file_size, mime_type, duration_seconds, parsed_quality, parsed_season, parsed_episode, parsed_resolution, parsed_language, matched_title_id",
           )
           .eq("telegram_channel_id", ch.channel_id)
           .is("deleted_at", null)
@@ -759,17 +903,24 @@ async function tryRelinkByIngest(
           .order("telegram_message_id", { ascending: false })
           .limit(50);
         if (args.titleId) q = q.eq("matched_title_id", args.titleId);
+        if (episodeIdentity?.season != null) q = q.eq("parsed_season", episodeIdentity.season);
+        if (episodeIdentity?.episode != null) q = q.eq("parsed_episode", episodeIdentity.episode);
         const { data: rows } = await q;
         const targetRes = (args.resolution || "").toLowerCase();
         const targetLang = (args.language || "").toLowerCase();
-        best =
-          ((rows ?? []) as IngestRow[]).find((r) => {
+        const candidates = (rows ?? []) as IngestRow[];
+        const exactMatch = candidates.find((r) => {
             const res = String(r.parsed_resolution || "").toLowerCase();
             const lang = String(r.parsed_language || "").toLowerCase();
             const resOk = !targetRes || !res || res === targetRes;
             const langOk = !targetLang || !lang || lang === targetLang;
             return resOk && langOk;
           }) ?? null;
+        const languageMatch = candidates.find((r) => {
+          const lang = String(r.parsed_language || "").toLowerCase();
+          return !targetLang || !lang || lang === targetLang;
+        }) ?? null;
+        best = exactMatch ?? languageMatch ?? candidates[0] ?? null;
       }
     }
 
@@ -793,6 +944,16 @@ async function tryRelinkByIngest(
     if (best.file_size != null) patch.file_size = best.file_size;
     if (best.mime_type) patch.mime_type = best.mime_type;
     if (best.duration_seconds != null) patch.duration_seconds = best.duration_seconds;
+    if (best.parsed_quality) patch.quality = best.parsed_quality;
+    if (best.parsed_resolution) patch.resolution = best.parsed_resolution;
+    if (best.parsed_language) patch.language = best.parsed_language;
+
+    await retireMediaSourceCollisions(supabase, args.mediaFileId, {
+      telegramFileId: best.telegram_file_id,
+      telegramFileUniqueId: best.telegram_file_unique_id,
+      channelRowId: best.channel_id,
+      telegramMessageId: best.telegram_message_id,
+    });
 
     const { error } = await supabase
       .from("media_files")
