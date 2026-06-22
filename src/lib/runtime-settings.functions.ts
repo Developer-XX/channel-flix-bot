@@ -114,7 +114,20 @@ export const updateAppSetting = createServerFn({ method: "POST" })
     await requireAdminAccess(context);
     if (!KEYS.has(data.key)) throw new Error(`Unknown setting key: ${data.key}`);
     const isSecret = SECRET_KEYS.has(data.key);
-    const cleanedValue = data.value && data.value.trim() !== "" ? data.value.trim() : null;
+    let cleanedValue = data.value && data.value.trim() !== "" ? data.value.trim() : null;
+    // Normalize PUBLIC_BASE_URL: force https://, strip trailing slash, validate host.
+    if (data.key === "PUBLIC_BASE_URL" && cleanedValue) {
+      let v = cleanedValue.replace(/\s+/g, "");
+      v = v.replace(/^http:\/\//i, "https://");
+      if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+      v = v.replace(/\/+$/, "");
+      let parsed: URL;
+      try { parsed = new URL(v); } catch { throw new Error("PUBLIC_BASE_URL must be a valid URL (e.g. https://example.com)"); }
+      if (parsed.protocol !== "https:") throw new Error("PUBLIC_BASE_URL must use https://");
+      if (!parsed.hostname || !/\./.test(parsed.hostname)) throw new Error("PUBLIC_BASE_URL must include a valid hostname with a TLD");
+      if (parsed.pathname && parsed.pathname !== "/") throw new Error("PUBLIC_BASE_URL must not include a path");
+      cleanedValue = `${parsed.protocol}//${parsed.host}`;
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("app_settings")

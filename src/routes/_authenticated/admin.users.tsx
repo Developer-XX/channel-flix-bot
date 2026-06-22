@@ -15,6 +15,7 @@ import {
   adminSendTextBroadcast,
   adminRegisterTelegramWebhook,
 } from "@/lib/admin-users.functions";
+import { rotateTelegramBotToken } from "@/lib/telegram-rotate.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
   component: AdminUsersPage,
@@ -26,10 +27,13 @@ function AdminUsersPage() {
   const overviewFn = useServerFn(adminBroadcastOverview);
   const sendTextFn = useServerFn(adminSendTextBroadcast);
   const registerWebhookFn = useServerFn(adminRegisterTelegramWebhook);
+  const rotateTokenFn = useServerFn(rotateTelegramBotToken);
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [broadcastText, setBroadcastText] = useState("");
+  const [newToken, setNewToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
 
   const users = useQuery({
     queryKey: ["admin-users", page, search],
@@ -67,6 +71,18 @@ function AdminUsersPage() {
     onError: (e: any) => toast.error(e?.message ?? "setWebhook failed"),
   });
 
+  const rotate = useMutation({
+    mutationFn: (token: string) => rotateTokenFn({ data: { newToken: token, confirm: "ROTATE" as const } }),
+    onSuccess: (r) => {
+      const prev = r.previousBot ? `@${r.previousBot.username ?? r.previousBot.id}` : "(none)";
+      const next = `@${r.newBot.username ?? r.newBot.id}`;
+      const hook = r.webhook.ok ? `webhook → ${r.webhook.url}` : `webhook FAILED: ${r.webhook.error}`;
+      toast.success(`Rotated ${prev} → ${next} · old cleared: ${String(r.oldWebhookCleared)} · ${hook}`, { duration: 10000 });
+      setNewToken("");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Rotation failed"),
+  });
+
   return (
     <div className="p-3 md:p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -94,6 +110,45 @@ function AdminUsersPage() {
           <Webhook className={`h-4 w-4 mr-2 ${setHook.isPending ? "animate-spin" : ""}`} />
           {setHook.isPending ? "Registering…" : "Register / refresh webhook"}
         </Button>
+
+        <div className="pt-3 mt-3 border-t border-border space-y-2">
+          <div className="text-sm font-medium">Rotate bot token</div>
+          <p className="text-xs text-muted-foreground">
+            Pastes the new token, clears the old bot's webhook (so it stops receiving updates), saves the new token, and re-registers the webhook on the new bot — in one step.
+          </p>
+          <div className="flex gap-2 items-start flex-wrap">
+            <Input
+              className="flex-1 min-w-[260px] font-mono text-xs"
+              type={showToken ? "text" : "password"}
+              placeholder="123456789:ABC-DEF..."
+              value={newToken}
+              onChange={(e) => setNewToken(e.target.value)}
+              autoComplete="off"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowToken((s) => !s)}
+            >
+              {showToken ? "Hide" : "Show"}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                const t = newToken.trim();
+                if (!t) return;
+                if (!confirm("Rotate bot token? The previous bot will stop receiving updates immediately.")) return;
+                rotate.mutate(t);
+              }}
+              disabled={rotate.isPending || !newToken.trim()}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${rotate.isPending ? "animate-spin" : ""}`} />
+              {rotate.isPending ? "Rotating…" : "Rotate token"}
+            </Button>
+          </div>
+        </div>
       </section>
 
       {/* Broadcast */}
