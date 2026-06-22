@@ -245,21 +245,49 @@ export const requestDownload = createServerFn({ method: "POST" })
       return { ok: false as const, reason: "file_not_found" as const };
     }
     const fileCategory: string | null = (file as any).master_titles?.category ?? null;
+
+    // Pre-delivery self-heal. Re-link the media_files row to the newest
+    // matching telegram_ingest row BEFORE failing for missing source fields or
+    // attempting delivery. Prefer telegram_file_unique_id (same physical file
+    // resent under a new message_id), then fall back to channel + identity
+    // (title/episode + resolution + language) for resends with a new
+    // unique_id (re-encoded uploads).
+    {
+      const healed = await tryRelinkByIngest(supabaseAdmin, {
+        mediaFileId: file.id,
+        telegramFileUniqueId: (file as any).telegram_file_unique_id ?? null,
+        channelRowId: file.channel_id ?? null,
+        episodeId: (file as any).episode_id ?? null,
+        titleId: file.title_id,
+        resolution: (file as any).resolution ?? null,
+        language: (file as any).language ?? null,
+        currentMessageId: file.telegram_message_id ?? null,
+      });
+      if (healed) {
+        const { data: refreshed } = await supabaseAdmin
+          .from("media_files")
+          .select("id, file_name, title_id, episode_id, resolution, language, telegram_message_id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
+          .eq("id", file.id)
+          .maybeSingle();
+        if (refreshed) file = refreshed as typeof file;
+      }
+    }
+
     const missing: string[] = [];
-    if (!file.telegram_message_id) missing.push("telegram_message_id");
-    if (!file.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
-    if (file.channel_id && !(file as any).telegram_channels?.channel_id) {
+    if (!file!.telegram_message_id) missing.push("telegram_message_id");
+    if (!file!.channel_id) missing.push("channel_id (media_files row not linked to a telegram_channels record)");
+    if (file!.channel_id && !(file as any).telegram_channels?.channel_id) {
       missing.push("telegram_channels.channel_id (channel row missing Telegram chat id)");
     }
     if (missing.length) {
       await auditFailure("source_missing", { missing, file_name: (file as any).file_name });
-      await downloadLogEarlyFailure("source_missing", { shortener: ver.lastProvider, category: fileCategory, titleId: file.title_id, fileId: file.id });
+      await downloadLogEarlyFailure("source_missing", { shortener: ver.lastProvider, category: fileCategory, titleId: file!.title_id, fileId: file!.id });
       return {
         ok: false as const,
         reason: "source_missing" as const,
-        detail: `Missing source field(s): ${missing.join(", ")}. File id: ${file.id}.`,
+        detail: `Missing source field(s): ${missing.join(", ")}. File id: ${file!.id}.`,
         missing,
-        mediaFileId: file.id,
+        mediaFileId: file!.id,
       };
 
     }
