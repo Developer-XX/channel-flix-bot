@@ -110,6 +110,45 @@ function AdminUsersPage() {
           <Webhook className={`h-4 w-4 mr-2 ${setHook.isPending ? "animate-spin" : ""}`} />
           {setHook.isPending ? "Registering…" : "Register / refresh webhook"}
         </Button>
+
+        <div className="pt-3 mt-3 border-t border-border space-y-2">
+          <div className="text-sm font-medium">Rotate bot token</div>
+          <p className="text-xs text-muted-foreground">
+            Pastes the new token, clears the old bot's webhook (so it stops receiving updates), saves the new token, and re-registers the webhook on the new bot — in one step.
+          </p>
+          <div className="flex gap-2 items-start flex-wrap">
+            <Input
+              className="flex-1 min-w-[260px] font-mono text-xs"
+              type={showToken ? "text" : "password"}
+              placeholder="123456789:ABC-DEF..."
+              value={newToken}
+              onChange={(e) => setNewToken(e.target.value)}
+              autoComplete="off"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowToken((s) => !s)}
+            >
+              {showToken ? "Hide" : "Show"}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                const t = newToken.trim();
+                if (!t) return;
+                if (!confirm("Rotate bot token? The previous bot will stop receiving updates immediately.")) return;
+                rotate.mutate(t);
+              }}
+              disabled={rotate.isPending || !newToken.trim()}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${rotate.isPending ? "animate-spin" : ""}`} />
+              {rotate.isPending ? "Rotating…" : "Rotate token"}
+            </Button>
+          </div>
+        </div>
       </section>
 
       {/* Broadcast */}
