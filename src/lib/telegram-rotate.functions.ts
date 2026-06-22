@@ -20,7 +20,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireAdminAccess } from "@/lib/admin-auth";
 
-async function callTgWithToken<T = any>(token: string, method: string, body: Record<string, unknown> = {}): Promise<T> {
+export async function callTgWithToken<T = any>(token: string, method: string, body: Record<string, unknown> = {}): Promise<T> {
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -31,6 +31,67 @@ async function callTgWithToken<T = any>(token: string, method: string, body: Rec
     throw new Error(`Telegram ${method} failed: ${JSON.stringify(json?.description ?? json)}`);
   }
   return json.result as T;
+}
+
+// Pure rotation flow extracted from the createServerFn handler so tests can
+// drive it with mocked fetch + injected persistence. The handler below wires
+// production deps (supabaseAdmin, runtime-settings) into this helper.
+export type RotationDeps = {
+  newToken: string;
+  oldToken: string | null;
+  webhookBase: string;
+  webhookSecret: string;
+  persistNewToken: (token: string) => Promise<void>;
+};
+export type RotationResult = {
+  ok: true;
+  previousBot: { id: number; username?: string } | null;
+  newBot: { id: number; username?: string };
+  oldWebhookCleared: boolean | string;
+  webhook: { ok: true; url: string } | { ok: false; error: string };
+};
+export async function executeTokenRotation(deps: RotationDeps): Promise<RotationResult> {
+  const { newToken, oldToken, webhookBase, webhookSecret, persistNewToken } = deps;
+  const newMe = await callTgWithToken<{ id: number; username?: string }>(newToken, "getMe");
+  let oldMe: { id: number; username?: string } | null = null;
+  if (oldToken && oldToken !== newToken) {
+    try { oldMe = await callTgWithToken(oldToken, "getMe"); } catch { /* may already be revoked */ }
+  }
+  let oldWebhookCleared: boolean | string = false;
+  if (oldToken && oldToken !== newToken) {
+    try {
+      await callTgWithToken(oldToken, "deleteWebhook", { drop_pending_updates: true });
+      oldWebhookCleared = true;
+    } catch (e: any) {
+      oldWebhookCleared = `failed: ${e?.message ?? String(e)}`;
+    }
+  } else if (oldToken === newToken) {
+    oldWebhookCleared = "same token — skipped";
+  }
+  await persistNewToken(newToken);
+  let webhook: RotationResult["webhook"];
+  if (!webhookBase) webhook = { ok: false, error: "PUBLIC_BASE_URL is not configured — set it then click Register webhook." };
+  else if (!webhookSecret) webhook = { ok: false, error: "TELEGRAM_WEBHOOK_SECRET is not configured." };
+  else {
+    const url = `${webhookBase.replace(/\/$/, "")}/api/public/telegram/webhook`;
+    try {
+      await callTgWithToken(newToken, "setWebhook", {
+        url,
+        secret_token: webhookSecret,
+        allowed_updates: ["message", "edited_message", "channel_post", "edited_channel_post"],
+      });
+      webhook = { ok: true, url };
+    } catch (e: any) {
+      webhook = { ok: false, error: e?.message ?? String(e) };
+    }
+  }
+  return {
+    ok: true,
+    previousBot: oldMe ? { id: oldMe.id, username: oldMe.username } : null,
+    newBot: { id: newMe.id, username: newMe.username },
+    oldWebhookCleared,
+    webhook,
+  };
 }
 
 export const rotateTelegramBotToken = createServerFn({ method: "POST" })
