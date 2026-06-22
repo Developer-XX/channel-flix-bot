@@ -470,6 +470,12 @@ export const requestDownload = createServerFn({ method: "POST" })
         excludeMessageId: file.telegram_message_id ?? null,
       });
       if (recovered) {
+        await retireMediaSourceCollisions(supabaseAdmin, file.id, {
+          telegramFileId: recovered.telegram_file_id,
+          telegramFileUniqueId: recovered.telegram_file_unique_id,
+          channelRowId: file.channel_id ?? null,
+          telegramMessageId: recovered.telegram_message_id,
+        });
         await supabaseAdmin
           .from("media_files")
           .update({
