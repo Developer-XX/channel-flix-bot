@@ -122,6 +122,78 @@ export const getTelegramSyncTimeline = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+// Recent run summaries: group telegram_sync_steps by run_id so admins see the
+// last N attempts at a glance, with success/error counts + a jump to the full
+// timeline of any failing run.
+export const getTelegramSyncAttempts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ limit: z.number().int().min(1).max(50).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdminAccess(context);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const limit = data.limit ?? 15;
+    const { data: steps, error } = await supabaseAdmin
+      .from("telegram_sync_steps")
+      .select("run_id, source, step, status, error_code, error_message, latency_ms, details, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit * 25);
+    if (error) throw error;
+    type Step = {
+      run_id: string; source: string; step: string; status: string;
+      error_code: string | null; error_message: string | null;
+      latency_ms: number | null; details: any; created_at: string;
+    };
+    const groups = new Map<string, Step[]>();
+    for (const s of (steps ?? []) as Step[]) {
+      if (!s.run_id) continue;
+      const arr = groups.get(s.run_id) ?? [];
+      arr.push(s);
+      groups.set(s.run_id, arr);
+    }
+    const { count: backlogNow } = await supabaseAdmin
+      .from("telegram_ingest")
+      .select("id", { count: "exact", head: true })
+      .eq("match_status", "unmatched")
+      .is("deleted_at", null);
+
+    const runs = Array.from(groups.entries())
+      .map(([runId, arr]) => {
+        const fetchStep = arr.find((s) => s.step === "fetch_updates");
+        const ingestCount = arr.filter((s) => s.step === "ingest_update").length;
+        const errorCount = arr.filter((s) => s.status === "error").length;
+        const okCount = arr.filter((s) => s.status === "ok").length;
+        const startedAt = arr.reduce((a, b) => (a < b.created_at ? a : b.created_at), arr[0].created_at);
+        const endedAt = arr.reduce((a, b) => (a > b.created_at ? a : b.created_at), arr[0].created_at);
+        const skipped = !!(fetchStep?.details && typeof fetchStep.details === "object" && (fetchStep.details as any).skipped);
+        const reason = skipped ? ((fetchStep!.details as any).reason ?? null) : null;
+        const overallStatus: "ok" | "error" | "skipped" | "mixed" =
+          skipped ? "skipped" :
+          errorCount === 0 ? "ok" :
+          okCount === 0 ? "error" : "mixed";
+        return {
+          runId, source: arr[0].source, startedAt, endedAt,
+          stepCount: arr.length, ingestCount, errorCount, okCount,
+          overallStatus,
+          fetchStatus: fetchStep?.status ?? null,
+          fetchErrorCode: fetchStep?.error_code ?? null,
+          fetchErrorMessage: fetchStep?.error_message ?? null,
+          skipped, skipReason: reason,
+        };
+      })
+      .sort((a, b) => (a.endedAt < b.endedAt ? 1 : -1))
+      .slice(0, limit);
+
+    let streak = 0;
+    for (const r of runs) {
+      if (r.overallStatus === "error") streak++;
+      else break;
+    }
+    return { runs, streak, backlogUnmatched: backlogNow ?? 0 };
+  });
+
+
 export const retrySyncChannel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
