@@ -47,7 +47,7 @@ export const Route = createFileRoute("/api/public/s/$token")({
           request.headers.get("cf-connecting-ip") ??
           null;
 
-        const respond = (
+        const respond = async (
           status: number,
           payload: { ok: boolean; reason: Reason; missingField?: string | null; targetUrl?: string | null },
         ) => {
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/api/public/s/$token")({
               headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
             });
           }
-          const origin = getPublicBaseUrl();
+          const origin = await getPublicBaseUrlAsync();
           if (payload.ok && payload.targetUrl) return Response.redirect(payload.targetUrl, 303);
           const u = new URL(`${origin}/`);
           u.searchParams.set("verify_error", payload.reason);
