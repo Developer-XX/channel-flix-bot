@@ -368,12 +368,42 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         if (typeof update?.update_id === "number") {
           const { data: prior } = await supabaseAdmin
             .from("telegram_webhook_events")
-            .select("status")
+            .select("status, processed_at")
             .eq("update_id", update.update_id)
             .maybeSingle();
-          if (prior) {
+          if (prior?.processed_at) {
             console.log(`[telegram-webhook] replay update_id=${update.update_id} prior_status=${prior.status}`);
             return Response.json({ ok: true, replay: true, status: prior.status });
+          }
+        }
+
+        // Persist the raw update FIRST so Telegram can be ack'd immediately.
+        // If our downstream ingest below times out or errors, the cron
+        // `telegram-retry-pending-1min` will pick the row up and reprocess.
+        // This is what stops caption edits from getting lost when the worker
+        // is slow to respond (Telegram drops updates that time out).
+        const chatId = update?.channel_post?.chat?.id
+          ?? update?.edited_channel_post?.chat?.id
+          ?? update?.message?.chat?.id
+          ?? update?.edited_message?.chat?.id
+          ?? 0;
+        const messageId = update?.channel_post?.message_id
+          ?? update?.edited_channel_post?.message_id
+          ?? update?.message?.message_id
+          ?? update?.edited_message?.message_id
+          ?? 0;
+        if (typeof update?.update_id === "number") {
+          try {
+            await supabaseAdmin.from("telegram_webhook_events").upsert({
+              update_id: update.update_id,
+              telegram_channel_id: chatId,
+              telegram_message_id: messageId,
+              source: "webhook",
+              status: "received",
+              raw_update: update,
+            }, { onConflict: "update_id" });
+          } catch (e: any) {
+            console.warn("[telegram-webhook] persist raw_update failed:", e?.message);
           }
         }
 
@@ -384,16 +414,10 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
           if (cmd.handled) {
             if (typeof update?.update_id === "number") {
               try {
-                await supabaseAdmin.from("telegram_webhook_events").insert({
-                  update_id: update.update_id,
-                  telegram_channel_id:
-                    update?.message?.chat?.id ?? update?.edited_message?.chat?.id ?? 0,
-                  telegram_message_id:
-                    update?.message?.message_id ?? update?.edited_message?.message_id ?? 0,
-                  source: "webhook",
-                  status: "processed",
-                });
-              } catch { /* unique violation = already recorded */ }
+                await supabaseAdmin.from("telegram_webhook_events")
+                  .update({ status: "processed", processed_at: new Date().toISOString() })
+                  .eq("update_id", update.update_id);
+              } catch { /* ignore */ }
             }
             console.log(`[telegram-webhook] command handled update_id=${update?.update_id}`);
             return Response.json({ ok: true, kind: "command" });
@@ -405,6 +429,9 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         const { ingestTelegramUpdate } = await import("@/lib/telegram-ingest.server");
         try {
           const result = await ingestTelegramUpdate(supabaseAdmin, update, "webhook");
+          await supabaseAdmin.from("telegram_webhook_events")
+            .update({ processed_at: new Date().toISOString() })
+            .eq("update_id", update.update_id);
           console.log(
             `[telegram-webhook] update_id=${update?.update_id} status=${result.status}` +
               ("matched" in result ? ` matched=${result.matched} score=${result.matchScore}` : "") +
@@ -414,10 +441,22 @@ export const Route = createFileRoute("/api/public/telegram/webhook")({
         } catch (e: any) {
           console.error(`[telegram-webhook] error processing update_id=${update?.update_id}`, e);
           // Always 200 to Telegram so it doesn't hammer us with retries; the
-          // event row in telegram_webhook_events records the failure.
-          return Response.json({ ok: false, error: e?.message ?? "error" });
+          // event row in telegram_webhook_events has raw_update + status='error',
+          // and the retry cron will reprocess it.
+          try {
+            await supabaseAdmin.from("telegram_webhook_events")
+              .update({
+                status: "error",
+                error: (e?.message ?? "error").toString().slice(0, 500),
+                last_attempt_at: new Date().toISOString(),
+                attempts: 1,
+              })
+              .eq("update_id", update.update_id);
+          } catch {}
+          return Response.json({ ok: false, error: e?.message ?? "error", will_retry: true });
         }
       },
     },
   },
 });
+
