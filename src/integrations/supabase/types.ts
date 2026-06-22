@@ -2471,7 +2471,11 @@ export type Database = {
       }
       telegram_webhook_events: {
         Row: {
+          attempts: number
           error: string | null
+          last_attempt_at: string | null
+          processed_at: string | null
+          raw_update: Json | null
           received_at: string
           source: string
           status: string
@@ -2480,7 +2484,11 @@ export type Database = {
           update_id: number
         }
         Insert: {
+          attempts?: number
           error?: string | null
+          last_attempt_at?: string | null
+          processed_at?: string | null
+          raw_update?: Json | null
           received_at?: string
           source?: string
           status?: string
@@ -2489,7 +2497,11 @@ export type Database = {
           update_id: number
         }
         Update: {
+          attempts?: number
           error?: string | null
+          last_attempt_at?: string | null
+          processed_at?: string | null
+          raw_update?: Json | null
           received_at?: string
           source?: string
           status?: string
