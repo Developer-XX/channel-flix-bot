@@ -67,6 +67,7 @@ import { Route as ApiPublicTelegramBackfillRouteImport } from './routes/api/publ
 import { Route as ApiPublicSectionKeyRouteImport } from './routes/api/public/section/$key'
 import { Route as ApiPublicSTokenRouteImport } from './routes/api/public/s/$token'
 import { Route as ApiPublicHooksTelegramSyncAlertsRouteImport } from './routes/api/public/hooks/telegram-sync-alerts'
+import { Route as ApiPublicHooksTelegramRetryPendingRouteImport } from './routes/api/public/hooks/telegram-retry-pending'
 import { Route as ApiPublicHooksTelegramResyncRecentRouteImport } from './routes/api/public/hooks/telegram-resync-recent'
 import { Route as ApiPublicHooksShortenerAlertsRouteImport } from './routes/api/public/hooks/shortener-alerts'
 import { Route as ApiPublicHooksReparseSeriesCronRouteImport } from './routes/api/public/hooks/reparse-series-cron'
@@ -399,6 +400,12 @@ const ApiPublicHooksTelegramSyncAlertsRoute =
     path: '/api/public/hooks/telegram-sync-alerts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksTelegramRetryPendingRoute =
+  ApiPublicHooksTelegramRetryPendingRouteImport.update({
+    id: '/api/public/hooks/telegram-retry-pending',
+    path: '/api/public/hooks/telegram-retry-pending',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksTelegramResyncRecentRoute =
   ApiPublicHooksTelegramResyncRecentRouteImport.update({
     id: '/api/public/hooks/telegram-resync-recent',
@@ -528,6 +535,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/hooks/telegram-retry-pending': typeof ApiPublicHooksTelegramRetryPendingRoute
   '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
@@ -597,6 +605,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/hooks/telegram-retry-pending': typeof ApiPublicHooksTelegramRetryPendingRoute
   '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
@@ -669,6 +678,7 @@ export interface FileRoutesById {
   '/api/public/hooks/reparse-series-cron': typeof ApiPublicHooksReparseSeriesCronRoute
   '/api/public/hooks/shortener-alerts': typeof ApiPublicHooksShortenerAlertsRoute
   '/api/public/hooks/telegram-resync-recent': typeof ApiPublicHooksTelegramResyncRecentRoute
+  '/api/public/hooks/telegram-retry-pending': typeof ApiPublicHooksTelegramRetryPendingRoute
   '/api/public/hooks/telegram-sync-alerts': typeof ApiPublicHooksTelegramSyncAlertsRoute
   '/api/public/s/$token': typeof ApiPublicSTokenRoute
   '/api/public/section/$key': typeof ApiPublicSectionKeyRoute
@@ -741,6 +751,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/hooks/telegram-retry-pending'
     | '/api/public/hooks/telegram-sync-alerts'
     | '/api/public/s/$token'
     | '/api/public/section/$key'
@@ -810,6 +821,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/hooks/telegram-retry-pending'
     | '/api/public/hooks/telegram-sync-alerts'
     | '/api/public/s/$token'
     | '/api/public/section/$key'
@@ -881,6 +893,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/reparse-series-cron'
     | '/api/public/hooks/shortener-alerts'
     | '/api/public/hooks/telegram-resync-recent'
+    | '/api/public/hooks/telegram-retry-pending'
     | '/api/public/hooks/telegram-sync-alerts'
     | '/api/public/s/$token'
     | '/api/public/section/$key'
@@ -916,6 +929,7 @@ export interface RootRouteChildren {
   ApiPublicHooksReparseSeriesCronRoute: typeof ApiPublicHooksReparseSeriesCronRoute
   ApiPublicHooksShortenerAlertsRoute: typeof ApiPublicHooksShortenerAlertsRoute
   ApiPublicHooksTelegramResyncRecentRoute: typeof ApiPublicHooksTelegramResyncRecentRoute
+  ApiPublicHooksTelegramRetryPendingRoute: typeof ApiPublicHooksTelegramRetryPendingRoute
   ApiPublicHooksTelegramSyncAlertsRoute: typeof ApiPublicHooksTelegramSyncAlertsRoute
   ApiPublicSTokenRoute: typeof ApiPublicSTokenRoute
   ApiPublicSectionKeyRoute: typeof ApiPublicSectionKeyRoute
@@ -1333,6 +1347,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksTelegramSyncAlertsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/telegram-retry-pending': {
+      id: '/api/public/hooks/telegram-retry-pending'
+      path: '/api/public/hooks/telegram-retry-pending'
+      fullPath: '/api/public/hooks/telegram-retry-pending'
+      preLoaderRoute: typeof ApiPublicHooksTelegramRetryPendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/telegram-resync-recent': {
       id: '/api/public/hooks/telegram-resync-recent'
       path: '/api/public/hooks/telegram-resync-recent'
@@ -1559,6 +1580,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicHooksShortenerAlertsRoute: ApiPublicHooksShortenerAlertsRoute,
   ApiPublicHooksTelegramResyncRecentRoute:
     ApiPublicHooksTelegramResyncRecentRoute,
+  ApiPublicHooksTelegramRetryPendingRoute:
+    ApiPublicHooksTelegramRetryPendingRoute,
   ApiPublicHooksTelegramSyncAlertsRoute: ApiPublicHooksTelegramSyncAlertsRoute,
   ApiPublicSTokenRoute: ApiPublicSTokenRoute,
   ApiPublicSectionKeyRoute: ApiPublicSectionKeyRoute,
@@ -1570,13 +1593,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

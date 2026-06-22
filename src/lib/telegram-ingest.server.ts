@@ -243,21 +243,31 @@ export async function ingestTelegramUpdate(
     return { ok: true, status: "ignored", reason: "no_message" };
   }
 
+  // Idempotent event row: upsert keyed by update_id. Webhook pre-inserts the
+  // row with raw_update so it can ack Telegram quickly; if we re-enter from
+  // the retry cron the row already exists. Only bail as a true duplicate when
+  // a prior run already finished (processed_at IS NOT NULL).
+  const { data: priorEvt } = await supabase
+    .from("telegram_webhook_events")
+    .select("processed_at")
+    .eq("update_id", update.update_id)
+    .maybeSingle();
+  if (priorEvt?.processed_at) {
+    return { ok: true, status: "duplicate", reason: "update_id_seen" };
+  }
   const { error: evtErr } = await supabase
     .from("telegram_webhook_events")
-    .insert({
+    .upsert({
       update_id: update.update_id,
       telegram_channel_id: message.chat.id,
       telegram_message_id: message.message_id,
       source,
       status: "received",
-    });
+    }, { onConflict: "update_id", ignoreDuplicates: false });
   if (evtErr) {
-    if ((evtErr as any).code === "23505") {
-      return { ok: true, status: "duplicate", reason: "update_id_seen" };
-    }
     throw evtErr;
   }
+
 
   const tgChannelId = message.chat.id;
   const tgMessageId = message.message_id;

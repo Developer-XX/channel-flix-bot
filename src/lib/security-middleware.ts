@@ -55,7 +55,14 @@ const CSP_REPORT_ONLY = [
 const PERMISSIONS_POLICY =
   "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
 
-const RATE_LIMITED_PREFIXES = ["/_serverFn/", "/api/public/hooks/", "/api/public/telegram/"];
+// NOTE: /api/public/telegram/webhook is intentionally EXCLUDED. All Telegram
+// updates originate from a single Telegram IP, so the per-IP limit caused
+// Telegram to receive HTTP 429 during normal post/edit bursts and silently
+// drop updates (most visibly: caption edits). The webhook is already
+// authenticated via the X-Telegram-Bot-Api-Secret-Token header and is
+// idempotent on update_id, so per-IP throttling is the wrong control.
+const RATE_LIMITED_PREFIXES = ["/_serverFn/", "/api/public/hooks/"];
+
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getRateLimitClient() {
