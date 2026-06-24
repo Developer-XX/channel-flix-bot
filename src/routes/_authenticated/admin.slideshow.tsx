@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { ArrowLeft, Images, Plus, Trash2, Save } from "lucide-react";
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/admin/slideshow")({
 });
 
 function SlideshowAdmin() {
+  const qc = useQueryClient();
   const list = useServerFn(adminListSlides);
   const upsert = useServerFn(adminUpsertSlide);
   const del = useServerFn(adminDeleteSlide);
@@ -41,6 +42,7 @@ function SlideshowAdmin() {
       await upsert({ data: a });
       toast.success("Slide saved");
       q.refetch();
+      qc.invalidateQueries({ queryKey: ["homepage-layout"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }
@@ -51,6 +53,7 @@ function SlideshowAdmin() {
       await updateSetting({ data: { key, value } });
       toast.success("Saved");
       s.refetch();
+      qc.invalidateQueries({ queryKey: ["homepage-layout"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }

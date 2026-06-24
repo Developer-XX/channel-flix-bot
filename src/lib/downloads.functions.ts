@@ -112,6 +112,48 @@ export const resolveEpisodeFile = createServerFn({ method: "POST" })
     if (!validation.ok) {
       return { ok: false as const, reason: validation.reason, detail: validation.detail, correlationId: cid };
     }
+    // Deterministic resolution: (1) the exact clicked file if still active,
+    // (2) sibling matching requested resolution AND language, (3) same
+    // resolution any language, (4) closest resolution by ranking, (5) newest.
+    const RES_RANK: Record<string, number> = {
+      "2160p": 5, "4k": 5,
+      "1440p": 4, "2k": 4,
+      "1080p": 3, "fhd": 3,
+      "720p": 2, "hd": 2,
+      "480p": 1, "sd": 1,
+      "360p": 0, "240p": 0,
+    };
+    const normRes = (v: unknown) => String(v ?? "").toLowerCase().trim();
+    const rankRes = (v: unknown) => RES_RANK[normRes(v)] ?? -1;
+
+    // 1) Try the exact clicked file first.
+    if (data.expectedFileId) {
+      const { data: exactRow } = await supabaseAdmin
+        .from("media_files")
+        .select(
+          "id, file_name, quality, resolution, language, file_size, episode_id, is_active, title_id, episodes!inner(episode_number, season_id, seasons!inner(season_number, title_id))",
+        )
+        .eq("id", data.expectedFileId)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (exactRow && (exactRow as any).title_id === data.titleId) {
+        return {
+          ok: true as const,
+          file: {
+            id: (exactRow as any).id,
+            file_name: (exactRow as any).file_name,
+            quality: (exactRow as any).quality,
+            resolution: (exactRow as any).resolution,
+            language: (exactRow as any).language,
+            file_size: (exactRow as any).file_size,
+          },
+          changed: false,
+          correlationId: cid,
+        };
+      }
+    }
+
+    // 2) Fetch all variants for this (title, season, episode).
     let query = supabaseAdmin
       .from("media_files")
       .select(
@@ -128,39 +170,39 @@ export const resolveEpisodeFile = createServerFn({ method: "POST" })
     }
     const { data: rows, error } = await query.limit(50);
     if (error) throw error;
-    // Prefer the exact requested file (so 720p stays 720p); if it's gone,
-    // fall back to a sibling with the same resolution/language; only then
-    // fall back to the newest matching row.
     let candidates = (rows ?? []) as any[];
-    if (data.expectedFileId) {
-      const exact = candidates.find((r) => r.id === data.expectedFileId);
-      if (exact) {
-        candidates = [exact, ...candidates.filter((r) => r.id !== exact.id)];
-      } else {
-        const { data: expRow } = await supabaseAdmin
-          .from("media_files")
-          .select("resolution, language")
-          .eq("id", data.expectedFileId)
-          .maybeSingle();
-        const wantRes = String(expRow?.resolution ?? "").toLowerCase();
-        const wantLang = String(expRow?.language ?? "").toLowerCase();
-        if (wantRes || wantLang) {
-          const scored = candidates
-            .map((r) => {
-              const res = String(r.resolution ?? "").toLowerCase();
-              const lang = String(r.language ?? "").toLowerCase();
-              let s = 0;
-              if (wantRes && res === wantRes) s += 2;
-              if (wantLang && lang === wantLang) s += 1;
-              return { r, s };
-            })
-            .sort((a, b) => b.s - a.s);
-          if (scored[0] && scored[0].s > 0) {
-            candidates = scored.map((x) => x.r);
-          }
+
+    // 3) Rank candidates by closeness to the requested resolution/language.
+    if (data.expectedFileId && candidates.length > 1) {
+      const { data: expRow } = await supabaseAdmin
+        .from("media_files")
+        .select("resolution, language")
+        .eq("id", data.expectedFileId)
+        .maybeSingle();
+      const wantRes = normRes(expRow?.resolution);
+      const wantLang = normRes(expRow?.language);
+      const wantRank = rankRes(expRow?.resolution);
+      candidates = [...candidates].sort((a, b) => {
+        const aRes = normRes(a.resolution);
+        const bRes = normRes(b.resolution);
+        const aLang = normRes(a.language);
+        const bLang = normRes(b.language);
+        const aResEq = wantRes && aRes === wantRes ? 1 : 0;
+        const bResEq = wantRes && bRes === wantRes ? 1 : 0;
+        if (aResEq !== bResEq) return bResEq - aResEq;
+        const aLangEq = wantLang && aLang === wantLang ? 1 : 0;
+        const bLangEq = wantLang && bLang === wantLang ? 1 : 0;
+        if (aLangEq !== bLangEq) return bLangEq - aLangEq;
+        // Closest resolution rank (smaller distance wins).
+        if (wantRank >= 0) {
+          const aDist = Math.abs(rankRes(a.resolution) - wantRank);
+          const bDist = Math.abs(rankRes(b.resolution) - wantRank);
+          if (aDist !== bDist) return aDist - bDist;
         }
-      }
+        return 0; // keep created_at ordering as final tiebreaker
+      });
     }
+
     const decision = decideEpisodeResolution({ ok: true }, candidates as any, data.expectedFileId);
     if (!decision.ok) {
       return { ok: false as const, reason: decision.reason, detail: decision.detail, correlationId: cid };

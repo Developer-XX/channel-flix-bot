@@ -49,10 +49,17 @@ export const getHomepageLayout = createServerFn({ method: "GET" }).handler(async
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
 
-  const orderRaw = await readSetting("HOMEPAGE_SECTION_ORDER");
-  const slideshowEnabled = !/^(0|false|no|off)$/i.test(
-    (await readSetting("HOMEPAGE_SLIDESHOW_ENABLED")) ?? "true",
-  );
+  // Read directly from app_settings — bypass the per-worker 60s cache so
+  // edits to section order / slideshow toggle reflect immediately.
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: settingRows } = await supabaseAdmin
+    .from("app_settings")
+    .select("key, value")
+    .in("key", ["HOMEPAGE_SECTION_ORDER", "HOMEPAGE_SLIDESHOW_ENABLED"]);
+  const settings = new Map((settingRows ?? []).map((r: any) => [r.key, r.value]));
+  const orderRaw = (settings.get("HOMEPAGE_SECTION_ORDER") as string | null) ?? null;
+  const enabledRaw = (settings.get("HOMEPAGE_SLIDESHOW_ENABLED") as string | null) ?? "true";
+  const slideshowEnabled = !/^(0|false|no|off)$/i.test(enabledRaw);
   const sectionOrder = (orderRaw && orderRaw.trim()
     ? orderRaw.split(",").map((s) => s.trim()).filter(Boolean)
     : [...DEFAULT_SECTION_ORDER]) as string[];
