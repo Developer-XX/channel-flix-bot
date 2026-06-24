@@ -263,9 +263,6 @@ function TitlePage() {
                     </div>
                     <div className="min-w-0">
                       <div className="font-medium text-sm sm:text-base break-words">{(f as { caption?: string | null }).caption?.trim() || f.file_name}</div>
-                      {(f as { caption?: string | null }).caption?.trim() && (
-                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate" title={f.file_name}>{f.file_name}</div>
-                      )}
                       <div className="text-[11px] sm:text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         {f.quality && <span>{f.quality}</span>}
                         {f.resolution && <span>· {f.resolution}</span>}
