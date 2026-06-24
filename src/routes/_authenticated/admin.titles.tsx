@@ -21,10 +21,21 @@ function TitlesAdmin() {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const list = useQuery({
     queryKey: ["admin-titles"],
     queryFn: () => listAdminTitles(),
+  });
+
+  const filtered = (list.data ?? []).filter((t) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.title.toLowerCase().includes(q) ||
+      t.slug.toLowerCase().includes(q) ||
+      (t.category ?? "").toLowerCase().includes(q)
+    );
   });
 
   const togglePublish = useMutation({
@@ -68,7 +79,18 @@ function TitlesAdmin() {
         </Button>
       </div>
 
-      <div className="mt-8 rounded-2xl border border-border overflow-hidden">
+      <div className="mt-6 relative max-w-md">
+        <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search titles by name, slug, or category…"
+          className="w-full h-10 pl-9 pr-3 rounded-lg bg-surface border border-border focus:border-ring outline-none text-sm"
+        />
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-surface text-muted-foreground text-xs uppercase tracking-wider">
             <tr>
@@ -76,7 +98,7 @@ function TitlesAdmin() {
               <th className="text-left px-4 py-3 hidden md:table-cell">Category</th>
               <th className="text-left px-4 py-3 hidden md:table-cell">Year</th>
               <th className="text-left px-4 py-3">Status</th>
-              <th className="text-left px-4 py-3 hidden lg:table-cell">Flags</th>
+              <th className="text-left px-4 py-3">Flags</th>
               <th className="text-right px-4 py-3"></th>
             </tr>
           </thead>
@@ -87,7 +109,10 @@ function TitlesAdmin() {
             {!list.isLoading && (list.data?.length ?? 0) === 0 && (
               <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No titles yet. Click <strong>Add title</strong> to import one from TMDB.</td></tr>
             )}
-            {list.data?.map((t) => (
+            {!list.isLoading && (list.data?.length ?? 0) > 0 && filtered.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No titles match “{search}”.</td></tr>
+            )}
+            {filtered.map((t) => (
               <tr key={t.id} className="border-t border-border hover:bg-surface/50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -111,8 +136,8 @@ function TitlesAdmin() {
                     <option value="archived">Archived</option>
                   </select>
                 </td>
-                <td className="px-4 py-3 hidden lg:table-cell">
-                  <div className="flex gap-1.5">
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       onClick={() => toggleFlag.mutate({ id: t.id, field: "is_trending", value: !t.is_trending })}
                       className={`text-xs px-2 py-1 rounded ${t.is_trending ? "bg-primary text-primary-foreground" : "bg-surface text-muted-foreground"}`}
@@ -120,7 +145,7 @@ function TitlesAdmin() {
                     <button
                       onClick={() => toggleFlag.mutate({ id: t.id, field: "is_featured", value: !t.is_featured })}
                       className={`text-xs px-2 py-1 rounded inline-flex items-center gap-1 ${t.is_featured ? "bg-gold text-gold-foreground" : "bg-surface text-muted-foreground"}`}
-                    ><Star className="h-3 w-3" />Featured</button>
+                    ><Star className="h-3 w-3" />Latest</button>
                     <AddToSlideshowButton titleId={t.id} titleName={t.title} />
                   </div>
                 </td>
