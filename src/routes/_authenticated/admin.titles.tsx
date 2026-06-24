@@ -79,7 +79,18 @@ function TitlesAdmin() {
         </Button>
       </div>
 
-      <div className="mt-8 rounded-2xl border border-border overflow-hidden">
+      <div className="mt-6 relative max-w-md">
+        <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search titles by name, slug, or category…"
+          className="w-full h-10 pl-9 pr-3 rounded-lg bg-surface border border-border focus:border-ring outline-none text-sm"
+        />
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-surface text-muted-foreground text-xs uppercase tracking-wider">
             <tr>
