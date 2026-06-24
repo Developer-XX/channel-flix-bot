@@ -194,9 +194,6 @@ function SeasonBlock({
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-medium break-words">{f.caption?.trim() || f.file_name}</div>
-                        {f.caption?.trim() && (
-                          <div className="text-[11px] text-muted-foreground mt-0.5 truncate" title={f.file_name}>{f.file_name}</div>
-                        )}
                         <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-1.5 gap-y-0.5 mt-0.5">
                           {f.quality && <span>{f.quality}</span>}
                           {f.resolution && <span>· {f.resolution}</span>}
