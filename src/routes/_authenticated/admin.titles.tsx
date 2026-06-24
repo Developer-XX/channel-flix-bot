@@ -21,10 +21,21 @@ function TitlesAdmin() {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const list = useQuery({
     queryKey: ["admin-titles"],
     queryFn: () => listAdminTitles(),
+  });
+
+  const filtered = (list.data ?? []).filter((t) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.title.toLowerCase().includes(q) ||
+      t.slug.toLowerCase().includes(q) ||
+      (t.category ?? "").toLowerCase().includes(q)
+    );
   });
 
   const togglePublish = useMutation({
