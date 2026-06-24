@@ -412,8 +412,10 @@ export const requestDownload = createServerFn({ method: "POST" })
       "▶️ Playback tip: if the video won't play or the audio is missing, open this file in <b>MX Player</b> or <b>VLC</b> — both are free and handle every format (MKV, multi-audio, HEVC). Stock gallery players often skip the audio track.";
     const tipRaw = (await getSetting("DOWNLOAD_CAPTION_TIP")) ?? "";
     const tip = tipRaw.trim() || defaultTip;
-    const captionTitle = ((file as any).caption?.trim?.() || file.file_name || "Your file");
-    const makeDeliveryCaption = () => `📥 <b>${captionTitle}</b>\nDelivered by StreamVault\n\n${tip}`;
+    const makeDeliveryCaption = () => {
+      const title = ((file as any).caption?.trim?.() || file.file_name || "Your file");
+      return `📥 <b>${title}</b>\nDelivered by StreamVault\n\n${tip}`;
+    };
     let deliveryCaption = makeDeliveryCaption();
 
     // 3b. Claim/insert the queue row (PK = idempotency key).
