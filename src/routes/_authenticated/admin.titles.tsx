@@ -136,7 +136,7 @@ function TitlesAdmin() {
                     <option value="archived">Archived</option>
                   </select>
                 </td>
-                <td className="px-4 py-3 hidden lg:table-cell">
+                <td className="px-4 py-3">
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => toggleFlag.mutate({ id: t.id, field: "is_trending", value: !t.is_trending })}
