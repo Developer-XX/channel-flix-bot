@@ -98,7 +98,7 @@ function TitlesAdmin() {
               <th className="text-left px-4 py-3 hidden md:table-cell">Category</th>
               <th className="text-left px-4 py-3 hidden md:table-cell">Year</th>
               <th className="text-left px-4 py-3">Status</th>
-              <th className="text-left px-4 py-3 hidden lg:table-cell">Flags</th>
+              <th className="text-left px-4 py-3">Flags</th>
               <th className="text-right px-4 py-3"></th>
             </tr>
           </thead>
@@ -109,7 +109,10 @@ function TitlesAdmin() {
             {!list.isLoading && (list.data?.length ?? 0) === 0 && (
               <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No titles yet. Click <strong>Add title</strong> to import one from TMDB.</td></tr>
             )}
-            {list.data?.map((t) => (
+            {!list.isLoading && (list.data?.length ?? 0) > 0 && filtered.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No titles match “{search}”.</td></tr>
+            )}
+            {filtered.map((t) => (
               <tr key={t.id} className="border-t border-border hover:bg-surface/50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
