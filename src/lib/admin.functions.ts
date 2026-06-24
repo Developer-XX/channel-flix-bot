@@ -71,7 +71,7 @@ export const listAdminTitles = createServerFn({ method: "GET" })
       .from("master_titles")
       .select("id, slug, title, category, status, release_year, rating, poster_url, is_trending, is_featured")
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(5000);
     if (error) throw error;
     return data ?? [];
   });

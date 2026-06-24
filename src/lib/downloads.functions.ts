@@ -126,9 +126,42 @@ export const resolveEpisodeFile = createServerFn({ method: "POST" })
     if (data.episode != null) {
       query = query.eq("episodes.episode_number", data.episode);
     }
-    const { data: rows, error } = await query.limit(1);
+    const { data: rows, error } = await query.limit(50);
     if (error) throw error;
-    const decision = decideEpisodeResolution({ ok: true }, (rows ?? []) as any, data.expectedFileId);
+    // Prefer the exact requested file (so 720p stays 720p); if it's gone,
+    // fall back to a sibling with the same resolution/language; only then
+    // fall back to the newest matching row.
+    let candidates = (rows ?? []) as any[];
+    if (data.expectedFileId) {
+      const exact = candidates.find((r) => r.id === data.expectedFileId);
+      if (exact) {
+        candidates = [exact, ...candidates.filter((r) => r.id !== exact.id)];
+      } else {
+        const { data: expRow } = await supabaseAdmin
+          .from("media_files")
+          .select("resolution, language")
+          .eq("id", data.expectedFileId)
+          .maybeSingle();
+        const wantRes = String(expRow?.resolution ?? "").toLowerCase();
+        const wantLang = String(expRow?.language ?? "").toLowerCase();
+        if (wantRes || wantLang) {
+          const scored = candidates
+            .map((r) => {
+              const res = String(r.resolution ?? "").toLowerCase();
+              const lang = String(r.language ?? "").toLowerCase();
+              let s = 0;
+              if (wantRes && res === wantRes) s += 2;
+              if (wantLang && lang === wantLang) s += 1;
+              return { r, s };
+            })
+            .sort((a, b) => b.s - a.s);
+          if (scored[0] && scored[0].s > 0) {
+            candidates = scored.map((x) => x.r);
+          }
+        }
+      }
+    }
+    const decision = decideEpisodeResolution({ ok: true }, candidates as any, data.expectedFileId);
     if (!decision.ok) {
       return { ok: false as const, reason: decision.reason, detail: decision.detail, correlationId: cid };
     }
