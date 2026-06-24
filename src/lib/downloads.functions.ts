@@ -269,7 +269,7 @@ export const requestDownload = createServerFn({ method: "POST" })
         );
         const { data: refreshed } = await supabaseAdmin
           .from("media_files")
-          .select("id, file_name, title_id, episode_id, resolution, language, telegram_message_id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
+          .select("id, file_name, caption, title_id, episode_id, resolution, language, telegram_message_id, telegram_file_id, telegram_file_unique_id, channel_id, telegram_channels(channel_id, name), master_titles(category)")
           .eq("id", file.id)
           .maybeSingle();
         if (refreshed) file = refreshed as typeof file;
