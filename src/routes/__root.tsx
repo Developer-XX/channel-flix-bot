@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
 
 import appCss from "../styles.css?url";
+import faviconAsset from "@/assets/stream-vault-favicon.png.asset.json";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { BuildSyncProvider } from "@/components/BuildSyncProvider";
 import { ServerFnErrorScreen, isServerFnError } from "@/components/ServerFnErrorScreen";
@@ -90,21 +91,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "A platform for browsing and downloading media via a Telegram bot, with admin tools." },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "A platform for browsing and downloading media via a Telegram bot, with admin tools." },
+      { title: "Stream Vault" },
+      { name: "description", content: "Stream Vault — browse and download movies and series fast, with a sleek catalog and admin tools." },
+      { name: "author", content: "Stream Vault" },
+      { property: "og:title", content: "Stream Vault" },
+      { property: "og:description", content: "Stream Vault — browse and download movies and series fast, with a sleek catalog and admin tools." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
-      { name: "twitter:description", content: "A platform for browsing and downloading media via a Telegram bot, with admin tools." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8f1bf498-77e0-428e-8a49-700b5c84181e/id-preview-9f245f2a--d54ff009-ac17-477f-85a3-112a949d0888.lovable.app-1781642032329.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/8f1bf498-77e0-428e-8a49-700b5c84181e/id-preview-9f245f2a--d54ff009-ac17-477f-85a3-112a949d0888.lovable.app-1781642032329.png" },
+      { name: "twitter:title", content: "Stream Vault" },
+      { name: "twitter:description", content: "Stream Vault — browse and download movies and series fast, with a sleek catalog and admin tools." },
+      { property: "og:image", content: faviconAsset.url },
+      { name: "twitter:image", content: faviconAsset.url },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: faviconAsset.url },
+      { rel: "apple-touch-icon", href: faviconAsset.url },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
