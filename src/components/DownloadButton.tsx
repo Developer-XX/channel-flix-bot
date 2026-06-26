@@ -10,6 +10,8 @@ import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/down
 import { startVerification } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
 import { triggerInterstitial } from "@/components/InterstitialController";
+import { DownloadPreflightDialog } from "@/components/DownloadPreflightDialog";
+import { getDownloadPreflightConfig, type DownloadPreflightConfig } from "@/lib/support-group.functions";
 
 
 interface Props {
@@ -36,7 +38,10 @@ export function DownloadButton({
   const reqCode = useServerFn(requestLinkCode);
   const resolveEp = useServerFn(resolveEpisodeFile);
   const startVerify = useServerFn(startVerification);
+  const getPreflight = useServerFn(getDownloadPreflightConfig);
   const [loading, setLoading] = useState(false);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [preflight, setPreflight] = useState<DownloadPreflightConfig | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string | null>(null);
@@ -212,6 +217,32 @@ export function DownloadButton({
   }
 
   async function handleClick() {
+    // Auth gate first — don't show the preflight to a signed-out user, just
+    // bounce them to /auth like before.
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        navigate({ to: "/auth", search: { redirect: returnTo } });
+        return;
+      }
+    } catch { /* fall through */ }
+    // Fetch preflight config (tutorial + rotation hours + support group).
+    // Cache the first response so subsequent clicks open instantly.
+    if (!preflight) {
+      try {
+        const cfg = await getPreflight();
+        setPreflight(cfg);
+      } catch {
+        // If the config call fails, skip the dialog and run the download.
+        void runDownload();
+        return;
+      }
+    }
+    setPreflightOpen(true);
+  }
+
+  async function runDownload() {
     setLoading(true);
 
     const cid = newCorrelationId();
@@ -494,6 +525,13 @@ export function DownloadButton({
           )}
         </DialogContent>
       </Dialog>
+
+      <DownloadPreflightDialog
+        open={preflightOpen}
+        onOpenChange={setPreflightOpen}
+        config={preflight}
+        onContinue={() => { void runDownload(); }}
+      />
     </>
 
   );

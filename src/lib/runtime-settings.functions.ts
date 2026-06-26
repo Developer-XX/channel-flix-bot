@@ -55,6 +55,10 @@ export const SETTING_KEYS = [
   { key: "AD_INTERSTITIAL_CANCEL_SECONDS", group: "Ads",        isSecret: false, placeholder: "12 (3–60) seconds before cancel button appears" },
   { key: "AD_INTERSTITIAL_PERIODIC_MINUTES", group: "Ads",      isSecret: false, placeholder: "120 minutes between periodic interstitials (0 disables)" },
   { key: "AD_INTERSTITIAL_BEFORE_DOWNLOAD_COOLDOWN_MINUTES", group: "Ads", isSecret: false, placeholder: "120 minutes minimum gap between before-download interstitials" },
+  { key: "SUPPORT_GROUP_ENABLED",     group: "Support Group", isSecret: false, placeholder: "true / false — show Join Help Support Group popup after login/register" },
+  { key: "SUPPORT_GROUP_URL",         group: "Support Group", isSecret: false, placeholder: "https://t.me/your_group  (Telegram group/channel invite link)" },
+  { key: "SUPPORT_GROUP_TITLE",       group: "Support Group", isSecret: false, placeholder: "Join our Help & Support Group" },
+  { key: "SUPPORT_GROUP_DESCRIPTION", group: "Support Group", isSecret: false, placeholder: "Short message shown in the popup (one or two lines)" },
 ] as const;
 
 const KEYS: Set<string> = new Set(SETTING_KEYS.map((s) => s.key));
