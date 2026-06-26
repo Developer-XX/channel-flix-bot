@@ -228,6 +228,17 @@ export function DownloadButton({
         return;
       }
     } catch { /* fall through */ }
+
+    // Skip the preflight entirely for premium users or users with an active
+    // verification window — they should go straight to the download flow.
+    try {
+      const status = await getStatus();
+      if (status?.premium || status?.verified) {
+        void runDownload();
+        return;
+      }
+    } catch { /* if status check fails, fall through to preflight */ }
+
     // Fetch preflight config (tutorial + rotation hours + support group).
     // Cache the first response so subsequent clicks open instantly.
     if (!preflight) {
