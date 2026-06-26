@@ -7,7 +7,7 @@ import { Send, Loader2, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
-import { startVerification } from "@/lib/verification.functions";
+import { startVerification, getVerificationStatus } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
 import { triggerInterstitial } from "@/components/InterstitialController";
 import { DownloadPreflightDialog } from "@/components/DownloadPreflightDialog";
@@ -38,6 +38,7 @@ export function DownloadButton({
   const reqCode = useServerFn(requestLinkCode);
   const resolveEp = useServerFn(resolveEpisodeFile);
   const startVerify = useServerFn(startVerification);
+  const getStatus = useServerFn(getVerificationStatus);
   const getPreflight = useServerFn(getDownloadPreflightConfig);
   const [loading, setLoading] = useState(false);
   const [preflightOpen, setPreflightOpen] = useState(false);
@@ -227,6 +228,17 @@ export function DownloadButton({
         return;
       }
     } catch { /* fall through */ }
+
+    // Skip the preflight entirely for premium users or users with an active
+    // verification window — they should go straight to the download flow.
+    try {
+      const status = await getStatus();
+      if (status?.premium || status?.verified) {
+        void runDownload();
+        return;
+      }
+    } catch { /* if status check fails, fall through to preflight */ }
+
     // Fetch preflight config (tutorial + rotation hours + support group).
     // Cache the first response so subsequent clicks open instantly.
     if (!preflight) {
