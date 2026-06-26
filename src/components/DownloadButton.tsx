@@ -525,6 +525,13 @@ export function DownloadButton({
           )}
         </DialogContent>
       </Dialog>
+
+      <DownloadPreflightDialog
+        open={preflightOpen}
+        onOpenChange={setPreflightOpen}
+        config={preflight}
+        onContinue={() => { void runDownload(); }}
+      />
     </>
 
   );
