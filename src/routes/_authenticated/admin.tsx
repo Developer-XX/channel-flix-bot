@@ -138,6 +138,7 @@ function AdminLayout() {
           <NavItem to="/admin/premium" icon={<Crown className="h-4 w-4" />} label="Premium" />
           <NavItem to="/admin/users" icon={<Users className="h-4 w-4" />} label="Users & Broadcast" />
           <NavItem to="/admin/support" icon={<MessageCircle className="h-4 w-4" />} label="Support chat" />
+          <NavItem to="/admin/support-group" icon={<MessageCircle className="h-4 w-4" />} label="Support group popup" />
           <NavItem to="/admin/announcements" icon={<Megaphone className="h-4 w-4" />} label="Announcements" />
           <NavItem to="/admin/slideshow" icon={<Images className="h-4 w-4" />} label="Homepage slideshow" />
           <NavItem to="/admin/ads" icon={<BadgeDollarSign className="h-4 w-4" />} label="Ads" />
@@ -179,6 +180,7 @@ function AdminLayout() {
             <MobileNavItem to="/admin/premium" label="Premium" />
             <MobileNavItem to="/admin/users" label="Users" />
             <MobileNavItem to="/admin/support" label="Support" />
+            <MobileNavItem to="/admin/support-group" label="Support group" />
             <MobileNavItem to="/admin/announcements" label="Announce" />
             <MobileNavItem to="/admin/slideshow" label="Slides" />
             <MobileNavItem to="/admin/ads" label="Ads" />
