@@ -36,6 +36,7 @@ import { Route as AuthenticatedAdminTitlesRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminTelegramHealthRouteImport } from './routes/_authenticated/admin.telegram-health'
 import { Route as AuthenticatedAdminTelegramRouteImport } from './routes/_authenticated/admin.telegram'
 import { Route as AuthenticatedAdminSyncTraceRouteImport } from './routes/_authenticated/admin.sync-trace'
+import { Route as AuthenticatedAdminSupportGroupRouteImport } from './routes/_authenticated/admin.support-group'
 import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
 import { Route as AuthenticatedAdminSlideshowRouteImport } from './routes/_authenticated/admin.slideshow'
 import { Route as AuthenticatedAdminShortenersRouteImport } from './routes/_authenticated/admin.shorteners'
@@ -220,6 +221,12 @@ const AuthenticatedAdminSyncTraceRoute =
   AuthenticatedAdminSyncTraceRouteImport.update({
     id: '/sync-trace',
     path: '/sync-trace',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminSupportGroupRoute =
+  AuthenticatedAdminSupportGroupRouteImport.update({
+    id: '/support-group',
+    path: '/support-group',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminSupportRoute =
@@ -529,6 +536,7 @@ export interface FileRoutesByFullPath {
   '/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
+  '/admin/support-group': typeof AuthenticatedAdminSupportGroupRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/telegram-health': typeof AuthenticatedAdminTelegramHealthRoute
@@ -601,6 +609,7 @@ export interface FileRoutesByTo {
   '/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
+  '/admin/support-group': typeof AuthenticatedAdminSupportGroupRoute
   '/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/admin/telegram-health': typeof AuthenticatedAdminTelegramHealthRoute
@@ -676,6 +685,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/shorteners': typeof AuthenticatedAdminShortenersRoute
   '/_authenticated/admin/slideshow': typeof AuthenticatedAdminSlideshowRoute
   '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
+  '/_authenticated/admin/support-group': typeof AuthenticatedAdminSupportGroupRoute
   '/_authenticated/admin/sync-trace': typeof AuthenticatedAdminSyncTraceRoute
   '/_authenticated/admin/telegram': typeof AuthenticatedAdminTelegramRoute
   '/_authenticated/admin/telegram-health': typeof AuthenticatedAdminTelegramHealthRoute
@@ -751,6 +761,7 @@ export interface FileRouteTypes {
     | '/admin/shorteners'
     | '/admin/slideshow'
     | '/admin/support'
+    | '/admin/support-group'
     | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/telegram-health'
@@ -823,6 +834,7 @@ export interface FileRouteTypes {
     | '/admin/shorteners'
     | '/admin/slideshow'
     | '/admin/support'
+    | '/admin/support-group'
     | '/admin/sync-trace'
     | '/admin/telegram'
     | '/admin/telegram-health'
@@ -897,6 +909,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/shorteners'
     | '/_authenticated/admin/slideshow'
     | '/_authenticated/admin/support'
+    | '/_authenticated/admin/support-group'
     | '/_authenticated/admin/sync-trace'
     | '/_authenticated/admin/telegram'
     | '/_authenticated/admin/telegram-health'
@@ -1155,6 +1168,13 @@ declare module '@tanstack/react-router' {
       path: '/sync-trace'
       fullPath: '/admin/sync-trace'
       preLoaderRoute: typeof AuthenticatedAdminSyncTraceRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/support-group': {
+      id: '/_authenticated/admin/support-group'
+      path: '/support-group'
+      fullPath: '/admin/support-group'
+      preLoaderRoute: typeof AuthenticatedAdminSupportGroupRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/support': {
@@ -1511,6 +1531,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminShortenersRoute: typeof AuthenticatedAdminShortenersRoute
   AuthenticatedAdminSlideshowRoute: typeof AuthenticatedAdminSlideshowRoute
   AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
+  AuthenticatedAdminSupportGroupRoute: typeof AuthenticatedAdminSupportGroupRoute
   AuthenticatedAdminSyncTraceRoute: typeof AuthenticatedAdminSyncTraceRoute
   AuthenticatedAdminTelegramRoute: typeof AuthenticatedAdminTelegramRoute
   AuthenticatedAdminTelegramHealthRoute: typeof AuthenticatedAdminTelegramHealthRoute
@@ -1549,6 +1570,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminShortenersRoute: AuthenticatedAdminShortenersRoute,
   AuthenticatedAdminSlideshowRoute: AuthenticatedAdminSlideshowRoute,
   AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
+  AuthenticatedAdminSupportGroupRoute: AuthenticatedAdminSupportGroupRoute,
   AuthenticatedAdminSyncTraceRoute: AuthenticatedAdminSyncTraceRoute,
   AuthenticatedAdminTelegramRoute: AuthenticatedAdminTelegramRoute,
   AuthenticatedAdminTelegramHealthRoute: AuthenticatedAdminTelegramHealthRoute,
