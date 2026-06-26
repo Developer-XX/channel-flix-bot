@@ -79,12 +79,12 @@ export function DownloadPreflightDialog({ open, onOpenChange, config, onContinue
         )}
 
         {/* Highlighted rotation-hours notice */}
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
-          <span className="font-semibold text-amber-300">
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-base md:text-lg">
+          <span className="font-bold text-amber-300">
             Verify once — then download any file free for the next {rotationHours} hour
             {rotationHours === 1 ? "" : "s"}.
           </span>{" "}
-          <span className="text-amber-100/80">
+          <span className="font-semibold text-amber-100/90">
             One verification unlocks unlimited downloads during this window.
           </span>
         </div>
