@@ -10,6 +10,8 @@ import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/down
 import { startVerification } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
 import { triggerInterstitial } from "@/components/InterstitialController";
+import { DownloadPreflightDialog } from "@/components/DownloadPreflightDialog";
+import { getDownloadPreflightConfig, type DownloadPreflightConfig } from "@/lib/support-group.functions";
 
 
 interface Props {
