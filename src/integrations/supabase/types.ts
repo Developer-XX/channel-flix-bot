@@ -973,6 +973,36 @@ export type Database = {
         }
         Relationships: []
       }
+      engagement_events: {
+        Row: {
+          created_at: string
+          event: string
+          id: number
+          meta: Json | null
+          session_id: string | null
+          surface: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event: string
+          id?: number
+          meta?: Json | null
+          session_id?: string | null
+          surface?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event?: string
+          id?: number
+          meta?: Json | null
+          session_id?: string | null
+          surface?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       episodes: {
         Row: {
           air_date: string | null

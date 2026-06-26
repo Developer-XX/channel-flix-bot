@@ -25,6 +25,7 @@ import { getAdPerfSummary } from "@/lib/ad-perf.functions";
 import { getGoogleOAuthLatestHealth } from "@/lib/google-oauth-admin.functions";
 import { Button } from "@/components/ui/button";
 import { AuthEventsWidget } from "@/components/AuthEventsWidget";
+import { EngagementWidget } from "@/components/EngagementWidget";
 
 
 export const Route = createFileRoute("/_authenticated/admin/analytics")({
@@ -76,6 +77,9 @@ function AnalyticsPage() {
       </Section>
 
       <AuthEventsWidget />
+
+      <EngagementWidget />
+
 
       <GoogleOAuthHealthWidget />
 

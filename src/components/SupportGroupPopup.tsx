@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Send, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSupportGroupConfig, type SupportGroupConfig } from "@/lib/support-group.functions";
-import { openTelegramLink, telegramDeepLink } from "@/lib/telegram-link";
+import { openTelegramLink, parseTelegramLink } from "@/lib/telegram-link";
+import { trackEngagement } from "@/lib/engagement-track";
 
 const STORAGE_KEY = "sv:support-popup:lastShownAt";
 const COOLDOWN_MS = 24 * 60 * 60 * 1000; // show at most once per 24h per browser
@@ -62,10 +63,29 @@ export function SupportGroupPopup() {
   }, [cfg]);
 
   if (!cfg?.enabled || !cfg.url) return null;
-  const deep = telegramDeepLink(cfg.url);
+  const info = parseTelegramLink(cfg.url);
+  if (!info.valid || !info.https) return null;
+  const httpsUrl = info.https;
+  const deep = info.deep;
+
+  // Fire impression once per open
+  if (open) {
+    // Defer to a microtask so we don't track during the render commit.
+    queueMicrotask(() => trackEngagement("support_popup_impression", { surface: "popup" }));
+  }
+
+  const handleJoin = () => {
+    trackEngagement("support_popup_join_click", { surface: "popup" });
+    openTelegramLink(httpsUrl);
+    setOpen(false);
+  };
+  const handleDismiss = () => {
+    trackEngagement("support_popup_dismiss", { surface: "popup" });
+    setOpen(false);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : handleDismiss())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-[#229ED9]/15">
@@ -83,7 +103,7 @@ export function SupportGroupPopup() {
         </DialogHeader>
         <div className="space-y-2">
           <Button
-            onClick={() => { openTelegramLink(cfg.url!); setOpen(false); }}
+            onClick={handleJoin}
             className="w-full h-11 text-white border-0"
             style={{ backgroundColor: "#229ED9" }}
           >
@@ -93,13 +113,13 @@ export function SupportGroupPopup() {
           {deep && (
             <Button
               variant="outline"
-              onClick={() => openTelegramLink(deep)}
+              onClick={() => { trackEngagement("support_popup_join_click", { surface: "popup_deep" }); openTelegramLink(deep); }}
               className="w-full h-10"
             >
               Open in Telegram app
             </Button>
           )}
-          <Button variant="ghost" onClick={() => setOpen(false)} className="w-full h-9 text-muted-foreground">
+          <Button variant="ghost" onClick={handleDismiss} className="w-full h-9 text-muted-foreground">
             <X className="h-4 w-4 mr-1.5" /> Maybe later
           </Button>
         </div>

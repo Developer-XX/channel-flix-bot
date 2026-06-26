@@ -28,13 +28,17 @@ function parseBool(v: string | null, fallback: boolean): boolean {
 
 async function readSupport(): Promise<SupportGroupConfig> {
   const { getSetting } = await import("@/lib/runtime-settings.server");
-  const [enabledRaw, url, title, description] = await Promise.all([
+  const { parseTelegramLink } = await import("@/lib/telegram-link");
+  const [enabledRaw, urlRaw, title, description] = await Promise.all([
     getSetting("SUPPORT_GROUP_ENABLED"),
     getSetting("SUPPORT_GROUP_URL"),
     getSetting("SUPPORT_GROUP_TITLE"),
     getSetting("SUPPORT_GROUP_DESCRIPTION"),
   ]);
-  const cleanUrl = url?.trim() || null;
+  // Normalize + validate the configured URL. Invalid or non-Telegram URLs are
+  // treated as "no link configured" so the popup/preflight can degrade gracefully.
+  const info = parseTelegramLink(urlRaw);
+  const cleanUrl = info.valid && info.https ? info.https : null;
   const enabled = parseBool(enabledRaw, !!cleanUrl) && !!cleanUrl;
   return {
     enabled,
