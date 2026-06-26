@@ -38,7 +38,10 @@ export function DownloadButton({
   const reqCode = useServerFn(requestLinkCode);
   const resolveEp = useServerFn(resolveEpisodeFile);
   const startVerify = useServerFn(startVerification);
+  const getPreflight = useServerFn(getDownloadPreflightConfig);
   const [loading, setLoading] = useState(false);
+  const [preflightOpen, setPreflightOpen] = useState(false);
+  const [preflight, setPreflight] = useState<DownloadPreflightConfig | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string | null>(null);
