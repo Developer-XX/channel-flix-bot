@@ -78,6 +78,9 @@ function AnalyticsPage() {
 
       <AuthEventsWidget />
 
+      <EngagementWidget />
+
+
       <GoogleOAuthHealthWidget />
 
       <InterstitialPerfWidget />
