@@ -178,6 +178,7 @@ function RootComponent() {
       <Toaster richColors />
       <BuildSyncProvider />
       <InterstitialController />
+      <SupportGroupPopup />
     </QueryClientProvider>
   );
 }
