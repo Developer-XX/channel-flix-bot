@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, Send } from "lucide-react";
 import type { DownloadPreflightConfig } from "@/lib/support-group.functions";
-import { openTelegramLink } from "@/lib/telegram-link";
+import { openTelegramLink, isValidTelegramUrl } from "@/lib/telegram-link";
+import { trackEngagement } from "@/lib/engagement-track";
 
 interface Props {
   open: boolean;
