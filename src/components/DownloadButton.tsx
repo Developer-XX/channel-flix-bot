@@ -7,7 +7,7 @@ import { Send, Loader2, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { requestDownload, requestLinkCode, resolveEpisodeFile } from "@/lib/downloads.functions";
-import { startVerification } from "@/lib/verification.functions";
+import { startVerification, getVerificationStatus } from "@/lib/verification.functions";
 import { AdSlot } from "@/components/AdSlot";
 import { triggerInterstitial } from "@/components/InterstitialController";
 import { DownloadPreflightDialog } from "@/components/DownloadPreflightDialog";
