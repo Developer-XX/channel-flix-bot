@@ -294,7 +294,12 @@ export const requestDownload = createServerFn({ method: "POST" })
     const { openAdminAlert, maybeNotifyAdminsTelegram, writeAudit } = await import("@/lib/audit.server");
     const { getSettingNumber, getSetting } = await import("@/lib/runtime-settings.server");
 
-    // 0. Verification gate (TTL from SHORTENER_ROTATION_HOURS)
+    // 0. Verification gate (TTL from SHORTENER_ROTATION_HOURS).
+    //    SECURITY: this check is the *server-side* enforcement of the
+    //    rotation-hour bypass window. The DownloadPreflightDialog is purely
+    //    informational — a client that skips the dialog and calls
+    //    requestDownload directly still hits this gate, so the bypass window
+    //    cannot be evaded. Do not move this check behind any client signal.
     const ver = await getVerificationState(supabaseAdmin, context.userId);
     if (!ver.verified) {
       await auditFailure("needs_verification", { expiresAt: ver.expiresAt });
