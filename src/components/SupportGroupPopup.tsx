@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Send, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getSupportGroupConfig, type SupportGroupConfig } from "@/lib/support-group.functions";
-import { openTelegramLink, telegramDeepLink } from "@/lib/telegram-link";
+import { openTelegramLink, parseTelegramLink } from "@/lib/telegram-link";
+import { trackEngagement } from "@/lib/engagement-track";
 
 const STORAGE_KEY = "sv:support-popup:lastShownAt";
 const COOLDOWN_MS = 24 * 60 * 60 * 1000; // show at most once per 24h per browser
