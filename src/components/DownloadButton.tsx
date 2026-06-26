@@ -217,6 +217,32 @@ export function DownloadButton({
   }
 
   async function handleClick() {
+    // Auth gate first — don't show the preflight to a signed-out user, just
+    // bounce them to /auth like before.
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        const returnTo = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        navigate({ to: "/auth", search: { redirect: returnTo } });
+        return;
+      }
+    } catch { /* fall through */ }
+    // Fetch preflight config (tutorial + rotation hours + support group).
+    // Cache the first response so subsequent clicks open instantly.
+    if (!preflight) {
+      try {
+        const cfg = await getPreflight();
+        setPreflight(cfg);
+      } catch {
+        // If the config call fails, skip the dialog and run the download.
+        void runDownload();
+        return;
+      }
+    }
+    setPreflightOpen(true);
+  }
+
+  async function runDownload() {
     setLoading(true);
 
     const cid = newCorrelationId();
