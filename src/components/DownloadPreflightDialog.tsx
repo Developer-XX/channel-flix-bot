@@ -33,10 +33,22 @@ function youtubeEmbed(url: string): string | null {
 }
 
 export function DownloadPreflightDialog({ open, onOpenChange, config, onContinue }: Props) {
+  // Fire impression when the dialog opens.
+  useEffect(() => {
+    if (open && config) {
+      trackEngagement("preflight_impression", {
+        surface: "download_preflight",
+        meta: { rotationHours: config.rotationHours, hasTutorial: !!config.tutorial.enabled },
+      });
+    }
+  }, [open, config]);
   if (!config) return null;
   const { tutorial, rotationHours, supportGroup } = config;
   const yt = tutorial.enabled && tutorial.type === "youtube" && tutorial.url
     ? youtubeEmbed(tutorial.url)
+    : null;
+  const supportUrl = supportGroup.enabled && supportGroup.url && isValidTelegramUrl(supportGroup.url)
+    ? supportGroup.url
     : null;
 
   return (
@@ -79,16 +91,23 @@ export function DownloadPreflightDialog({ open, onOpenChange, config, onContinue
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
           <Button
-            onClick={() => { onOpenChange(false); onContinue(); }}
+            onClick={() => {
+              trackEngagement("preflight_verify_click", { surface: "download_preflight" });
+              onOpenChange(false);
+              onContinue();
+            }}
             className="h-11 bg-gradient-primary text-primary-foreground border-0 hover:opacity-90"
           >
             <ShieldCheck className="h-4 w-4 mr-1.5" />
             Continue to verification
           </Button>
-          {supportGroup.enabled && supportGroup.url ? (
+          {supportUrl ? (
             <Button
               variant="outline"
-              onClick={() => openTelegramLink(supportGroup.url!)}
+              onClick={() => {
+                trackEngagement("preflight_join_click", { surface: "download_preflight" });
+                openTelegramLink(supportUrl);
+              }}
               className="h-11 border-[#229ED9]/50 text-[#229ED9] hover:bg-[#229ED9]/10"
             >
               <Send className="h-4 w-4 mr-1.5" />
